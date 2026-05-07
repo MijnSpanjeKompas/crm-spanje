@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { db } from "./firebase";
+import { db, auth } from "./firebase";
 import {
   collection,
   onSnapshot,
@@ -10,6 +10,11 @@ import {
   getDocs,
   writeBatch,
 } from "firebase/firestore";
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
 
 // ─── VASTE OPTIES ────────────────────────────────────────────────────────────
 
@@ -484,7 +489,16 @@ function StatCard({ label, value, color }) {
   );
 }
 
-function Field({ label, fieldKey, value, onChange, type = "text", as, options = [], rows = 4 }) {
+function Field({
+  label,
+  fieldKey,
+  value,
+  onChange,
+  type = "text",
+  as,
+  options = [],
+  rows = 4,
+}) {
   return (
     <div>
       <label style={labelStyle}>{label}</label>
@@ -522,6 +536,135 @@ function Field({ label, fieldKey, value, onChange, type = "text", as, options = 
           style={inputStyle}
         />
       )}
+    </div>
+  );
+}
+
+function SectionTitle({ children }) {
+  return (
+    <div
+      style={{
+        fontSize: 14,
+        fontWeight: 900,
+        color: "#0f172a",
+        marginBottom: 12,
+        paddingBottom: 8,
+        borderBottom: "1px solid #f1f5f9",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ─── LOGIN SCHERM ────────────────────────────────────────────────────────────
+
+function LoginScherm() {
+  const [email, setEmail] = useState("");
+  const [wachtwoord, setWachtwoord] = useState("");
+  const [fout, setFout] = useState("");
+  const [bezig, setBezig] = useState(false);
+
+  async function inloggen(e) {
+    e.preventDefault();
+    setFout("");
+    setBezig(true);
+
+    try {
+      await signInWithEmailAndPassword(auth, email, wachtwoord);
+    } catch (error) {
+      setFout("Inloggen lukt niet. Controleer je e-mail en wachtwoord.");
+    } finally {
+      setBezig(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#f8fafc",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "system-ui, sans-serif",
+        padding: 20,
+      }}
+    >
+      <form
+        onSubmit={inloggen}
+        style={{
+          width: "100%",
+          maxWidth: 390,
+          background: "#fff",
+          border: "1px solid #f1f5f9",
+          borderRadius: 18,
+          padding: 28,
+          boxShadow: "0 10px 30px rgba(15,23,42,.08)",
+        }}
+      >
+        <div style={{ fontSize: 24, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>
+          🇪🇸 Mijn Spanje Kompas
+        </div>
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 22 }}>
+          Log in om je CRM te openen.
+        </div>
+
+        <label style={labelStyle}>E-mailadres</label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ ...inputStyle, marginBottom: 14 }}
+          autoComplete="email"
+          required
+        />
+
+        <label style={labelStyle}>Wachtwoord</label>
+        <input
+          type="password"
+          value={wachtwoord}
+          onChange={(e) => setWachtwoord(e.target.value)}
+          style={{ ...inputStyle, marginBottom: 14 }}
+          autoComplete="current-password"
+          required
+        />
+
+        {fout && (
+          <div
+            style={{
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              color: "#b91c1c",
+              borderRadius: 10,
+              padding: "9px 11px",
+              fontSize: 12,
+              marginBottom: 14,
+            }}
+          >
+            {fout}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={bezig}
+          style={{
+            width: "100%",
+            background: "#6366f1",
+            color: "#fff",
+            border: "none",
+            borderRadius: 10,
+            padding: "11px 16px",
+            fontSize: 14,
+            fontWeight: 800,
+            cursor: bezig ? "not-allowed" : "pointer",
+            opacity: bezig ? 0.7 : 1,
+          }}
+        >
+          {bezig ? "Bezig met inloggen..." : "Inloggen"}
+        </button>
+      </form>
     </div>
   );
 }
@@ -1055,26 +1198,11 @@ function LeadModal({ lead, onClose, onSave, isNieuw }) {
   );
 }
 
-function SectionTitle({ children }) {
-  return (
-    <div
-      style={{
-        fontSize: 14,
-        fontWeight: 900,
-        color: "#0f172a",
-        marginBottom: 12,
-        paddingBottom: 8,
-        borderBottom: "1px solid #f1f5f9",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
 // ─── MAIN APP ────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const [user, setUser] = useState(null);
+  const [authLaden, setAuthLaden] = useState(true);
   const [leads, setLeads] = useState([]);
   const [laden, setLaden] = useState(true);
   const [zoek, setZoek] = useState("");
@@ -1090,6 +1218,23 @@ export default function App() {
   const demoSeedGedaan = useRef(false);
 
   useEffect(() => {
+    const stopAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setAuthLaden(false);
+    });
+
+    return () => stopAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setLeads([]);
+      setLaden(false);
+      return;
+    }
+
+    setLaden(true);
+
     if (!demoSeedGedaan.current) {
       demoSeedGedaan.current = true;
       seedDemoLeadsIfEmpty();
@@ -1108,7 +1253,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   const regioOpties = useMemo(() => {
     return ["Alle", ...Array.from(new Set(leads.map((l) => l.regio).filter(Boolean)))];
@@ -1225,6 +1370,28 @@ export default function App() {
     setSorteer("startdatum");
   }
 
+  if (authLaden) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "system-ui, sans-serif",
+          color: "#64748b",
+          background: "#f8fafc",
+        }}
+      >
+        Login wordt gecontroleerd...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScherm />;
+  }
+
   if (laden) {
     return (
       <div
@@ -1271,25 +1438,43 @@ export default function App() {
             🇪🇸 Mijn Spanje Kompas
           </div>
           <div style={{ fontSize: 11, color: "#94a3b8" }}>
-            Realtime lead- en klantvolgsysteem
+            Beveiligd realtime lead- en klantvolgsysteem
           </div>
         </div>
 
-        <button
-          onClick={() => setModal({ lead: { ...LEEG_LEAD }, isNieuw: true })}
-          style={{
-            background: "#6366f1",
-            color: "#fff",
-            border: "none",
-            borderRadius: 9,
-            padding: "9px 18px",
-            fontSize: 13,
-            fontWeight: 800,
-            cursor: "pointer",
-          }}
-        >
-          + Nieuwe lead
-        </button>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <button
+            onClick={() => setModal({ lead: { ...LEEG_LEAD }, isNieuw: true })}
+            style={{
+              background: "#6366f1",
+              color: "#fff",
+              border: "none",
+              borderRadius: 9,
+              padding: "9px 18px",
+              fontSize: 13,
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
+            + Nieuwe lead
+          </button>
+
+          <button
+            onClick={() => signOut(auth)}
+            style={{
+              background: "#f8fafc",
+              color: "#64748b",
+              border: "1px solid #e2e8f0",
+              borderRadius: 9,
+              padding: "9px 14px",
+              fontSize: 13,
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
+            Uitloggen
+          </button>
+        </div>
       </div>
 
       <div style={{ maxWidth: 1280, margin: "0 auto", padding: "26px 24px" }}>
