@@ -1,21 +1,129 @@
 import { useState, useEffect, useMemo } from "react";
 
-// ─── DEMO DATA ────────────────────────────────────────────────────────────────
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const STORAGE_KEY = "crm_spanje_kompas_v1";
+
+const STATUS_CONFIG = {
+  "Nieuwe lead": { color: "#6366f1", bg: "#eef2ff" },
+  "Intake gepland": { color: "#0ea5e9", bg: "#e0f2fe" },
+  "Intake gehad": { color: "#8b5cf6", bg: "#f3e8ff" },
+  "Zoekprofiel duidelijk": { color: "#14b8a6", bg: "#ccfbf1" },
+  "Woningvoorstellen gestuurd": { color: "#f59e0b", bg: "#fffbeb" },
+  Doorgegeven: { color: "#10b981", bg: "#ecfdf5" },
+  Afgerond: { color: "#64748b", bg: "#f1f5f9" },
+  "Niet doorgegaan": { color: "#94a3b8", bg: "#f8fafc" },
+};
+
+const STATUSSEN = Object.keys(STATUS_CONFIG);
+
+const LEADBRONNEN = [
+  "Website",
+  "Meta Ads",
+  "Google Ads",
+  "Organisch",
+  "Via-via",
+  "Partner",
+  "Anders",
+];
+
+const LEADSCORES = ["A-lead", "B-lead", "C-lead"];
+
+const VOLGENDE_ACTIES = [
+  "Intake plannen",
+  "Intake uitvoeren",
+  "Wensen controleren",
+  "Woningvoorstellen sturen",
+  "Doorgeven",
+  "Wachten op reactie",
+  "Later opnieuw benaderen",
+  "Geen directe actie",
+];
+
+const CONTACTMETHODES = [
+  "Telefoon",
+  "WhatsApp",
+  "E-mail",
+  "Intakeformulier",
+  "Videocall",
+  "Nog geen contact",
+];
+
+const TAGS = [
+  "Investering",
+  "Emigratie",
+  "Tweede woning",
+  "Vakantiehuis",
+  "Nieuwbouw",
+  "Bestaande bouw",
+  "Verhuurinteresse",
+  "Oriënterend",
+  "Urgent",
+];
+
+const LEEG_LEAD = {
+  naam: "",
+  telefoon: "",
+  email: "",
+  regio: "",
+  status: "Nieuwe lead",
+  startdatum: new Date().toISOString().split("T")[0],
+
+  leadbron: "Website",
+  leadscore: "B-lead",
+  volgendeActie: "Intake plannen",
+
+  opvolgdatum: "",
+  geenStrengeDatum: true,
+
+  laatsteContactdatum: "",
+  contactmethode: "Nog geen contact",
+
+  tags: [],
+
+  gewensteRegio: "",
+  gewenstePlaats: "",
+  woningtype: "",
+  bouwtype: "",
+  slaapkamers: "",
+  budget: "",
+  doelAankoop: "",
+  verhuurinteresse: "",
+  tijdshorizon: "",
+
+  notities: "",
+  voortgangsnotitie: "",
+};
+
+// ─── DEMO DATA ───────────────────────────────────────────────────────────────
 const DEMO_LEADS = [
   {
     id: "1",
     naam: "Familie Van den Berg",
     telefoon: "+31 6 12 34 56 78",
     email: "vandenberg@gmail.com",
-    regio: "Costa Blanca",
-    status: "Actieve klant",
-    startdatum: "2025-02-10",
-    typeKlant: "Pensioenmigratie",
-    budget: "€ 280.000 – 350.000",
-    verantwoordelijke: "Luke",
-    volgendActie: "2026-05-12",
-    laatsteContact: "2026-04-28",
-    notities: `Stel zoekt een vrijstaande villa met privézwembad, bij voorkeur in de regio Altea of Jávea. Beide partners gaan volgend jaar met pensioen.\n\nWensen:\n- Minimaal 3 slaapkamers\n- Privézwembad\n- Rustige ligging, maar niet te afgelegen\n- Dicht bij golf (man speelt 2x per week)\n\nBezwaren:\n- Zorgen over taalbarrière bij notaris en belastingaangiften\n- Onzeker over procedure niet-residente belasting\n\nAfspraken:\n- Volgende week bel ik terug met 3 concrete objecten\n- Ik stuur het artikel over de NIE-aanvraag\n\nPersoonlijke notitie: Erg vriendelijk stel. Vrouw wil graag dicht bij de zee wonen. Man meer geïnteresseerd in de praktische kant.`,
+    regio: "Costa Blanca Noord",
+    status: "Zoekprofiel duidelijk",
+    startdatum: "2026-04-18",
+    leadbron: "Website",
+    leadscore: "A-lead",
+    volgendeActie: "Woningvoorstellen sturen",
+    opvolgdatum: "2026-05-12",
+    geenStrengeDatum: false,
+    laatsteContactdatum: "2026-05-04",
+    contactmethode: "Telefoon",
+    tags: ["Emigratie", "Tweede woning", "Urgent"],
+    gewensteRegio: "Costa Blanca Noord",
+    gewenstePlaats: "Altea / Jávea",
+    woningtype: "Villa",
+    bouwtype: "Bestaande bouw",
+    slaapkamers: "3+",
+    budget: "€ 300.000 – € 400.000",
+    doelAankoop: "Pensioen / langere verblijven",
+    verhuurinteresse: "Nee",
+    tijdshorizon: "Binnen 6 maanden",
+    notities:
+      "Vriendelijk stel dat zich serieus oriënteert op een woning voor hun pensioen. Ze zoeken rust, zee in de buurt en willen vooral zekerheid over het aankoopproces.",
+    voortgangsnotitie: "Zoekprofiel is duidelijk. Volgende stap: passende woningen sturen.",
   },
   {
     id: "2",
@@ -23,44 +131,86 @@ const DEMO_LEADS = [
     telefoon: "+31 6 98 76 54 32",
     email: "marieke.janssen@outlook.com",
     regio: "Costa del Sol",
-    status: "In gesprek",
-    startdatum: "2025-03-18",
-    typeKlant: "Vakantiehuis",
-    budget: "€ 150.000 – 200.000",
-    verantwoordelijke: "Luke",
-    volgendActie: "2026-05-09",
-    laatsteContact: "2026-05-02",
-    notities: `Marieke zoekt een appartement als vakantiehuis, dat ze ook wil verhuren in de zomers. Oriëntatiefase.\n\nWensen:\n- Zwembad in complex\n- Max 15 min van strand\n- Verhuurpotentieel is heel belangrijk\n- Budget is absoluut maximum\n\nBezwaren:\n- Twijfelt over de belastingplicht bij verhuurinkomsten vanuit NL\n- Vraagt of ze dit als investering of als genot moet zien\n\nAfspraken:\n- Ik zoek 2 complexen met verhuurgeschiedenis\n- Ze wil liefst een bezichtigingstour in september\n\nPersoonlijke notitie: Enthousiast maar twijfelachtig. Geef haar wat meer zekerheid door cijfers te onderbouwen.`,
+    status: "Intake gehad",
+    startdatum: "2026-04-25",
+    leadbron: "Meta Ads",
+    leadscore: "B-lead",
+    volgendeActie: "Wensen controleren",
+    opvolgdatum: "2026-05-10",
+    geenStrengeDatum: false,
+    laatsteContactdatum: "2026-05-02",
+    contactmethode: "Videocall",
+    tags: ["Vakantiehuis", "Verhuurinteresse", "Oriënterend"],
+    gewensteRegio: "Costa del Sol",
+    gewenstePlaats: "Málaga omgeving",
+    woningtype: "Appartement",
+    bouwtype: "Nieuwbouw of bestaande bouw",
+    slaapkamers: "2",
+    budget: "€ 200.000 – € 300.000",
+    doelAankoop: "Vakantiehuis met verhuurmogelijkheid",
+    verhuurinteresse: "Ja",
+    tijdshorizon: "6 tot 12 maanden",
+    notities:
+      "Marieke zoekt een appartement dat ze zelf kan gebruiken en deels wil verhuren. Ze is enthousiast, maar wil beter begrijpen wat realistische verhuuropbrengsten zijn.",
+    voortgangsnotitie: "Nog controleren of Costa del Sol binnen budget realistisch genoeg is.",
   },
   {
     id: "3",
     naam: "Peter & Inge Smits",
     telefoon: "+32 476 11 22 33",
     email: "smitsfamilie@telenet.be",
-    regio: "Murcia / Mar Menor",
-    status: "Wacht op reactie",
-    startdatum: "2025-04-01",
-    typeKlant: "Permanente bewoning",
-    budget: "€ 200.000 – 250.000",
-    verantwoordelijke: "Luke",
-    volgendActie: "2026-05-08",
-    laatsteContact: "2026-04-18",
-    notities: `Belgisch koppel dat al een jaar twijfelt over de stap. Peter heeft een early retirement deal geaccepteerd.\n\nWensen:\n- Wil absoluut niet meer dan 250k uitgeven\n- Grondgebonden woning\n- Inge wil een grote tuin voor haar moestuin\n- Hond aanwezig, dus hekwerk is must\n\nBezwaren:\n- Peter twijfelt of de Spaanse gezondheidszorg echt goed genoeg is\n- Inge wil niet te ver van een Nederlandse winkel (Lidl/Aldi)\n- Zijn bang dat ze de taal niet leren\n\nAfspraken:\n- Ik stuur hen het document over gezondheidszorg en residency\n- Wachten op reactie al 2 weken – opvolgen!\n\nPersoonlijke notitie: Ze zijn bijna over de streep maar Inge aarzelt nog. Volgende keer meer aandacht voor haar specifieke wensen.`,
+    regio: "Costa Cálida",
+    status: "Woningvoorstellen gestuurd",
+    startdatum: "2026-03-30",
+    leadbron: "Organisch",
+    leadscore: "A-lead",
+    volgendeActie: "Wachten op reactie",
+    opvolgdatum: "2026-05-06",
+    geenStrengeDatum: false,
+    laatsteContactdatum: "2026-04-29",
+    contactmethode: "WhatsApp",
+    tags: ["Emigratie", "Bestaande bouw"],
+    gewensteRegio: "Costa Cálida",
+    gewenstePlaats: "Los Alcázares / San Pedro del Pinatar",
+    woningtype: "Townhouse",
+    bouwtype: "Bestaande bouw",
+    slaapkamers: "3",
+    budget: "€ 250.000 – € 325.000",
+    doelAankoop: "Permanente bewoning",
+    verhuurinteresse: "Nee",
+    tijdshorizon: "Binnen 3 maanden",
+    notities:
+      "Belgisch koppel. Ze twijfelen vooral over zorg, taal en papierwerk. Woningwensen zijn concreet en ze reageren goed op praktische uitleg.",
+    voortgangsnotitie: "Voorstellen verstuurd. Reactie afwachten en daarna eventueel doorgeven.",
   },
   {
     id: "4",
     naam: "Thomas Groen",
     telefoon: "+31 6 55 44 33 22",
     email: "t.groen@icloud.com",
-    regio: "Alicante stad",
+    regio: "Alicante",
     status: "Nieuwe lead",
-    startdatum: "2026-04-29",
-    typeKlant: "Investering",
-    budget: "€ 180.000 – 220.000",
-    verantwoordelijke: "Luke",
-    volgendActie: "2026-05-10",
-    laatsteContact: "2026-04-29",
-    notities: `Thomas reageerde via het contactformulier op de website. Zoekt als investering een appartement om te verhuren.\n\nNog weinig info. Eerste gesprek inplannen.\n\nEerste indruk: zakelijk type, wil vooral rendementen en cijfers zien.`,
+    startdatum: "2026-05-03",
+    leadbron: "Google Ads",
+    leadscore: "B-lead",
+    volgendeActie: "Intake plannen",
+    opvolgdatum: "",
+    geenStrengeDatum: true,
+    laatsteContactdatum: "",
+    contactmethode: "Intakeformulier",
+    tags: ["Investering", "Nieuwbouw"],
+    gewensteRegio: "Costa Blanca Zuid",
+    gewenstePlaats: "Alicante / Torrevieja",
+    woningtype: "Appartement",
+    bouwtype: "Nieuwbouw",
+    slaapkamers: "2",
+    budget: "€ 200.000 – € 275.000",
+    doelAankoop: "Investering",
+    verhuurinteresse: "Ja",
+    tijdshorizon: "Oriënterend",
+    notities:
+      "Lead via formulier. Wil vooral weten wat interessant is qua rendement en verhuurpotentie.",
+    voortgangsnotitie: "Nog geen contact gehad. Intake plannen.",
   },
   {
     id: "5",
@@ -69,13 +219,27 @@ const DEMO_LEADS = [
     email: "ansencor@kpnmail.nl",
     regio: "Costa Cálida",
     status: "Afgerond",
-    startdatum: "2024-09-05",
-    typeKlant: "Pensioenmigratie",
+    startdatum: "2025-10-05",
+    leadbron: "Via-via",
+    leadscore: "A-lead",
+    volgendeActie: "Geen directe actie",
+    opvolgdatum: "",
+    geenStrengeDatum: true,
+    laatsteContactdatum: "2026-02-15",
+    contactmethode: "E-mail",
+    tags: ["Tweede woning", "Bestaande bouw"],
+    gewensteRegio: "Costa Cálida",
+    gewenstePlaats: "Lo Pagán",
+    woningtype: "Villa",
+    bouwtype: "Bestaande bouw",
+    slaapkamers: "3",
     budget: "€ 310.000",
-    verantwoordelijke: "Luke",
-    volgendActie: null,
-    laatsteContact: "2026-02-15",
-    notities: `Ans en Cor hebben in februari 2026 hun droomhuis gekocht in Lo Pagán. Traject van 5 maanden.\n\nMooie villa met 3 slaapkamers, gezwembad en zonneterras. Koopakte getekend bij notaris in Cartagena.\n\nKlant was erg tevreden. Ze gaven een 9 als beoordeling en willen een testimonial schrijven.\n\nAftercare:\n- NIE geregeld ✓\n- Stroomaansluiting omgezet ✓\n- Habia-overschrijving water lopend`,
+    doelAankoop: "Tweede woning",
+    verhuurinteresse: "Nee",
+    tijdshorizon: "Aangekocht",
+    notities:
+      "Traject afgerond. Ze hebben een woning gekocht in Lo Pagán en waren erg tevreden over de begeleiding.",
+    voortgangsnotitie: "Afgerond. Mogelijk later testimonial vragen.",
   },
   {
     id: "6",
@@ -84,68 +248,151 @@ const DEMO_LEADS = [
     email: "dirk.vermeulen@hotmail.com",
     regio: "Costa Brava",
     status: "Niet doorgegaan",
-    startdatum: "2025-01-15",
-    typeKlant: "Vakantiehuis",
-    budget: "€ 130.000",
-    verantwoordelijke: "Luke",
-    volgendActie: null,
-    laatsteContact: "2025-11-10",
-    notities: `Dirk heeft uiteindelijk besloten niet door te gaan. Gezinsomstandigheid veranderd (scheiding).\n\nMogelijk in de toekomst opnieuw interesse. Op vriendschappelijke voet afgerond.\n\nNogmaals contact opnemen in 2027 kan kansen opleveren.`,
+    startdatum: "2026-01-15",
+    leadbron: "Partner",
+    leadscore: "C-lead",
+    volgendeActie: "Later opnieuw benaderen",
+    opvolgdatum: "",
+    geenStrengeDatum: true,
+    laatsteContactdatum: "2026-03-12",
+    contactmethode: "Telefoon",
+    tags: ["Vakantiehuis", "Oriënterend"],
+    gewensteRegio: "Costa Brava",
+    gewenstePlaats: "Nog niet duidelijk",
+    woningtype: "Appartement",
+    bouwtype: "Bestaande bouw",
+    slaapkamers: "2",
+    budget: "€ 150.000 – € 200.000",
+    doelAankoop: "Vakantiehuis",
+    verhuurinteresse: "Misschien",
+    tijdshorizon: "Niet concreet",
+    notities:
+      "Dirk heeft besloten voorlopig niet door te gaan door persoonlijke omstandigheden.",
+    voortgangsnotitie: "Netjes afgerond. Geen actieve opvolging nodig.",
   },
 ];
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
-const STATUS_CONFIG = {
-  "Nieuwe lead":      { color: "#6366f1", bg: "#eef2ff", label: "Nieuwe lead" },
-  "In gesprek":       { color: "#f59e0b", bg: "#fffbeb", label: "In gesprek" },
-  "Wacht op reactie": { color: "#ef4444", bg: "#fef2f2", label: "Wacht op reactie" },
-  "Actieve klant":    { color: "#10b981", bg: "#ecfdf5", label: "Actieve klant" },
-  "Afgerond":         { color: "#64748b", bg: "#f1f5f9", label: "Afgerond" },
-  "Niet doorgegaan":  { color: "#94a3b8", bg: "#f8fafc", label: "Niet doorgegaan" },
-};
+function todayISO() {
+  return new Date().toISOString().split("T")[0];
+}
 
-const STATUSSEN = Object.keys(STATUS_CONFIG);
+function dateOnly(dateString) {
+  if (!dateString) return null;
+  return new Date(`${dateString}T00:00:00`);
+}
 
-function looptijdDagen(startdatum) {
-  if (!startdatum) return 0;
-  const start = new Date(startdatum);
-  const nu = new Date();
-  return Math.floor((nu - start) / (1000 * 60 * 60 * 24));
+function diffInDays(dateString) {
+  const target = dateOnly(dateString);
+  const today = dateOnly(todayISO());
+  if (!target || !today) return null;
+  return Math.round((target - today) / (1000 * 60 * 60 * 24));
 }
 
 function formatDatum(d) {
   if (!d) return "–";
-  return new Date(d).toLocaleDateString("nl-NL", { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(`${d}T00:00:00`).toLocaleDateString("nl-NL", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
-function isOpvolgingBinnenkort(datum) {
-  if (!datum) return false;
-  const d = new Date(datum);
-  const nu = new Date();
-  const diff = (d - nu) / (1000 * 60 * 60 * 24);
-  return diff >= 0 && diff <= 3;
+function getOpvolgingInfo(lead) {
+  if (lead.geenStrengeDatum || !lead.opvolgdatum) {
+    return {
+      type: "geen",
+      label: "Geen strenge datum",
+      color: "#64748b",
+      bg: "#f8fafc",
+    };
+  }
+
+  const diff = diffInDays(lead.opvolgdatum);
+
+  if (diff === 0) {
+    return {
+      type: "vandaag",
+      label: "Vandaag opvolgen",
+      color: "#f59e0b",
+      bg: "#fffbeb",
+    };
+  }
+
+  if (diff === 1) {
+    return {
+      type: "binnenkort",
+      label: "Morgen opvolgen",
+      color: "#0ea5e9",
+      bg: "#e0f2fe",
+    };
+  }
+
+  if (diff > 1) {
+    return {
+      type: diff <= 7 ? "binnenkort" : "later",
+      label: `Over ${diff} dagen opvolgen`,
+      color: diff <= 7 ? "#0ea5e9" : "#64748b",
+      bg: diff <= 7 ? "#e0f2fe" : "#f8fafc",
+    };
+  }
+
+  const teLaat = Math.abs(diff);
+  return {
+    type: "telaat",
+    label: `${teLaat} ${teLaat === 1 ? "dag" : "dagen"} te laat`,
+    color: "#ef4444",
+    bg: "#fef2f2",
+  };
 }
 
-function isOpvolgingVerlopen(datum) {
-  if (!datum) return false;
-  return new Date(datum) < new Date();
+function isOpenLead(lead) {
+  return lead.status !== "Afgerond" && lead.status !== "Niet doorgegaan";
 }
 
-const LEEG_KLANT = {
-  naam: "", telefoon: "", email: "", regio: "", status: "Nieuwe lead",
-  startdatum: new Date().toISOString().split("T")[0], typeKlant: "",
-  budget: "", verantwoordelijke: "Luke", volgendActie: "", laatsteContact: "",
-  notities: "",
-};
+function mapOldStatus(status) {
+  const mapping = {
+    "In gesprek": "Intake gehad",
+    "Wacht op reactie": "Woningvoorstellen gestuurd",
+    "Actieve klant": "Zoekprofiel duidelijk",
+    "Doorgestuurd naar makelaar": "Doorgegeven",
+  };
+  return mapping[status] || status || "Nieuwe lead";
+}
 
-// ─── STORAGE ─────────────────────────────────────────────────────────────────
-const STORAGE_KEY = "crm_spanje_kompas_v1";
+function normalizeLead(lead) {
+  const normalizedStatus = STATUSSEN.includes(mapOldStatus(lead.status))
+    ? mapOldStatus(lead.status)
+    : "Nieuwe lead";
+
+  return {
+    ...LEEG_LEAD,
+    ...lead,
+    status: normalizedStatus,
+    leadbron: lead.leadbron || "Website",
+    leadscore: lead.leadscore || "B-lead",
+    volgendeActie: lead.volgendeActie || "Geen directe actie",
+    opvolgdatum: lead.opvolgdatum || lead.volgendActie || "",
+    geenStrengeDatum:
+      typeof lead.geenStrengeDatum === "boolean"
+        ? lead.geenStrengeDatum
+        : !(lead.opvolgdatum || lead.volgendActie),
+    laatsteContactdatum: lead.laatsteContactdatum || lead.laatsteContact || "",
+    contactmethode: lead.contactmethode || "Nog geen contact",
+    doelAankoop: lead.doelAankoop || lead.typeKlant || "",
+    gewensteRegio: lead.gewensteRegio || lead.regio || "",
+    tags: Array.isArray(lead.tags) ? lead.tags : [],
+  };
+}
 
 function loadData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : DEMO_LEADS;
-  } catch { return DEMO_LEADS; }
+    const data = raw ? JSON.parse(raw) : DEMO_LEADS;
+    return data.map(normalizeLead);
+  } catch {
+    return DEMO_LEADS.map(normalizeLead);
+  }
 }
 
 function saveData(data) {
@@ -155,78 +402,337 @@ function saveData(data) {
 // ─── ICONS ───────────────────────────────────────────────────────────────────
 const Icon = ({ name, size = 16 }) => {
   const icons = {
-    search: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>,
-    plus: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>,
-    edit: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
-    trash: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>,
-    x: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>,
-    user: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
-    phone: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
-    mail: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
-    map: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>,
-    calendar: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
-    bell: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
-    chart: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
-    flag: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>,
-    sun: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
-    back: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>,
-    save: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
+    search: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.35-4.35" />
+      </svg>
+    ),
+    plus: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    ),
+    edit: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+      </svg>
+    ),
+    trash: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="3,6 5,6 21,6" />
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        <path d="M10 11v6M14 11v6" />
+        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      </svg>
+    ),
+    x: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M18 6 6 18M6 6l12 12" />
+      </svg>
+    ),
+    user: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+    ),
+    map: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+        <circle cx="12" cy="10" r="3" />
+      </svg>
+    ),
+    calendar: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+    ),
+    bell: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+    ),
+    chart: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    ),
+    save: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+        <polyline points="17 21 17 13 7 13 7 21" />
+        <polyline points="7 3 7 8 15 8" />
+      </svg>
+    ),
+    table: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+      </svg>
+    ),
+    grid: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="3" y="3" width="7" height="7" />
+        <rect x="14" y="3" width="7" height="7" />
+        <rect x="14" y="14" width="7" height="7" />
+        <rect x="3" y="14" width="7" height="7" />
+      </svg>
+    ),
   };
+
   return icons[name] || null;
 };
 
-// ─── STAT CARD ────────────────────────────────────────────────────────────────
+// ─── STYLES ──────────────────────────────────────────────────────────────────
+const inputStyle = {
+  width: "100%",
+  border: "1px solid #e2e8f0",
+  borderRadius: 8,
+  padding: "8px 12px",
+  fontSize: 14,
+  color: "#0f172a",
+  background: "#f8fafc",
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+const selectStyle = {
+  border: "1px solid #e2e8f0",
+  borderRadius: 8,
+  padding: "8px 12px",
+  fontSize: 13,
+  color: "#0f172a",
+  background: "#fff",
+  cursor: "pointer",
+  outline: "none",
+};
+
+const labelStyle = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#64748b",
+  marginBottom: 5,
+  display: "block",
+};
+
+function btnStyle(color, solid = false) {
+  return {
+    background: solid ? color : `${color}12`,
+    color: solid ? "#fff" : color,
+    border: solid ? "none" : `1px solid ${color}30`,
+    borderRadius: 8,
+    padding: "6px 10px",
+    fontSize: 12,
+    cursor: "pointer",
+    display: "flex",
+    gap: 5,
+    alignItems: "center",
+    fontWeight: 700,
+  };
+}
+
+// ─── UI COMPONENTS ───────────────────────────────────────────────────────────
 function StatCard({ label, value, accent, icon }) {
   return (
-    <div style={{
-      background: "#fff", borderRadius: 14, padding: "20px 24px",
-      display: "flex", flexDirection: "column", gap: 6,
-      boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f1f5f9",
-      flex: 1, minWidth: 140,
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, color: accent, fontSize: 12, fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase" }}>
-        <Icon name={icon} size={14} />
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 14,
+        padding: "14px 16px",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+        border: "1px solid #f1f5f9",
+        flex: 1,
+        minWidth: 150,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 7,
+          color: accent,
+          fontSize: 11,
+          fontWeight: 800,
+          letterSpacing: ".04em",
+          textTransform: "uppercase",
+          marginBottom: 8,
+        }}
+      >
+        <Icon name={icon} size={13} />
         {label}
       </div>
-      <div style={{ fontSize: 34, fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 26, fontWeight: 900, color: "#0f172a", lineHeight: 1 }}>
+        {value}
+      </div>
     </div>
   );
 }
 
-// ─── STATUS BADGE ─────────────────────────────────────────────────────────────
-function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || { color: "#64748b", bg: "#f1f5f9" };
+function Badge({ children, color = "#64748b", bg = "#f8fafc" }) {
   return (
-    <span style={{
-      background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}22`,
-      borderRadius: 20, padding: "3px 10px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
-    }}>{status}</span>
+    <span
+      style={{
+        background: bg,
+        color,
+        border: `1px solid ${color}22`,
+        borderRadius: 999,
+        padding: "3px 9px",
+        fontSize: 11,
+        fontWeight: 700,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </span>
   );
 }
 
-// ─── MINI CHART (status verdeling) ───────────────────────────────────────────
+function StatusBadge({ status }) {
+  const cfg = STATUS_CONFIG[status] || { color: "#64748b", bg: "#f1f5f9" };
+  return <Badge color={cfg.color} bg={cfg.bg}>{status}</Badge>;
+}
+
+function SectionTitle({ children }) {
+  return (
+    <div
+      style={{
+        fontSize: 14,
+        fontWeight: 900,
+        color: "#0f172a",
+        marginBottom: 12,
+        paddingBottom: 8,
+        borderBottom: "1px solid #f1f5f9",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Field({ label, fieldKey, value, onChange, type = "text", as, options, rows = 4 }) {
+  return (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      {as === "textarea" ? (
+        <textarea
+          value={value || ""}
+          onChange={(e) => onChange(fieldKey, e.target.value)}
+          rows={rows}
+          style={{
+            ...inputStyle,
+            resize: "vertical",
+            lineHeight: 1.6,
+            fontFamily: "inherit",
+          }}
+        />
+      ) : as === "select" ? (
+        <select
+          value={value || ""}
+          onChange={(e) => onChange(fieldKey, e.target.value)}
+          style={inputStyle}
+        >
+          <option value="">Selecteer...</option>
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          type={type}
+          value={value || ""}
+          onChange={(e) => onChange(fieldKey, e.target.value)}
+          style={inputStyle}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── STATUS CHART ────────────────────────────────────────────────────────────
 function StatusChart({ leads }) {
   const counts = {};
-  STATUSSEN.forEach(s => { counts[s] = leads.filter(l => l.status === s).length; });
+  STATUSSEN.forEach((s) => {
+    counts[s] = leads.filter((l) => l.status === s).length;
+  });
+
   const max = Math.max(...Object.values(counts), 1);
 
   return (
-    <div style={{ background: "#fff", borderRadius: 14, padding: "20px 24px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 14, display: "flex", gap: 8, alignItems: "center" }}>
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 14,
+        padding: "16px 18px",
+        border: "1px solid #f1f5f9",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 800,
+          color: "#0f172a",
+          marginBottom: 12,
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+        }}
+      >
         <Icon name="chart" size={14} /> Leads per status
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {STATUSSEN.map(s => (
-          <div key={s} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 110, fontSize: 11, color: "#64748b", textAlign: "right", flexShrink: 0 }}>{s}</div>
-            <div style={{ flex: 1, background: "#f1f5f9", borderRadius: 6, height: 14, overflow: "hidden" }}>
-              <div style={{
-                width: `${(counts[s] / max) * 100}%`, height: "100%",
-                background: STATUS_CONFIG[s]?.color || "#94a3b8", borderRadius: 6,
-                transition: "width .5s ease",
-              }} />
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {STATUSSEN.map((s) => (
+          <div key={s} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div
+              style={{
+                width: 135,
+                fontSize: 11,
+                color: "#64748b",
+                flexShrink: 0,
+              }}
+            >
+              {s}
             </div>
-            <div style={{ width: 20, fontSize: 12, fontWeight: 700, color: "#0f172a" }}>{counts[s]}</div>
+            <div
+              style={{
+                flex: 1,
+                background: "#f1f5f9",
+                borderRadius: 6,
+                height: 10,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${(counts[s] / max) * 100}%`,
+                  height: "100%",
+                  background: STATUS_CONFIG[s]?.color || "#94a3b8",
+                  borderRadius: 6,
+                }}
+              />
+            </div>
+            <div
+              style={{
+                width: 18,
+                fontSize: 11,
+                fontWeight: 800,
+                color: "#0f172a",
+                textAlign: "right",
+              }}
+            >
+              {counts[s]}
+            </div>
           </div>
         ))}
       </div>
@@ -234,177 +740,583 @@ function StatusChart({ leads }) {
   );
 }
 
-// ─── OPVOLGING PANEL ──────────────────────────────────────────────────────────
+// ─── OPVOLGING PANEL ─────────────────────────────────────────────────────────
 function OpvolgingPanel({ leads, onOpen }) {
-  const urgent = leads.filter(l => l.volgendActie && (isOpvolgingBinnenkort(l.volgendActie) || isOpvolgingVerlopen(l.volgendActie)) && l.status !== "Afgerond" && l.status !== "Niet doorgegaan");
-  if (!urgent.length) return null;
+  const relevanteLeads = leads.filter(isOpenLead);
+
+  const groepen = {
+    "Te laat": relevanteLeads.filter((l) => getOpvolgingInfo(l).type === "telaat"),
+    "Vandaag opvolgen": relevanteLeads.filter((l) => getOpvolgingInfo(l).type === "vandaag"),
+    "Binnenkort opvolgen": relevanteLeads.filter((l) => getOpvolgingInfo(l).type === "binnenkort"),
+    "Geen strenge datum": relevanteLeads.filter((l) => getOpvolgingInfo(l).type === "geen"),
+  };
 
   return (
-    <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 14, padding: "16px 20px", marginBottom: 24 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#92400e", marginBottom: 10, display: "flex", gap: 8, alignItems: "center" }}>
-        <Icon name="bell" size={14} /> Opvolging vereist ({urgent.length})
+    <div
+      style={{
+        background: "#fff",
+        border: "1px solid #f1f5f9",
+        borderRadius: 14,
+        padding: "16px 18px",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 800,
+          color: "#0f172a",
+          marginBottom: 12,
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+        }}
+      >
+        <Icon name="bell" size={14} /> Rustige opvolging
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {urgent.map(l => (
-          <button key={l.id} onClick={() => onOpen(l)} style={{
-            background: "#fff", border: "1px solid #fcd34d", borderRadius: 8,
-            padding: "6px 12px", fontSize: 12, color: "#92400e", cursor: "pointer",
-            display: "flex", gap: 6, alignItems: "center",
-          }}>
-            <span style={{ fontWeight: 700 }}>{l.naam}</span>
-            <span style={{ opacity: .7 }}>→ {formatDatum(l.volgendActie)}</span>
-            {isOpvolgingVerlopen(l.volgendActie) && <span style={{ color: "#ef4444", fontWeight: 800 }}>VERLOPEN</span>}
-          </button>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+        {Object.entries(groepen).map(([titel, items]) => (
+          <div
+            key={titel}
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #eef2f7",
+              borderRadius: 12,
+              padding: 10,
+              minHeight: 86,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 800,
+                color: "#64748b",
+                marginBottom: 8,
+              }}
+            >
+              {titel} ({items.length})
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {items.slice(0, 3).map((lead) => {
+                const info = getOpvolgingInfo(lead);
+                return (
+                  <button
+                    key={lead.id}
+                    onClick={() => onOpen(lead)}
+                    style={{
+                      textAlign: "left",
+                      background: "#fff",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: 8,
+                      padding: "7px 8px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#0f172a" }}>
+                      {lead.naam}
+                    </div>
+                    <div style={{ fontSize: 11, color: info.color, marginTop: 2 }}>
+                      {info.label}
+                    </div>
+                  </button>
+                );
+              })}
+
+              {items.length > 3 && (
+                <div style={{ fontSize: 11, color: "#94a3b8", paddingLeft: 2 }}>
+                  +{items.length - 3} meer
+                </div>
+              )}
+
+              {!items.length && (
+                <div style={{ fontSize: 11, color: "#94a3b8" }}>Geen leads</div>
+              )}
+            </div>
+          </div>
         ))}
       </div>
     </div>
   );
 }
 
-// ─── KLANT KAART ─────────────────────────────────────────────────────────────
-function KlantKaart({ klant, onOpen, onDelete }) {
-  const looptijd = looptijdDagen(klant.startdatum);
-  const opvolgingKleur = isOpvolgingVerlopen(klant.volgendActie) ? "#ef4444"
-    : isOpvolgingBinnenkort(klant.volgendActie) ? "#f59e0b" : "#64748b";
+// ─── LEAD CARD ───────────────────────────────────────────────────────────────
+function LeadCard({ lead, onOpen, onDelete, onStatusChange }) {
+  const opvolging = getOpvolgingInfo(lead);
+  const scoreColor =
+    lead.leadscore === "A-lead" ? "#10b981" : lead.leadscore === "B-lead" ? "#f59e0b" : "#64748b";
 
   return (
-    <div style={{
-      background: "#fff", borderRadius: 14, border: "1px solid #f1f5f9",
-      boxShadow: "0 1px 4px rgba(0,0,0,0.06)", padding: "18px 20px",
-      display: "flex", flexDirection: "column", gap: 12,
-      transition: "box-shadow .2s", cursor: "pointer",
-    }}
-      onClick={() => onOpen(klant)}
-      onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.10)"}
-      onMouseLeave={e => e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.06)"}
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 14,
+        border: "1px solid #f1f5f9",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+        padding: "17px 18px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        cursor: "pointer",
+      }}
+      onClick={() => onOpen(lead)}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#0f172a" }}>{klant.naam}</div>
-          <div style={{ fontSize: 12, color: "#64748b", marginTop: 2, display: "flex", gap: 6, alignItems: "center" }}>
-            <Icon name="map" size={11} />{klant.regio}
+          <div style={{ fontWeight: 900, fontSize: 15, color: "#0f172a" }}>{lead.naam}</div>
+          <div
+            style={{
+              fontSize: 12,
+              color: "#64748b",
+              marginTop: 3,
+              display: "flex",
+              gap: 5,
+              alignItems: "center",
+            }}
+          >
+            <Icon name="map" size={11} />
+            {lead.regio || "Regio onbekend"}
           </div>
         </div>
-        <StatusBadge status={klant.status} />
+        <StatusBadge status={lead.status} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px", fontSize: 12, color: "#475569" }}>
-        <div style={{ display: "flex", gap: 5, alignItems: "center" }}><Icon name="flag" size={11} />{klant.typeKlant || "–"}</div>
-        <div style={{ display: "flex", gap: 5, alignItems: "center" }}><Icon name="chart" size={11} />{looptijd} dagen</div>
-        <div style={{ display: "flex", gap: 5, alignItems: "center" }}><Icon name="sun" size={11} />Budget: {klant.budget || "–"}</div>
-        <div style={{ display: "flex", gap: 5, alignItems: "center", color: opvolgingKleur }}>
-          <Icon name="calendar" size={11} />
-          {klant.volgendActie ? formatDatum(klant.volgendActie) : "Geen actie"}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <Badge color={scoreColor} bg={`${scoreColor}12`}>
+          {lead.leadscore}
+        </Badge>
+        <Badge color="#6366f1" bg="#eef2ff">
+          {lead.leadbron || "Bron onbekend"}
+        </Badge>
+        {lead.tags?.slice(0, 3).map((tag) => (
+          <Badge key={tag} color="#64748b" bg="#f8fafc">
+            {tag}
+          </Badge>
+        ))}
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "7px 12px",
+          fontSize: 12,
+          color: "#475569",
+        }}
+      >
+        <div>
+          <strong>Doel:</strong> {lead.doelAankoop || "–"}
+        </div>
+        <div>
+          <strong>Budget:</strong> {lead.budget || "–"}
+        </div>
+        <div>
+          <strong>Actie:</strong> {lead.volgendeActie || "–"}
+        </div>
+        <div style={{ color: opvolging.color }}>
+          <strong>Opvolging:</strong> {opvolging.label}
         </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }} onClick={e => e.stopPropagation()}>
-        <button onClick={() => onOpen(klant)} style={btnStyle("#6366f1")}>
-          <Icon name="edit" size={13} /> Openen
-        </button>
-        <button onClick={() => onDelete(klant.id)} style={btnStyle("#ef4444")}>
-          <Icon name="trash" size={13} />
-        </button>
+      <div
+        style={{
+          fontSize: 12,
+          color: "#64748b",
+          background: "#f8fafc",
+          borderRadius: 10,
+          padding: "9px 10px",
+          minHeight: 36,
+        }}
+      >
+        {lead.voortgangsnotitie || "Geen korte voortgangsnotitie."}
+      </div>
+
+      <div
+        style={{ display: "flex", justifyContent: "space-between", gap: 8 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <select
+          value={lead.status}
+          onChange={(e) => onStatusChange(lead.id, e.target.value)}
+          style={{
+            ...selectStyle,
+            padding: "6px 8px",
+            fontSize: 12,
+            maxWidth: 170,
+          }}
+        >
+          {STATUSSEN.map((s) => (
+            <option key={s}>{s}</option>
+          ))}
+        </select>
+
+        <div style={{ display: "flex", gap: 7 }}>
+          <button onClick={() => onOpen(lead)} style={btnStyle("#6366f1")}>
+            Openen
+          </button>
+          <button onClick={() => onOpen(lead)} style={btnStyle("#0ea5e9")}>
+            <Icon name="edit" size={13} />
+          </button>
+          <button onClick={() => onDelete(lead.id)} style={btnStyle("#ef4444")}>
+            <Icon name="trash" size={13} />
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-function btnStyle(color) {
-  return {
-    background: `${color}12`, color, border: `1px solid ${color}30`,
-    borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer",
-    display: "flex", gap: 4, alignItems: "center", fontWeight: 600,
-  };
-}
+// ─── TABLE VIEW ──────────────────────────────────────────────────────────────
+function LeadTable({ leads, onOpen, onDelete }) {
+  return (
+    <div
+      style={{
+        background: "#fff",
+        border: "1px solid #f1f5f9",
+        borderRadius: 14,
+        overflow: "auto",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+      }}
+    >
+      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
+        <thead>
+          <tr style={{ background: "#f8fafc" }}>
+            {[
+              "Naam",
+              "Status",
+              "Regio",
+              "Budget",
+              "Leadscore",
+              "Leadbron",
+              "Volgende actie",
+              "Opvolging",
+              "Laatste contact",
+              "",
+            ].map((h) => (
+              <th
+                key={h}
+                style={{
+                  textAlign: "left",
+                  padding: "12px 14px",
+                  fontSize: 11,
+                  color: "#64748b",
+                  textTransform: "uppercase",
+                  letterSpacing: ".04em",
+                  borderBottom: "1px solid #f1f5f9",
+                }}
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
 
-// ─── KLANT MODAL (detail + edit) ─────────────────────────────────────────────
-function KlantModal({ klant, onClose, onSave, isNieuw }) {
-  const [form, setForm] = useState(klant);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  const inputStyle = {
-    width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px",
-    fontSize: 14, color: "#0f172a", background: "#f8fafc", outline: "none",
-    boxSizing: "border-box",
-  };
-  const labelStyle = { fontSize: 12, fontWeight: 600, color: "#64748b", marginBottom: 4, display: "block" };
-
-  const Field = ({ label, k, type = "text", as }) => (
-    <div>
-      <label style={labelStyle}>{label}</label>
-      {as === "textarea"
-        ? <textarea value={form[k] || ""} onChange={e => set(k, e.target.value)}
-            rows={10} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6, fontFamily: "inherit" }} />
-        : as === "select"
-          ? <select value={form[k] || ""} onChange={e => set(k, e.target.value)} style={inputStyle}>
-              {STATUSSEN.map(s => <option key={s}>{s}</option>)}
-            </select>
-          : <input type={type} value={form[k] || ""} onChange={e => set(k, e.target.value)} style={inputStyle} />
-      }
+        <tbody>
+          {leads.map((lead) => {
+            const opvolging = getOpvolgingInfo(lead);
+            return (
+              <tr key={lead.id} style={{ borderBottom: "1px solid #f8fafc" }}>
+                <td style={tdStyle}>
+                  <button
+                    onClick={() => onOpen(lead)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      fontWeight: 800,
+                      color: "#0f172a",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {lead.naam}
+                  </button>
+                </td>
+                <td style={tdStyle}>
+                  <StatusBadge status={lead.status} />
+                </td>
+                <td style={tdStyle}>{lead.regio || "–"}</td>
+                <td style={tdStyle}>{lead.budget || "–"}</td>
+                <td style={tdStyle}>{lead.leadscore || "–"}</td>
+                <td style={tdStyle}>{lead.leadbron || "–"}</td>
+                <td style={tdStyle}>{lead.volgendeActie || "–"}</td>
+                <td style={{ ...tdStyle, color: opvolging.color, fontWeight: 700 }}>
+                  {opvolging.label}
+                </td>
+                <td style={tdStyle}>
+                  {lead.laatsteContactdatum ? formatDatum(lead.laatsteContactdatum) : "–"}
+                </td>
+                <td style={tdStyle}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => onOpen(lead)} style={btnStyle("#6366f1")}>
+                      Open
+                    </button>
+                    <button onClick={() => onDelete(lead.id)} style={btnStyle("#ef4444")}>
+                      <Icon name="trash" size={13} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
+}
+
+const tdStyle = {
+  padding: "12px 14px",
+  fontSize: 12,
+  color: "#475569",
+  verticalAlign: "middle",
+};
+
+// ─── MODAL ───────────────────────────────────────────────────────────────────
+function LeadModal({ lead, onClose, onSave, isNieuw }) {
+  const [form, setForm] = useState(lead);
+
+  const set = (k, v) => {
+    setForm((f) => ({ ...f, [k]: v }));
+  };
+
+  const toggleTag = (tag) => {
+    setForm((f) => {
+      const current = Array.isArray(f.tags) ? f.tags : [];
+      return {
+        ...f,
+        tags: current.includes(tag)
+          ? current.filter((t) => t !== tag)
+          : [...current, tag],
+      };
+    });
+  };
+
+  const save = () => {
+    const cleanForm = {
+      ...form,
+      opvolgdatum: form.geenStrengeDatum ? "" : form.opvolgdatum,
+    };
+
+    onSave(cleanForm);
+  };
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(15,23,42,.45)", zIndex: 1000,
-      display: "flex", alignItems: "flex-start", justifyContent: "center",
-      padding: "24px 16px", overflowY: "auto",
-    }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{
-        background: "#fff", borderRadius: 18, width: "100%", maxWidth: 720,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.18)", padding: "28px 32px",
-        display: "flex", flexDirection: "column", gap: 20,
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>
-            {isNieuw ? "Nieuwe klant / lead toevoegen" : `${form.naam}`}
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15,23,42,.45)",
+        zIndex: 1000,
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        padding: "24px 16px",
+        overflowY: "auto",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 18,
+          width: "100%",
+          maxWidth: 980,
+          boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
+          padding: "26px 30px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 22,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 18 }}>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: "#0f172a" }}>
+              {isNieuw ? "Nieuwe lead toevoegen" : form.naam || "Lead bewerken"}
+            </div>
+            <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+              Bewerk contactgegevens, wensen, opvolging en notities.
+            </div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>
+
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#94a3b8",
+            }}
+          >
             <Icon name="x" size={22} />
           </button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <Field label="Naam klant / lead" k="naam" />
-          <Field label="Telefoon" k="telefoon" />
-          <Field label="E-mailadres" k="email" type="email" />
-          <Field label="Regio / Locatie Spanje" k="regio" />
-          <div>
-            <label style={labelStyle}>Status</label>
-            <select value={form.status} onChange={e => set("status", e.target.value)} style={inputStyle}>
-              {STATUSSEN.map(s => <option key={s}>{s}</option>)}
-            </select>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+          <div
+            style={{
+              background: "#fff",
+              border: "1px solid #f1f5f9",
+              borderRadius: 14,
+              padding: 16,
+            }}
+          >
+            <SectionTitle>Contactgegevens</SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <Field label="Naam" fieldKey="naam" value={form.naam} onChange={set} />
+              <Field label="Telefoon" fieldKey="telefoon" value={form.telefoon} onChange={set} />
+              <Field label="E-mail" fieldKey="email" type="email" value={form.email} onChange={set} />
+              <Field label="Regio hoofdkaart" fieldKey="regio" value={form.regio} onChange={set} />
+              <Field label="Startdatum" fieldKey="startdatum" type="date" value={form.startdatum} onChange={set} />
+              <Field label="Leadbron" fieldKey="leadbron" as="select" options={LEADBRONNEN} value={form.leadbron} onChange={set} />
+            </div>
           </div>
-          <Field label="Type klant / interesse" k="typeKlant" />
-          <Field label="Startdatum" k="startdatum" type="date" />
-          <Field label="Laatste contact" k="laatsteContact" type="date" />
-          <Field label="Volgende actie / follow-up" k="volgendActie" type="date" />
-          <Field label="Budget / waarde indicatie" k="budget" />
-          <Field label="Verantwoordelijke" k="verantwoordelijke" />
+
+          <div
+            style={{
+              background: "#fff",
+              border: "1px solid #f1f5f9",
+              borderRadius: 14,
+              padding: 16,
+            }}
+          >
+            <SectionTitle>Status en opvolging</SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <Field label="Status" fieldKey="status" as="select" options={STATUSSEN} value={form.status} onChange={set} />
+              <Field label="Leadscore" fieldKey="leadscore" as="select" options={LEADSCORES} value={form.leadscore} onChange={set} />
+              <Field label="Volgende actie" fieldKey="volgendeActie" as="select" options={VOLGENDE_ACTIES} value={form.volgendeActie} onChange={set} />
+
+              <div>
+                <label style={labelStyle}>Opvolging</label>
+                <select
+                  value={form.geenStrengeDatum ? "geen" : "datum"}
+                  onChange={(e) => set("geenStrengeDatum", e.target.value === "geen")}
+                  style={inputStyle}
+                >
+                  <option value="geen">Geen strenge datum</option>
+                  <option value="datum">Concrete opvolgdatum</option>
+                </select>
+              </div>
+
+              {!form.geenStrengeDatum && (
+                <Field
+                  label="Concrete opvolgdatum"
+                  fieldKey="opvolgdatum"
+                  type="date"
+                  value={form.opvolgdatum}
+                  onChange={set}
+                />
+              )}
+
+              <Field
+                label="Laatste contactdatum"
+                fieldKey="laatsteContactdatum"
+                type="date"
+                value={form.laatsteContactdatum}
+                onChange={set}
+              />
+
+              <Field
+                label="Contactmethode"
+                fieldKey="contactmethode"
+                as="select"
+                options={CONTACTMETHODES}
+                value={form.contactmethode}
+                onChange={set}
+              />
+            </div>
+          </div>
         </div>
 
-        <div>
-          <label style={{ ...labelStyle, marginBottom: 6 }}>
-            📝 Notities &amp; gespreksaantekeningen
-          </label>
-          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>
-            Wat zoekt de klant? Welke wensen, bezwaren, afspraken en persoonlijke opmerkingen zijn er?
+        <div
+          style={{
+            background: "#fff",
+            border: "1px solid #f1f5f9",
+            borderRadius: 14,
+            padding: 16,
+          }}
+        >
+          <SectionTitle>Belangrijkste wensen</SectionTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+            <Field label="Gewenste regio" fieldKey="gewensteRegio" value={form.gewensteRegio} onChange={set} />
+            <Field label="Gewenste plaats" fieldKey="gewenstePlaats" value={form.gewenstePlaats} onChange={set} />
+            <Field label="Woningtype" fieldKey="woningtype" value={form.woningtype} onChange={set} />
+            <Field label="Nieuwbouw of bestaande bouw" fieldKey="bouwtype" value={form.bouwtype} onChange={set} />
+            <Field label="Aantal slaapkamers" fieldKey="slaapkamers" value={form.slaapkamers} onChange={set} />
+            <Field label="Budget" fieldKey="budget" value={form.budget} onChange={set} />
+            <Field label="Doel aankoop" fieldKey="doelAankoop" value={form.doelAankoop} onChange={set} />
+            <Field label="Verhuurinteresse" fieldKey="verhuurinteresse" value={form.verhuurinteresse} onChange={set} />
+            <Field label="Tijdshorizon" fieldKey="tijdshorizon" value={form.tijdshorizon} onChange={set} />
           </div>
-          <textarea value={form.notities || ""} onChange={e => set("notities", e.target.value)}
-            rows={10} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.7, fontFamily: "inherit" }}
-            placeholder="Bijv: Familie Van den Berg zoekt een vrijstaande villa in Altea met privézwembad. Zorgen over de NIE-procedure. Volgende stap: 3 objecten sturen en terugbellen op donderdag." />
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, paddingTop: 4 }}>
-          <button onClick={onClose} style={{ ...btnStyle("#64748b"), padding: "8px 18px", fontSize: 13 }}>
+        <div
+          style={{
+            background: "#fff",
+            border: "1px solid #f1f5f9",
+            borderRadius: 14,
+            padding: 16,
+          }}
+        >
+          <SectionTitle>Tags</SectionTitle>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {TAGS.map((tag) => {
+              const active = form.tags?.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  onClick={() => toggleTag(tag)}
+                  style={{
+                    border: `1px solid ${active ? "#6366f1" : "#e2e8f0"}`,
+                    background: active ? "#eef2ff" : "#fff",
+                    color: active ? "#6366f1" : "#64748b",
+                    borderRadius: 999,
+                    padding: "6px 10px",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+          <Field
+            label="Notities uit gesprek"
+            fieldKey="notities"
+            as="textarea"
+            rows={8}
+            value={form.notities}
+            onChange={set}
+          />
+          <Field
+            label="Korte voortgangsnotitie"
+            fieldKey="voortgangsnotitie"
+            as="textarea"
+            rows={8}
+            value={form.voortgangsnotitie}
+            onChange={set}
+          />
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+          <button onClick={onClose} style={{ ...btnStyle("#64748b"), padding: "9px 18px" }}>
             Annuleren
           </button>
-          <button onClick={() => onSave(form)} style={{
-            background: "#6366f1", color: "#fff", border: "none", borderRadius: 9,
-            padding: "9px 22px", fontSize: 13, fontWeight: 700, cursor: "pointer",
-            display: "flex", gap: 6, alignItems: "center",
-          }}>
+          <button
+            onClick={save}
+            style={{
+              ...btnStyle("#6366f1", true),
+              padding: "10px 22px",
+              fontSize: 13,
+            }}
+          >
             <Icon name="save" size={14} /> Opslaan
           </button>
         </div>
@@ -413,165 +1325,400 @@ function KlantModal({ klant, onClose, onSave, isNieuw }) {
   );
 }
 
-// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+// ─── MAIN APP ────────────────────────────────────────────────────────────────
 export default function App() {
   const [leads, setLeads] = useState(loadData);
   const [zoek, setZoek] = useState("");
   const [filterStatus, setFilterStatus] = useState("Alle");
   const [filterRegio, setFilterRegio] = useState("Alle");
+  const [filterLeadscore, setFilterLeadscore] = useState("Alle");
+  const [filterLeadbron, setFilterLeadbron] = useState("Alle");
+  const [filterDoel, setFilterDoel] = useState("Alle");
+  const [filterOpvolging, setFilterOpvolging] = useState("Alle");
   const [sorteer, setSorteer] = useState("startdatum");
-  const [modal, setModal] = useState(null); // null | { klant, isNieuw }
+  const [weergave, setWeergave] = useState("kaarten");
+  const [modal, setModal] = useState(null);
 
-  useEffect(() => { saveData(leads); }, [leads]);
+  useEffect(() => {
+    saveData(leads);
+  }, [leads]);
 
-  const regioos = useMemo(() => ["Alle", ...Array.from(new Set(leads.map(l => l.regio).filter(Boolean)))], [leads]);
+  const regioOpties = useMemo(
+    () => ["Alle", ...Array.from(new Set(leads.map((l) => l.regio).filter(Boolean)))],
+    [leads]
+  );
+
+  const doelOpties = useMemo(
+    () => ["Alle", ...Array.from(new Set(leads.map((l) => l.doelAankoop).filter(Boolean)))],
+    [leads]
+  );
 
   const gefilterd = useMemo(() => {
     let res = leads;
-    if (zoek) res = res.filter(l => l.naam.toLowerCase().includes(zoek.toLowerCase()));
-    if (filterStatus !== "Alle") res = res.filter(l => l.status === filterStatus);
-    if (filterRegio !== "Alle") res = res.filter(l => l.regio === filterRegio);
+
+    if (zoek) {
+      const q = zoek.toLowerCase();
+      res = res.filter(
+        (l) =>
+          l.naam?.toLowerCase().includes(q) ||
+          l.email?.toLowerCase().includes(q) ||
+          l.regio?.toLowerCase().includes(q)
+      );
+    }
+
+    if (filterStatus !== "Alle") res = res.filter((l) => l.status === filterStatus);
+    if (filterRegio !== "Alle") res = res.filter((l) => l.regio === filterRegio);
+    if (filterLeadscore !== "Alle") res = res.filter((l) => l.leadscore === filterLeadscore);
+    if (filterLeadbron !== "Alle") res = res.filter((l) => l.leadbron === filterLeadbron);
+    if (filterDoel !== "Alle") res = res.filter((l) => l.doelAankoop === filterDoel);
+
+    if (filterOpvolging !== "Alle") {
+      res = res.filter((l) => getOpvolgingInfo(l).type === filterOpvolging);
+    }
+
     res = [...res].sort((a, b) => {
       if (sorteer === "startdatum") return new Date(b.startdatum) - new Date(a.startdatum);
-      if (sorteer === "looptijd") return looptijdDagen(b.startdatum) - looptijdDagen(a.startdatum);
-      if (sorteer === "volgendActie") return (a.volgendActie || "9") < (b.volgendActie || "9") ? -1 : 1;
+      if (sorteer === "opvolging") {
+        const aDate = a.geenStrengeDatum || !a.opvolgdatum ? "9999-12-31" : a.opvolgdatum;
+        const bDate = b.geenStrengeDatum || !b.opvolgdatum ? "9999-12-31" : b.opvolgdatum;
+        return aDate.localeCompare(bDate);
+      }
+      if (sorteer === "leadscore") {
+        const order = { "A-lead": 1, "B-lead": 2, "C-lead": 3 };
+        return (order[a.leadscore] || 9) - (order[b.leadscore] || 9);
+      }
       return 0;
     });
+
     return res;
-  }, [leads, zoek, filterStatus, filterRegio, sorteer]);
+  }, [
+    leads,
+    zoek,
+    filterStatus,
+    filterRegio,
+    filterLeadscore,
+    filterLeadbron,
+    filterDoel,
+    filterOpvolging,
+    sorteer,
+  ]);
 
-  const stats = useMemo(() => ({
-    totaal: leads.length,
-    actief: leads.filter(l => l.status === "Actieve klant").length,
-    warm: leads.filter(l => l.status === "In gesprek").length,
-    afgerond: leads.filter(l => l.status === "Afgerond").length,
-    gemLooptijd: leads.length ? Math.round(leads.reduce((a, l) => a + looptijdDagen(l.startdatum), 0) / leads.length) : 0,
-  }), [leads]);
+  const stats = useMemo(
+    () => ({
+      open: leads.filter(isOpenLead).length,
+      nieuw: leads.filter((l) => l.status === "Nieuwe lead").length,
+      aLeads: leads.filter((l) => isOpenLead(l) && l.leadscore === "A-lead").length,
+      doorgegeven: leads.filter((l) => l.status === "Doorgegeven").length,
+      afgerond: leads.filter((l) => l.status === "Afgerond").length,
+    }),
+    [leads]
+  );
 
-  function opslaanKlant(form) {
+  function opslaanLead(form) {
     if (form.id) {
-      setLeads(ls => ls.map(l => l.id === form.id ? form : l));
+      setLeads((ls) => ls.map((l) => (l.id === form.id ? normalizeLead(form) : l)));
     } else {
-      setLeads(ls => [...ls, { ...form, id: Date.now().toString() }]);
+      setLeads((ls) => [
+        ...ls,
+        normalizeLead({
+          ...form,
+          id: Date.now().toString(),
+          startdatum: form.startdatum || todayISO(),
+        }),
+      ]);
     }
     setModal(null);
   }
 
-  function verwijderKlant(id) {
-if (window.confirm("Weet je zeker dat je deze lead wilt verwijderen?")) {
-      setLeads(ls => ls.filter(l => l.id !== id));
+  function verwijderLead(id) {
+    if (confirm("Weet je zeker dat je deze lead wilt verwijderen?")) {
+      setLeads((ls) => ls.filter((l) => l.id !== id));
     }
   }
 
-  const selectStyle = {
-    border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 12px",
-    fontSize: 13, color: "#0f172a", background: "#fff", cursor: "pointer", outline: "none",
-  };
+  function wijzigStatus(id, status) {
+    setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, status } : l)));
+  }
+
+  function resetFilters() {
+    setZoek("");
+    setFilterStatus("Alle");
+    setFilterRegio("Alle");
+    setFilterLeadscore("Alle");
+    setFilterLeadbron("Alle");
+    setFilterDoel("Alle");
+    setFilterOpvolging("Alle");
+    setSorteer("startdatum");
+  }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-      {/* HEADER */}
-      <div style={{
-        background: "#fff", borderBottom: "1px solid #f1f5f9",
-        padding: "0 32px", display: "flex", alignItems: "center",
-        justifyContent: "space-between", height: 60, position: "sticky", top: 0, zIndex: 100,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-      }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#f8fafc",
+        fontFamily: "'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+      }}
+    >
+      <div
+        style={{
+          background: "#fff",
+          borderBottom: "1px solid #f1f5f9",
+          padding: "0 32px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          height: 62,
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ fontSize: 22 }}>🇪🇸</div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 16, color: "#0f172a" }}>Mijn Spanje Kompas</div>
-            <div style={{ fontSize: 11, color: "#94a3b8" }}>CRM — Klantbeheer</div>
-          </div>
-        </div>
-        <button onClick={() => setModal({ klant: { ...LEEG_KLANT }, isNieuw: true })} style={{
-          background: "#6366f1", color: "#fff", border: "none", borderRadius: 9,
-          padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer",
-          display: "flex", gap: 6, alignItems: "center",
-        }}>
-          <Icon name="plus" size={14} /> Nieuwe lead
-        </button>
-      </div>
-
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px" }}>
-
-        {/* STATS */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 28 }}>
-          <StatCard label="Totaal leads" value={stats.totaal} accent="#6366f1" icon="user" />
-          <StatCard label="Actieve klanten" value={stats.actief} accent="#10b981" icon="flag" />
-          <StatCard label="In gesprek" value={stats.warm} accent="#f59e0b" icon="phone" />
-          <StatCard label="Afgerond" value={stats.afgerond} accent="#64748b" icon="save" />
-          <StatCard label="Gem. looptijd" value={`${stats.gemLooptijd}d`} accent="#8b5cf6" icon="calendar" />
-        </div>
-
-        {/* CHART + OPVOLGING */}
-        <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16, marginBottom: 28 }}>
-          <StatusChart leads={leads} />
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            <OpvolgingPanel leads={leads} onOpen={k => setModal({ klant: k, isNieuw: false })} />
-            <div style={{
-              background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 14,
-              padding: "16px 20px", fontSize: 13, color: "#15803d", lineHeight: 1.6,
-            }}>
-              <strong>💡 Tip:</strong> Klik op een klantkaart hieronder om alle details te zien en te bewerken. Gebruik de filters om snel te zoeken. Notities worden automatisch opgeslagen in je browser.
+            <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a" }}>
+              Mijn Spanje Kompas
+            </div>
+            <div style={{ fontSize: 11, color: "#94a3b8" }}>
+              Lead- en klantvolgsysteem
             </div>
           </div>
         </div>
 
-        {/* FILTERS */}
-        <div style={{
-          display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20,
-          background: "#fff", borderRadius: 12, padding: "14px 16px",
-          border: "1px solid #f1f5f9", boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 200, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0", padding: "7px 12px" }}>
-            <Icon name="search" size={14} />
-            <input value={zoek} onChange={e => setZoek(e.target.value)} placeholder="Zoeken op naam…"
-              style={{ border: "none", outline: "none", background: "transparent", fontSize: 13, flex: 1, color: "#0f172a" }} />
-          </div>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
-            <option>Alle</option>
-            {STATUSSEN.map(s => <option key={s}>{s}</option>)}
-          </select>
-          <select value={filterRegio} onChange={e => setFilterRegio(e.target.value)} style={selectStyle}>
-            {regioos.map(r => <option key={r}>{r}</option>)}
-          </select>
-          <select value={sorteer} onChange={e => setSorteer(e.target.value)} style={selectStyle}>
-            <option value="startdatum">Sorteren: startdatum</option>
-            <option value="looptijd">Sorteren: looptijd</option>
-            <option value="volgendActie">Sorteren: follow-up</option>
-          </select>
-          <div style={{ fontSize: 12, color: "#94a3b8", alignSelf: "center" }}>{gefilterd.length} resultaten</div>
+        <button
+          onClick={() => setModal({ lead: { ...LEEG_LEAD }, isNieuw: true })}
+          style={{
+            background: "#6366f1",
+            color: "#fff",
+            border: "none",
+            borderRadius: 9,
+            padding: "9px 18px",
+            fontSize: 13,
+            fontWeight: 800,
+            cursor: "pointer",
+            display: "flex",
+            gap: 7,
+            alignItems: "center",
+          }}
+        >
+          <Icon name="plus" size={14} /> Nieuwe lead
+        </button>
+      </div>
+
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "26px 24px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 22 }}>
+          <StatCard label="Totaal open leads" value={stats.open} accent="#6366f1" icon="user" />
+          <StatCard label="Nieuwe leads" value={stats.nieuw} accent="#0ea5e9" icon="plus" />
+          <StatCard label="A-leads" value={stats.aLeads} accent="#10b981" icon="chart" />
+          <StatCard label="Doorgegeven" value={stats.doorgegeven} accent="#14b8a6" icon="save" />
+          <StatCard label="Afgerond" value={stats.afgerond} accent="#64748b" icon="calendar" />
         </div>
 
-        {/* KLANTEN GRID */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(260px, 330px) 1fr",
+            gap: 16,
+            marginBottom: 20,
+          }}
+        >
+          <StatusChart leads={leads} />
+          <OpvolgingPanel leads={leads} onOpen={(lead) => setModal({ lead, isNieuw: false })} />
+        </div>
+
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: 14,
+            padding: "14px 16px",
+            border: "1px solid #f1f5f9",
+            boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+            marginBottom: 18,
+          }}
+        >
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flex: 1,
+                minWidth: 210,
+                background: "#f8fafc",
+                borderRadius: 8,
+                border: "1px solid #e2e8f0",
+                padding: "8px 12px",
+              }}
+            >
+              <Icon name="search" size={14} />
+              <input
+                value={zoek}
+                onChange={(e) => setZoek(e.target.value)}
+                placeholder="Zoeken op naam, e-mail of regio..."
+                style={{
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  fontSize: 13,
+                  flex: 1,
+                  color: "#0f172a",
+                }}
+              />
+            </div>
+
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={selectStyle}>
+              <option>Alle</option>
+              {STATUSSEN.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+
+            <select value={filterRegio} onChange={(e) => setFilterRegio(e.target.value)} style={selectStyle}>
+              {regioOpties.map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+
+            <select value={filterLeadscore} onChange={(e) => setFilterLeadscore(e.target.value)} style={selectStyle}>
+              <option>Alle</option>
+              {LEADSCORES.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+
+            <select value={filterLeadbron} onChange={(e) => setFilterLeadbron(e.target.value)} style={selectStyle}>
+              <option>Alle</option>
+              {LEADBRONNEN.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+
+            <select value={filterDoel} onChange={(e) => setFilterDoel(e.target.value)} style={selectStyle}>
+              {doelOpties.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+
+            <select value={filterOpvolging} onChange={(e) => setFilterOpvolging(e.target.value)} style={selectStyle}>
+              <option value="Alle">Alle opvolging</option>
+              <option value="vandaag">Vandaag</option>
+              <option value="binnenkort">Binnenkort</option>
+              <option value="telaat">Te laat</option>
+              <option value="geen">Geen strenge datum</option>
+            </select>
+
+            <select value={sorteer} onChange={(e) => setSorteer(e.target.value)} style={selectStyle}>
+              <option value="startdatum">Sorteren: startdatum</option>
+              <option value="opvolging">Sorteren: opvolging</option>
+              <option value="leadscore">Sorteren: leadscore</option>
+            </select>
+
+            <button onClick={resetFilters} style={btnStyle("#64748b")}>
+              Reset
+            </button>
+          </div>
+
+          <div
+            style={{
+              marginTop: 12,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ fontSize: 12, color: "#94a3b8" }}>
+              {gefilterd.length} resultaten
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                border: "1px solid #e2e8f0",
+                borderRadius: 9,
+                overflow: "hidden",
+              }}
+            >
+              <button
+                onClick={() => setWeergave("kaarten")}
+                style={{
+                  ...viewButtonStyle,
+                  background: weergave === "kaarten" ? "#eef2ff" : "#fff",
+                  color: weergave === "kaarten" ? "#6366f1" : "#64748b",
+                }}
+              >
+                <Icon name="grid" size={13} /> Kaarten
+              </button>
+              <button
+                onClick={() => setWeergave("tabel")}
+                style={{
+                  ...viewButtonStyle,
+                  background: weergave === "tabel" ? "#eef2ff" : "#fff",
+                  color: weergave === "tabel" ? "#6366f1" : "#64748b",
+                }}
+              >
+                <Icon name="table" size={13} /> Tabel
+              </button>
+            </div>
+          </div>
+        </div>
+
         {gefilterd.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 20px", color: "#94a3b8" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>Geen leads gevonden</div>
-            <div style={{ fontSize: 13, marginTop: 6 }}>Pas je filters aan of voeg een nieuwe lead toe.</div>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>Geen leads gevonden</div>
+            <div style={{ fontSize: 13, marginTop: 6 }}>
+              Pas je filters aan of voeg een nieuwe lead toe.
+            </div>
           </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 14 }}>
-            {gefilterd.map(k => (
-              <KlantKaart key={k.id} klant={k}
-                onOpen={k => setModal({ klant: k, isNieuw: false })}
-                onDelete={verwijderKlant}
+        ) : weergave === "kaarten" ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(330px, 1fr))",
+              gap: 14,
+            }}
+          >
+            {gefilterd.map((lead) => (
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                onOpen={(lead) => setModal({ lead, isNieuw: false })}
+                onDelete={verwijderLead}
+                onStatusChange={wijzigStatus}
               />
             ))}
           </div>
+        ) : (
+          <LeadTable
+            leads={gefilterd}
+            onOpen={(lead) => setModal({ lead, isNieuw: false })}
+            onDelete={verwijderLead}
+          />
         )}
       </div>
 
-      {/* MODAL */}
       {modal && (
-        <KlantModal
-          klant={modal.klant}
+        <LeadModal
+          lead={modal.lead}
           isNieuw={modal.isNieuw}
           onClose={() => setModal(null)}
-          onSave={opslaanKlant}
+          onSave={opslaanLead}
         />
       )}
     </div>
   );
 }
+
+const viewButtonStyle = {
+  border: "none",
+  padding: "8px 11px",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+};
