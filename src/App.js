@@ -1,7 +1,28 @@
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { db } from "./firebase";
+import {
+  collection,
+  onSnapshot,
+  addDoc,
+  setDoc,
+  doc,
+  deleteDoc,
+  getDocs,
+  writeBatch,
+} from "firebase/firestore";
 
-// ─── CONFIG ──────────────────────────────────────────────────────────────────
-const STORAGE_KEY = "crm_spanje_kompas_v1";
+// ─── VASTE OPTIES ────────────────────────────────────────────────────────────
+
+const STATUSSEN = [
+  "Nieuwe lead",
+  "Intake gepland",
+  "Intake gehad",
+  "Zoekprofiel duidelijk",
+  "Woningvoorstellen gestuurd",
+  "Doorgegeven",
+  "Afgerond",
+  "Niet doorgegaan",
+];
 
 const STATUS_CONFIG = {
   "Nieuwe lead": { color: "#6366f1", bg: "#eef2ff" },
@@ -13,8 +34,6 @@ const STATUS_CONFIG = {
   Afgerond: { color: "#64748b", bg: "#f1f5f9" },
   "Niet doorgegaan": { color: "#94a3b8", bg: "#f8fafc" },
 };
-
-const STATUSSEN = Object.keys(STATUS_CONFIG);
 
 const LEADBRONNEN = [
   "Website",
@@ -67,19 +86,14 @@ const LEEG_LEAD = {
   regio: "",
   status: "Nieuwe lead",
   startdatum: new Date().toISOString().split("T")[0],
-
   leadbron: "Website",
   leadscore: "B-lead",
   volgendeActie: "Intake plannen",
-
   opvolgdatum: "",
   geenStrengeDatum: true,
-
   laatsteContactdatum: "",
   contactmethode: "Nog geen contact",
-
   tags: [],
-
   gewensteRegio: "",
   gewenstePlaats: "",
   woningtype: "",
@@ -89,12 +103,12 @@ const LEEG_LEAD = {
   doelAankoop: "",
   verhuurinteresse: "",
   tijdshorizon: "",
-
   notities: "",
   voortgangsnotitie: "",
 };
 
 // ─── DEMO DATA ───────────────────────────────────────────────────────────────
+
 const DEMO_LEADS = [
   {
     id: "1",
@@ -122,7 +136,7 @@ const DEMO_LEADS = [
     verhuurinteresse: "Nee",
     tijdshorizon: "Binnen 6 maanden",
     notities:
-      "Vriendelijk stel dat zich serieus oriënteert op een woning voor hun pensioen. Ze zoeken rust, zee in de buurt en willen vooral zekerheid over het aankoopproces.",
+      "Vriendelijk stel dat zich serieus oriënteert op een woning voor hun pensioen. Ze zoeken rust, zee in de buurt en willen zekerheid over het aankoopproces.",
     voortgangsnotitie: "Zoekprofiel is duidelijk. Volgende stap: passende woningen sturen.",
   },
   {
@@ -151,7 +165,7 @@ const DEMO_LEADS = [
     verhuurinteresse: "Ja",
     tijdshorizon: "6 tot 12 maanden",
     notities:
-      "Marieke zoekt een appartement dat ze zelf kan gebruiken en deels wil verhuren. Ze is enthousiast, maar wil beter begrijpen wat realistische verhuuropbrengsten zijn.",
+      "Marieke zoekt een appartement dat ze zelf kan gebruiken en deels wil verhuren. Ze wil vooral beter begrijpen wat realistische verhuuropbrengsten zijn.",
     voortgangsnotitie: "Nog controleren of Costa del Sol binnen budget realistisch genoeg is.",
   },
   {
@@ -180,7 +194,7 @@ const DEMO_LEADS = [
     verhuurinteresse: "Nee",
     tijdshorizon: "Binnen 3 maanden",
     notities:
-      "Belgisch koppel. Ze twijfelen vooral over zorg, taal en papierwerk. Woningwensen zijn concreet en ze reageren goed op praktische uitleg.",
+      "Belgisch koppel. Ze twijfelen vooral over zorg, taal en papierwerk. Woningwensen zijn concreet.",
     voortgangsnotitie: "Voorstellen verstuurd. Reactie afwachten en daarna eventueel doorgeven.",
   },
   {
@@ -238,64 +252,40 @@ const DEMO_LEADS = [
     verhuurinteresse: "Nee",
     tijdshorizon: "Aangekocht",
     notities:
-      "Traject afgerond. Ze hebben een woning gekocht in Lo Pagán en waren erg tevreden over de begeleiding.",
+      "Traject afgerond. Ze hebben een woning gekocht in Lo Pagán en waren tevreden over de begeleiding.",
     voortgangsnotitie: "Afgerond. Mogelijk later testimonial vragen.",
-  },
-  {
-    id: "6",
-    naam: "Dirk Vermeulen",
-    telefoon: "+32 495 77 88 99",
-    email: "dirk.vermeulen@hotmail.com",
-    regio: "Costa Brava",
-    status: "Niet doorgegaan",
-    startdatum: "2026-01-15",
-    leadbron: "Partner",
-    leadscore: "C-lead",
-    volgendeActie: "Later opnieuw benaderen",
-    opvolgdatum: "",
-    geenStrengeDatum: true,
-    laatsteContactdatum: "2026-03-12",
-    contactmethode: "Telefoon",
-    tags: ["Vakantiehuis", "Oriënterend"],
-    gewensteRegio: "Costa Brava",
-    gewenstePlaats: "Nog niet duidelijk",
-    woningtype: "Appartement",
-    bouwtype: "Bestaande bouw",
-    slaapkamers: "2",
-    budget: "€ 150.000 – € 200.000",
-    doelAankoop: "Vakantiehuis",
-    verhuurinteresse: "Misschien",
-    tijdshorizon: "Niet concreet",
-    notities:
-      "Dirk heeft besloten voorlopig niet door te gaan door persoonlijke omstandigheden.",
-    voortgangsnotitie: "Netjes afgerond. Geen actieve opvolging nodig.",
   },
 ];
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
-function todayISO() {
+
+function vandaag() {
   return new Date().toISOString().split("T")[0];
 }
 
-function dateOnly(dateString) {
-  if (!dateString) return null;
-  return new Date(`${dateString}T00:00:00`);
+function datumObject(datum) {
+  if (!datum) return null;
+  return new Date(`${datum}T00:00:00`);
 }
 
-function diffInDays(dateString) {
-  const target = dateOnly(dateString);
-  const today = dateOnly(todayISO());
-  if (!target || !today) return null;
-  return Math.round((target - today) / (1000 * 60 * 60 * 24));
+function verschilInDagen(datum) {
+  const doel = datumObject(datum);
+  const nu = datumObject(vandaag());
+  if (!doel || !nu) return null;
+  return Math.round((doel - nu) / (1000 * 60 * 60 * 24));
 }
 
-function formatDatum(d) {
-  if (!d) return "–";
-  return new Date(`${d}T00:00:00`).toLocaleDateString("nl-NL", {
+function formatDatum(datum) {
+  if (!datum) return "–";
+  return new Date(`${datum}T00:00:00`).toLocaleDateString("nl-NL", {
     day: "2-digit",
     month: "short",
     year: "numeric",
   });
+}
+
+function isOpenLead(lead) {
+  return lead.status !== "Afgerond" && lead.status !== "Niet doorgegaan";
 }
 
 function getOpvolgingInfo(lead) {
@@ -308,7 +298,7 @@ function getOpvolgingInfo(lead) {
     };
   }
 
-  const diff = diffInDays(lead.opvolgdatum);
+  const diff = verschilInDagen(lead.opvolgdatum);
 
   if (diff === 0) {
     return {
@@ -338,6 +328,7 @@ function getOpvolgingInfo(lead) {
   }
 
   const teLaat = Math.abs(diff);
+
   return {
     type: "telaat",
     label: `${teLaat} ${teLaat === 1 ? "dag" : "dagen"} te laat`,
@@ -346,152 +337,39 @@ function getOpvolgingInfo(lead) {
   };
 }
 
-function isOpenLead(lead) {
-  return lead.status !== "Afgerond" && lead.status !== "Niet doorgegaan";
-}
-
-function mapOldStatus(status) {
-  const mapping = {
-    "In gesprek": "Intake gehad",
-    "Wacht op reactie": "Woningvoorstellen gestuurd",
-    "Actieve klant": "Zoekprofiel duidelijk",
-    "Doorgestuurd naar makelaar": "Doorgegeven",
-  };
-  return mapping[status] || status || "Nieuwe lead";
-}
-
 function normalizeLead(lead) {
-  const normalizedStatus = STATUSSEN.includes(mapOldStatus(lead.status))
-    ? mapOldStatus(lead.status)
-    : "Nieuwe lead";
-
   return {
     ...LEEG_LEAD,
     ...lead,
-    status: normalizedStatus,
+    status: STATUSSEN.includes(lead.status) ? lead.status : "Nieuwe lead",
     leadbron: lead.leadbron || "Website",
     leadscore: lead.leadscore || "B-lead",
     volgendeActie: lead.volgendeActie || "Geen directe actie",
-    opvolgdatum: lead.opvolgdatum || lead.volgendActie || "",
     geenStrengeDatum:
       typeof lead.geenStrengeDatum === "boolean"
         ? lead.geenStrengeDatum
-        : !(lead.opvolgdatum || lead.volgendActie),
-    laatsteContactdatum: lead.laatsteContactdatum || lead.laatsteContact || "",
-    contactmethode: lead.contactmethode || "Nog geen contact",
-    doelAankoop: lead.doelAankoop || lead.typeKlant || "",
-    gewensteRegio: lead.gewensteRegio || lead.regio || "",
+        : !lead.opvolgdatum,
     tags: Array.isArray(lead.tags) ? lead.tags : [],
   };
 }
 
-function loadData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const data = raw ? JSON.parse(raw) : DEMO_LEADS;
-    return data.map(normalizeLead);
-  } catch {
-    return DEMO_LEADS.map(normalizeLead);
-  }
+async function seedDemoLeadsIfEmpty() {
+  const snapshot = await getDocs(collection(db, "leads"));
+
+  if (!snapshot.empty) return;
+
+  const batch = writeBatch(db);
+
+  DEMO_LEADS.forEach((lead) => {
+    const leadRef = doc(db, "leads", lead.id);
+    batch.set(leadRef, normalizeLead(lead));
+  });
+
+  await batch.commit();
 }
-
-function saveData(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-// ─── ICONS ───────────────────────────────────────────────────────────────────
-const Icon = ({ name, size = 16 }) => {
-  const icons = {
-    search: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="11" cy="11" r="8" />
-        <path d="m21 21-4.35-4.35" />
-      </svg>
-    ),
-    plus: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M12 5v14M5 12h14" />
-      </svg>
-    ),
-    edit: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-      </svg>
-    ),
-    trash: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="3,6 5,6 21,6" />
-        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-        <path d="M10 11v6M14 11v6" />
-        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-      </svg>
-    ),
-    x: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M18 6 6 18M6 6l12 12" />
-      </svg>
-    ),
-    user: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
-    ),
-    map: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-        <circle cx="12" cy="10" r="3" />
-      </svg>
-    ),
-    calendar: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-        <line x1="16" y1="2" x2="16" y2="6" />
-        <line x1="8" y1="2" x2="8" y2="6" />
-        <line x1="3" y1="10" x2="21" y2="10" />
-      </svg>
-    ),
-    bell: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-      </svg>
-    ),
-    chart: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <line x1="18" y1="20" x2="18" y2="10" />
-        <line x1="12" y1="20" x2="12" y2="4" />
-        <line x1="6" y1="20" x2="6" y2="14" />
-      </svg>
-    ),
-    save: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-        <polyline points="17 21 17 13 7 13 7 21" />
-        <polyline points="7 3 7 8 15 8" />
-      </svg>
-    ),
-    table: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
-      </svg>
-    ),
-    grid: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <rect x="3" y="3" width="7" height="7" />
-        <rect x="14" y="3" width="7" height="7" />
-        <rect x="14" y="14" width="7" height="7" />
-        <rect x="3" y="14" width="7" height="7" />
-      </svg>
-    ),
-  };
-
-  return icons[name] || null;
-};
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
+
 const inputStyle = {
   width: "100%",
   border: "1px solid #e2e8f0",
@@ -523,58 +401,31 @@ const labelStyle = {
   display: "block",
 };
 
+const cardStyle = {
+  background: "#fff",
+  borderRadius: 14,
+  border: "1px solid #f1f5f9",
+  boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+};
+
 function btnStyle(color, solid = false) {
   return {
     background: solid ? color : `${color}12`,
     color: solid ? "#fff" : color,
     border: solid ? "none" : `1px solid ${color}30`,
     borderRadius: 8,
-    padding: "6px 10px",
+    padding: "7px 10px",
     fontSize: 12,
     cursor: "pointer",
     display: "flex",
     gap: 5,
     alignItems: "center",
+    justifyContent: "center",
     fontWeight: 700,
   };
 }
 
-// ─── UI COMPONENTS ───────────────────────────────────────────────────────────
-function StatCard({ label, value, accent, icon }) {
-  return (
-    <div
-      style={{
-        background: "#fff",
-        borderRadius: 14,
-        padding: "14px 16px",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-        border: "1px solid #f1f5f9",
-        flex: 1,
-        minWidth: 150,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 7,
-          color: accent,
-          fontSize: 11,
-          fontWeight: 800,
-          letterSpacing: ".04em",
-          textTransform: "uppercase",
-          marginBottom: 8,
-        }}
-      >
-        <Icon name={icon} size={13} />
-        {label}
-      </div>
-      <div style={{ fontSize: 26, fontWeight: 900, color: "#0f172a", lineHeight: 1 }}>
-        {value}
-      </div>
-    </div>
-  );
-}
+// ─── KLEINE COMPONENTEN ──────────────────────────────────────────────────────
 
 function Badge({ children, color = "#64748b", bg = "#f8fafc" }) {
   return (
@@ -597,30 +448,47 @@ function Badge({ children, color = "#64748b", bg = "#f8fafc" }) {
 
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || { color: "#64748b", bg: "#f1f5f9" };
-  return <Badge color={cfg.color} bg={cfg.bg}>{status}</Badge>;
+  return (
+    <Badge color={cfg.color} bg={cfg.bg}>
+      {status}
+    </Badge>
+  );
 }
 
-function SectionTitle({ children }) {
+function StatCard({ label, value, color }) {
   return (
     <div
       style={{
-        fontSize: 14,
-        fontWeight: 900,
-        color: "#0f172a",
-        marginBottom: 12,
-        paddingBottom: 8,
-        borderBottom: "1px solid #f1f5f9",
+        ...cardStyle,
+        padding: "14px 16px",
+        flex: 1,
+        minWidth: 145,
       }}
     >
-      {children}
+      <div
+        style={{
+          color,
+          fontSize: 11,
+          fontWeight: 800,
+          textTransform: "uppercase",
+          letterSpacing: ".04em",
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ fontSize: 27, fontWeight: 900, color: "#0f172a" }}>
+        {value}
+      </div>
     </div>
   );
 }
 
-function Field({ label, fieldKey, value, onChange, type = "text", as, options, rows = 4 }) {
+function Field({ label, fieldKey, value, onChange, type = "text", as, options = [], rows = 4 }) {
   return (
     <div>
       <label style={labelStyle}>{label}</label>
+
       {as === "textarea" ? (
         <textarea
           value={value || ""}
@@ -640,9 +508,9 @@ function Field({ label, fieldKey, value, onChange, type = "text", as, options, r
           style={inputStyle}
         >
           <option value="">Selecteer...</option>
-          {options.map((o) => (
-            <option key={o} value={o}>
-              {o}
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {option}
             </option>
           ))}
         </select>
@@ -658,121 +526,22 @@ function Field({ label, fieldKey, value, onChange, type = "text", as, options, r
   );
 }
 
-// ─── STATUS CHART ────────────────────────────────────────────────────────────
-function StatusChart({ leads }) {
-  const counts = {};
-  STATUSSEN.forEach((s) => {
-    counts[s] = leads.filter((l) => l.status === s).length;
-  });
+// ─── OPVOLGING BLOK ──────────────────────────────────────────────────────────
 
-  const max = Math.max(...Object.values(counts), 1);
-
-  return (
-    <div
-      style={{
-        background: "#fff",
-        borderRadius: 14,
-        padding: "16px 18px",
-        border: "1px solid #f1f5f9",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 13,
-          fontWeight: 800,
-          color: "#0f172a",
-          marginBottom: 12,
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-        }}
-      >
-        <Icon name="chart" size={14} /> Leads per status
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-        {STATUSSEN.map((s) => (
-          <div key={s} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div
-              style={{
-                width: 135,
-                fontSize: 11,
-                color: "#64748b",
-                flexShrink: 0,
-              }}
-            >
-              {s}
-            </div>
-            <div
-              style={{
-                flex: 1,
-                background: "#f1f5f9",
-                borderRadius: 6,
-                height: 10,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${(counts[s] / max) * 100}%`,
-                  height: "100%",
-                  background: STATUS_CONFIG[s]?.color || "#94a3b8",
-                  borderRadius: 6,
-                }}
-              />
-            </div>
-            <div
-              style={{
-                width: 18,
-                fontSize: 11,
-                fontWeight: 800,
-                color: "#0f172a",
-                textAlign: "right",
-              }}
-            >
-              {counts[s]}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── OPVOLGING PANEL ─────────────────────────────────────────────────────────
 function OpvolgingPanel({ leads, onOpen }) {
-  const relevanteLeads = leads.filter(isOpenLead);
+  const openLeads = leads.filter(isOpenLead);
 
   const groepen = {
-    "Te laat": relevanteLeads.filter((l) => getOpvolgingInfo(l).type === "telaat"),
-    "Vandaag opvolgen": relevanteLeads.filter((l) => getOpvolgingInfo(l).type === "vandaag"),
-    "Binnenkort opvolgen": relevanteLeads.filter((l) => getOpvolgingInfo(l).type === "binnenkort"),
-    "Geen strenge datum": relevanteLeads.filter((l) => getOpvolgingInfo(l).type === "geen"),
+    "Te laat": openLeads.filter((l) => getOpvolgingInfo(l).type === "telaat"),
+    Vandaag: openLeads.filter((l) => getOpvolgingInfo(l).type === "vandaag"),
+    Binnenkort: openLeads.filter((l) => getOpvolgingInfo(l).type === "binnenkort"),
+    "Geen strenge datum": openLeads.filter((l) => getOpvolgingInfo(l).type === "geen"),
   };
 
   return (
-    <div
-      style={{
-        background: "#fff",
-        border: "1px solid #f1f5f9",
-        borderRadius: 14,
-        padding: "16px 18px",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 13,
-          fontWeight: 800,
-          color: "#0f172a",
-          marginBottom: 12,
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-        }}
-      >
-        <Icon name="bell" size={14} /> Rustige opvolging
+    <div style={{ ...cardStyle, padding: 16 }}>
+      <div style={{ fontSize: 14, fontWeight: 900, color: "#0f172a", marginBottom: 12 }}>
+        Rustige opvolging
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
@@ -784,23 +553,17 @@ function OpvolgingPanel({ leads, onOpen }) {
               border: "1px solid #eef2f7",
               borderRadius: 12,
               padding: 10,
-              minHeight: 86,
+              minHeight: 90,
             }}
           >
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 800,
-                color: "#64748b",
-                marginBottom: 8,
-              }}
-            >
+            <div style={{ fontSize: 11, fontWeight: 900, color: "#64748b", marginBottom: 8 }}>
               {titel} ({items.length})
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {items.slice(0, 3).map((lead) => {
                 const info = getOpvolgingInfo(lead);
+
                 return (
                   <button
                     key={lead.id}
@@ -824,14 +587,14 @@ function OpvolgingPanel({ leads, onOpen }) {
                 );
               })}
 
-              {items.length > 3 && (
-                <div style={{ fontSize: 11, color: "#94a3b8", paddingLeft: 2 }}>
-                  +{items.length - 3} meer
-                </div>
-              )}
-
               {!items.length && (
                 <div style={{ fontSize: 11, color: "#94a3b8" }}>Geen leads</div>
+              )}
+
+              {items.length > 3 && (
+                <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                  +{items.length - 3} meer
+                </div>
               )}
             </div>
           </div>
@@ -841,19 +604,72 @@ function OpvolgingPanel({ leads, onOpen }) {
   );
 }
 
-// ─── LEAD CARD ───────────────────────────────────────────────────────────────
+// ─── STATUS BLOK ─────────────────────────────────────────────────────────────
+
+function StatusChart({ leads }) {
+  const counts = {};
+
+  STATUSSEN.forEach((status) => {
+    counts[status] = leads.filter((l) => l.status === status).length;
+  });
+
+  const max = Math.max(...Object.values(counts), 1);
+
+  return (
+    <div style={{ ...cardStyle, padding: 16 }}>
+      <div style={{ fontSize: 14, fontWeight: 900, color: "#0f172a", marginBottom: 12 }}>
+        Leads per status
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {STATUSSEN.map((status) => (
+          <div key={status} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 135, fontSize: 11, color: "#64748b" }}>{status}</div>
+
+            <div
+              style={{
+                flex: 1,
+                background: "#f1f5f9",
+                borderRadius: 6,
+                height: 10,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${(counts[status] / max) * 100}%`,
+                  height: "100%",
+                  background: STATUS_CONFIG[status]?.color || "#94a3b8",
+                  borderRadius: 6,
+                }}
+              />
+            </div>
+
+            <div style={{ width: 18, fontSize: 11, fontWeight: 800, textAlign: "right" }}>
+              {counts[status]}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── LEAD KAART ──────────────────────────────────────────────────────────────
+
 function LeadCard({ lead, onOpen, onDelete, onStatusChange }) {
   const opvolging = getOpvolgingInfo(lead);
   const scoreColor =
-    lead.leadscore === "A-lead" ? "#10b981" : lead.leadscore === "B-lead" ? "#f59e0b" : "#64748b";
+    lead.leadscore === "A-lead"
+      ? "#10b981"
+      : lead.leadscore === "B-lead"
+      ? "#f59e0b"
+      : "#64748b";
 
   return (
     <div
       style={{
-        background: "#fff",
-        borderRadius: 14,
-        border: "1px solid #f1f5f9",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+        ...cardStyle,
         padding: "17px 18px",
         display: "flex",
         flexDirection: "column",
@@ -864,21 +680,14 @@ function LeadCard({ lead, onOpen, onDelete, onStatusChange }) {
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
         <div>
-          <div style={{ fontWeight: 900, fontSize: 15, color: "#0f172a" }}>{lead.naam}</div>
-          <div
-            style={{
-              fontSize: 12,
-              color: "#64748b",
-              marginTop: 3,
-              display: "flex",
-              gap: 5,
-              alignItems: "center",
-            }}
-          >
-            <Icon name="map" size={11} />
-            {lead.regio || "Regio onbekend"}
+          <div style={{ fontWeight: 900, fontSize: 15, color: "#0f172a" }}>
+            {lead.naam}
+          </div>
+          <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
+            📍 {lead.regio || "Regio onbekend"}
           </div>
         </div>
+
         <StatusBadge status={lead.status} />
       </div>
 
@@ -887,12 +696,10 @@ function LeadCard({ lead, onOpen, onDelete, onStatusChange }) {
           {lead.leadscore}
         </Badge>
         <Badge color="#6366f1" bg="#eef2ff">
-          {lead.leadbron || "Bron onbekend"}
+          {lead.leadbron}
         </Badge>
         {lead.tags?.slice(0, 3).map((tag) => (
-          <Badge key={tag} color="#64748b" bg="#f8fafc">
-            {tag}
-          </Badge>
+          <Badge key={tag}>{tag}</Badge>
         ))}
       </div>
 
@@ -943,11 +750,11 @@ function LeadCard({ lead, onOpen, onDelete, onStatusChange }) {
             ...selectStyle,
             padding: "6px 8px",
             fontSize: 12,
-            maxWidth: 170,
+            maxWidth: 175,
           }}
         >
-          {STATUSSEN.map((s) => (
-            <option key={s}>{s}</option>
+          {STATUSSEN.map((status) => (
+            <option key={status}>{status}</option>
           ))}
         </select>
 
@@ -955,11 +762,8 @@ function LeadCard({ lead, onOpen, onDelete, onStatusChange }) {
           <button onClick={() => onOpen(lead)} style={btnStyle("#6366f1")}>
             Openen
           </button>
-          <button onClick={() => onOpen(lead)} style={btnStyle("#0ea5e9")}>
-            <Icon name="edit" size={13} />
-          </button>
           <button onClick={() => onDelete(lead.id)} style={btnStyle("#ef4444")}>
-            <Icon name="trash" size={13} />
+            Verwijderen
           </button>
         </div>
       </div>
@@ -967,18 +771,11 @@ function LeadCard({ lead, onOpen, onDelete, onStatusChange }) {
   );
 }
 
-// ─── TABLE VIEW ──────────────────────────────────────────────────────────────
+// ─── TABEL ───────────────────────────────────────────────────────────────────
+
 function LeadTable({ leads, onOpen, onDelete }) {
   return (
-    <div
-      style={{
-        background: "#fff",
-        border: "1px solid #f1f5f9",
-        borderRadius: 14,
-        overflow: "auto",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-      }}
-    >
+    <div style={{ ...cardStyle, overflow: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
         <thead>
           <tr style={{ background: "#f8fafc" }}>
@@ -993,20 +790,19 @@ function LeadTable({ leads, onOpen, onDelete }) {
               "Opvolging",
               "Laatste contact",
               "",
-            ].map((h) => (
+            ].map((heading) => (
               <th
-                key={h}
+                key={heading}
                 style={{
                   textAlign: "left",
                   padding: "12px 14px",
                   fontSize: 11,
                   color: "#64748b",
                   textTransform: "uppercase",
-                  letterSpacing: ".04em",
                   borderBottom: "1px solid #f1f5f9",
                 }}
               >
-                {h}
+                {heading}
               </th>
             ))}
           </tr>
@@ -1015,6 +811,7 @@ function LeadTable({ leads, onOpen, onDelete }) {
         <tbody>
           {leads.map((lead) => {
             const opvolging = getOpvolgingInfo(lead);
+
             return (
               <tr key={lead.id} style={{ borderBottom: "1px solid #f8fafc" }}>
                 <td style={tdStyle}>
@@ -1043,16 +840,14 @@ function LeadTable({ leads, onOpen, onDelete }) {
                 <td style={{ ...tdStyle, color: opvolging.color, fontWeight: 700 }}>
                   {opvolging.label}
                 </td>
-                <td style={tdStyle}>
-                  {lead.laatsteContactdatum ? formatDatum(lead.laatsteContactdatum) : "–"}
-                </td>
+                <td style={tdStyle}>{formatDatum(lead.laatsteContactdatum)}</td>
                 <td style={tdStyle}>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={() => onOpen(lead)} style={btnStyle("#6366f1")}>
                       Open
                     </button>
                     <button onClick={() => onDelete(lead.id)} style={btnStyle("#ef4444")}>
-                      <Icon name="trash" size={13} />
+                      Weg
                     </button>
                   </div>
                 </td>
@@ -1073,16 +868,18 @@ const tdStyle = {
 };
 
 // ─── MODAL ───────────────────────────────────────────────────────────────────
+
 function LeadModal({ lead, onClose, onSave, isNieuw }) {
   const [form, setForm] = useState(lead);
 
-  const set = (k, v) => {
-    setForm((f) => ({ ...f, [k]: v }));
-  };
+  function set(field, value) {
+    setForm((f) => ({ ...f, [field]: value }));
+  }
 
-  const toggleTag = (tag) => {
+  function toggleTag(tag) {
     setForm((f) => {
       const current = Array.isArray(f.tags) ? f.tags : [];
+
       return {
         ...f,
         tags: current.includes(tag)
@@ -1090,16 +887,16 @@ function LeadModal({ lead, onClose, onSave, isNieuw }) {
           : [...current, tag],
       };
     });
-  };
+  }
 
-  const save = () => {
+  function opslaan() {
     const cleanForm = {
       ...form,
       opvolgdatum: form.geenStrengeDatum ? "" : form.opvolgdatum,
     };
 
     onSave(cleanForm);
-  };
+  }
 
   return (
     <div
@@ -1148,40 +945,27 @@ function LeadModal({ lead, onClose, onSave, isNieuw }) {
               border: "none",
               cursor: "pointer",
               color: "#94a3b8",
+              fontSize: 24,
             }}
           >
-            <Icon name="x" size={22} />
+            ×
           </button>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-          <div
-            style={{
-              background: "#fff",
-              border: "1px solid #f1f5f9",
-              borderRadius: 14,
-              padding: 16,
-            }}
-          >
+          <div style={{ ...cardStyle, padding: 16 }}>
             <SectionTitle>Contactgegevens</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <Field label="Naam" fieldKey="naam" value={form.naam} onChange={set} />
               <Field label="Telefoon" fieldKey="telefoon" value={form.telefoon} onChange={set} />
-              <Field label="E-mail" fieldKey="email" type="email" value={form.email} onChange={set} />
+              <Field label="E-mail" fieldKey="email" value={form.email} onChange={set} />
               <Field label="Regio hoofdkaart" fieldKey="regio" value={form.regio} onChange={set} />
               <Field label="Startdatum" fieldKey="startdatum" type="date" value={form.startdatum} onChange={set} />
               <Field label="Leadbron" fieldKey="leadbron" as="select" options={LEADBRONNEN} value={form.leadbron} onChange={set} />
             </div>
           </div>
 
-          <div
-            style={{
-              background: "#fff",
-              border: "1px solid #f1f5f9",
-              borderRadius: 14,
-              padding: 16,
-            }}
-          >
+          <div style={{ ...cardStyle, padding: 16 }}>
             <SectionTitle>Status en opvolging</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <Field label="Status" fieldKey="status" as="select" options={STATUSSEN} value={form.status} onChange={set} />
@@ -1201,43 +985,16 @@ function LeadModal({ lead, onClose, onSave, isNieuw }) {
               </div>
 
               {!form.geenStrengeDatum && (
-                <Field
-                  label="Concrete opvolgdatum"
-                  fieldKey="opvolgdatum"
-                  type="date"
-                  value={form.opvolgdatum}
-                  onChange={set}
-                />
+                <Field label="Opvolgdatum" fieldKey="opvolgdatum" type="date" value={form.opvolgdatum} onChange={set} />
               )}
 
-              <Field
-                label="Laatste contactdatum"
-                fieldKey="laatsteContactdatum"
-                type="date"
-                value={form.laatsteContactdatum}
-                onChange={set}
-              />
-
-              <Field
-                label="Contactmethode"
-                fieldKey="contactmethode"
-                as="select"
-                options={CONTACTMETHODES}
-                value={form.contactmethode}
-                onChange={set}
-              />
+              <Field label="Laatste contactdatum" fieldKey="laatsteContactdatum" type="date" value={form.laatsteContactdatum} onChange={set} />
+              <Field label="Contactmethode" fieldKey="contactmethode" as="select" options={CONTACTMETHODES} value={form.contactmethode} onChange={set} />
             </div>
           </div>
         </div>
 
-        <div
-          style={{
-            background: "#fff",
-            border: "1px solid #f1f5f9",
-            borderRadius: 14,
-            padding: 16,
-          }}
-        >
+        <div style={{ ...cardStyle, padding: 16 }}>
           <SectionTitle>Belangrijkste wensen</SectionTitle>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
             <Field label="Gewenste regio" fieldKey="gewensteRegio" value={form.gewensteRegio} onChange={set} />
@@ -1252,18 +1009,12 @@ function LeadModal({ lead, onClose, onSave, isNieuw }) {
           </div>
         </div>
 
-        <div
-          style={{
-            background: "#fff",
-            border: "1px solid #f1f5f9",
-            borderRadius: 14,
-            padding: 16,
-          }}
-        >
+        <div style={{ ...cardStyle, padding: 16 }}>
           <SectionTitle>Tags</SectionTitle>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {TAGS.map((tag) => {
               const active = form.tags?.includes(tag);
+
               return (
                 <button
                   key={tag}
@@ -1287,37 +1038,16 @@ function LeadModal({ lead, onClose, onSave, isNieuw }) {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-          <Field
-            label="Notities uit gesprek"
-            fieldKey="notities"
-            as="textarea"
-            rows={8}
-            value={form.notities}
-            onChange={set}
-          />
-          <Field
-            label="Korte voortgangsnotitie"
-            fieldKey="voortgangsnotitie"
-            as="textarea"
-            rows={8}
-            value={form.voortgangsnotitie}
-            onChange={set}
-          />
+          <Field label="Notities uit gesprek" fieldKey="notities" as="textarea" rows={8} value={form.notities} onChange={set} />
+          <Field label="Korte voortgangsnotitie" fieldKey="voortgangsnotitie" as="textarea" rows={8} value={form.voortgangsnotitie} onChange={set} />
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
           <button onClick={onClose} style={{ ...btnStyle("#64748b"), padding: "9px 18px" }}>
             Annuleren
           </button>
-          <button
-            onClick={save}
-            style={{
-              ...btnStyle("#6366f1", true),
-              padding: "10px 22px",
-              fontSize: 13,
-            }}
-          >
-            <Icon name="save" size={14} /> Opslaan
+          <button onClick={opslaan} style={{ ...btnStyle("#6366f1", true), padding: "10px 22px" }}>
+            Opslaan
           </button>
         </div>
       </div>
@@ -1325,9 +1055,28 @@ function LeadModal({ lead, onClose, onSave, isNieuw }) {
   );
 }
 
+function SectionTitle({ children }) {
+  return (
+    <div
+      style={{
+        fontSize: 14,
+        fontWeight: 900,
+        color: "#0f172a",
+        marginBottom: 12,
+        paddingBottom: 8,
+        borderBottom: "1px solid #f1f5f9",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ─── MAIN APP ────────────────────────────────────────────────────────────────
+
 export default function App() {
-  const [leads, setLeads] = useState(loadData);
+  const [leads, setLeads] = useState([]);
+  const [laden, setLaden] = useState(true);
   const [zoek, setZoek] = useState("");
   const [filterStatus, setFilterStatus] = useState("Alle");
   const [filterRegio, setFilterRegio] = useState("Alle");
@@ -1338,26 +1087,43 @@ export default function App() {
   const [sorteer, setSorteer] = useState("startdatum");
   const [weergave, setWeergave] = useState("kaarten");
   const [modal, setModal] = useState(null);
+  const demoSeedGedaan = useRef(false);
 
   useEffect(() => {
-    saveData(leads);
+    if (!demoSeedGedaan.current) {
+      demoSeedGedaan.current = true;
+      seedDemoLeadsIfEmpty();
+    }
+
+    const unsubscribe = onSnapshot(collection(db, "leads"), (snapshot) => {
+      const firebaseLeads = snapshot.docs.map((document) =>
+        normalizeLead({
+          ...document.data(),
+          id: document.id,
+        })
+      );
+
+      setLeads(firebaseLeads);
+      setLaden(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const regioOpties = useMemo(() => {
+    return ["Alle", ...Array.from(new Set(leads.map((l) => l.regio).filter(Boolean)))];
   }, [leads]);
 
-  const regioOpties = useMemo(
-    () => ["Alle", ...Array.from(new Set(leads.map((l) => l.regio).filter(Boolean)))],
-    [leads]
-  );
-
-  const doelOpties = useMemo(
-    () => ["Alle", ...Array.from(new Set(leads.map((l) => l.doelAankoop).filter(Boolean)))],
-    [leads]
-  );
+  const doelOpties = useMemo(() => {
+    return ["Alle", ...Array.from(new Set(leads.map((l) => l.doelAankoop).filter(Boolean)))];
+  }, [leads]);
 
   const gefilterd = useMemo(() => {
     let res = leads;
 
     if (zoek) {
       const q = zoek.toLowerCase();
+
       res = res.filter(
         (l) =>
           l.naam?.toLowerCase().includes(q) ||
@@ -1378,15 +1144,18 @@ export default function App() {
 
     res = [...res].sort((a, b) => {
       if (sorteer === "startdatum") return new Date(b.startdatum) - new Date(a.startdatum);
+
       if (sorteer === "opvolging") {
         const aDate = a.geenStrengeDatum || !a.opvolgdatum ? "9999-12-31" : a.opvolgdatum;
         const bDate = b.geenStrengeDatum || !b.opvolgdatum ? "9999-12-31" : b.opvolgdatum;
         return aDate.localeCompare(bDate);
       }
+
       if (sorteer === "leadscore") {
         const order = { "A-lead": 1, "B-lead": 2, "C-lead": 3 };
         return (order[a.leadscore] || 9) - (order[b.leadscore] || 9);
       }
+
       return 0;
     });
 
@@ -1403,41 +1172,46 @@ export default function App() {
     sorteer,
   ]);
 
-  const stats = useMemo(
-    () => ({
+  const stats = useMemo(() => {
+    return {
       open: leads.filter(isOpenLead).length,
       nieuw: leads.filter((l) => l.status === "Nieuwe lead").length,
       aLeads: leads.filter((l) => isOpenLead(l) && l.leadscore === "A-lead").length,
       doorgegeven: leads.filter((l) => l.status === "Doorgegeven").length,
       afgerond: leads.filter((l) => l.status === "Afgerond").length,
-    }),
-    [leads]
-  );
+    };
+  }, [leads]);
 
-  function opslaanLead(form) {
-    if (form.id) {
-      setLeads((ls) => ls.map((l) => (l.id === form.id ? normalizeLead(form) : l)));
+  async function opslaanLead(form) {
+    const leadData = normalizeLead({
+      ...form,
+      startdatum: form.startdatum || vandaag(),
+    });
+
+    if (leadData.id) {
+      await setDoc(doc(db, "leads", leadData.id), leadData);
     } else {
-      setLeads((ls) => [
-        ...ls,
-        normalizeLead({
-          ...form,
-          id: Date.now().toString(),
-          startdatum: form.startdatum || todayISO(),
-        }),
-      ]);
+      const { id, ...newLead } = leadData;
+      await addDoc(collection(db, "leads"), newLead);
     }
+
     setModal(null);
   }
 
-  function verwijderLead(id) {
-   if (window.confirm("Weet je zeker dat je deze lead wilt verwijderen?")) {
-      setLeads((ls) => ls.filter((l) => l.id !== id));
+  async function verwijderLead(id) {
+    if (window.confirm("Weet je zeker dat je deze lead wilt verwijderen?")) {
+      await deleteDoc(doc(db, "leads", id));
     }
   }
 
-  function wijzigStatus(id, status) {
-    setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, status } : l)));
+  async function wijzigStatus(id, status) {
+    const lead = leads.find((l) => l.id === id);
+    if (!lead) return;
+
+    await setDoc(doc(db, "leads", id), {
+      ...lead,
+      status,
+    });
   }
 
   function resetFilters() {
@@ -1449,6 +1223,24 @@ export default function App() {
     setFilterDoel("Alle");
     setFilterOpvolging("Alle");
     setSorteer("startdatum");
+  }
+
+  if (laden) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "system-ui, sans-serif",
+          color: "#64748b",
+          background: "#f8fafc",
+        }}
+      >
+        CRM wordt geladen...
+      </div>
+    );
   }
 
   return (
@@ -1474,15 +1266,12 @@ export default function App() {
           boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ fontSize: 22 }}>🇪🇸</div>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a" }}>
-              Mijn Spanje Kompas
-            </div>
-            <div style={{ fontSize: 11, color: "#94a3b8" }}>
-              Lead- en klantvolgsysteem
-            </div>
+        <div>
+          <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a" }}>
+            🇪🇸 Mijn Spanje Kompas
+          </div>
+          <div style={{ fontSize: 11, color: "#94a3b8" }}>
+            Realtime lead- en klantvolgsysteem
           </div>
         </div>
 
@@ -1497,22 +1286,19 @@ export default function App() {
             fontSize: 13,
             fontWeight: 800,
             cursor: "pointer",
-            display: "flex",
-            gap: 7,
-            alignItems: "center",
           }}
         >
-          <Icon name="plus" size={14} /> Nieuwe lead
+          + Nieuwe lead
         </button>
       </div>
 
       <div style={{ maxWidth: 1280, margin: "0 auto", padding: "26px 24px" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 22 }}>
-          <StatCard label="Totaal open leads" value={stats.open} accent="#6366f1" icon="user" />
-          <StatCard label="Nieuwe leads" value={stats.nieuw} accent="#0ea5e9" icon="plus" />
-          <StatCard label="A-leads" value={stats.aLeads} accent="#10b981" icon="chart" />
-          <StatCard label="Doorgegeven" value={stats.doorgegeven} accent="#14b8a6" icon="save" />
-          <StatCard label="Afgerond" value={stats.afgerond} accent="#64748b" icon="calendar" />
+          <StatCard label="Totaal open leads" value={stats.open} color="#6366f1" />
+          <StatCard label="Nieuwe leads" value={stats.nieuw} color="#0ea5e9" />
+          <StatCard label="A-leads" value={stats.aLeads} color="#10b981" />
+          <StatCard label="Doorgegeven" value={stats.doorgegeven} color="#14b8a6" />
+          <StatCard label="Afgerond" value={stats.afgerond} color="#64748b" />
         </div>
 
         <div
@@ -1529,43 +1315,23 @@ export default function App() {
 
         <div
           style={{
-            background: "#fff",
-            borderRadius: 14,
+            ...cardStyle,
             padding: "14px 16px",
-            border: "1px solid #f1f5f9",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
             marginBottom: 18,
           }}
         >
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-            <div
+            <input
+              value={zoek}
+              onChange={(e) => setZoek(e.target.value)}
+              placeholder="Zoeken op naam, e-mail of regio..."
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
+                ...inputStyle,
                 flex: 1,
-                minWidth: 210,
-                background: "#f8fafc",
-                borderRadius: 8,
-                border: "1px solid #e2e8f0",
-                padding: "8px 12px",
+                minWidth: 220,
+                background: "#fff",
               }}
-            >
-              <Icon name="search" size={14} />
-              <input
-                value={zoek}
-                onChange={(e) => setZoek(e.target.value)}
-                placeholder="Zoeken op naam, e-mail of regio..."
-                style={{
-                  border: "none",
-                  outline: "none",
-                  background: "transparent",
-                  fontSize: 13,
-                  flex: 1,
-                  color: "#0f172a",
-                }}
-              />
-            </div>
+            />
 
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={selectStyle}>
               <option>Alle</option>
@@ -1633,33 +1399,18 @@ export default function App() {
               {gefilterd.length} resultaten
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                border: "1px solid #e2e8f0",
-                borderRadius: 9,
-                overflow: "hidden",
-              }}
-            >
+            <div style={{ display: "flex", gap: 8 }}>
               <button
                 onClick={() => setWeergave("kaarten")}
-                style={{
-                  ...viewButtonStyle,
-                  background: weergave === "kaarten" ? "#eef2ff" : "#fff",
-                  color: weergave === "kaarten" ? "#6366f1" : "#64748b",
-                }}
+                style={btnStyle(weergave === "kaarten" ? "#6366f1" : "#64748b")}
               >
-                <Icon name="grid" size={13} /> Kaarten
+                Kaarten
               </button>
               <button
                 onClick={() => setWeergave("tabel")}
-                style={{
-                  ...viewButtonStyle,
-                  background: weergave === "tabel" ? "#eef2ff" : "#fff",
-                  color: weergave === "tabel" ? "#6366f1" : "#64748b",
-                }}
+                style={btnStyle(weergave === "tabel" ? "#6366f1" : "#64748b")}
               >
-                <Icon name="table" size={13} /> Tabel
+                Tabel
               </button>
             </div>
           </div>
@@ -1711,14 +1462,3 @@ export default function App() {
     </div>
   );
 }
-
-const viewButtonStyle = {
-  border: "none",
-  padding: "8px 11px",
-  fontSize: 12,
-  fontWeight: 800,
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-};
