@@ -1431,7 +1431,7 @@ export default function App() {
   }
 
   function verwijderLead(id) {
-    if (confirm("Weet je zeker dat je deze lead wilt verwijderen?")) {
+   if (window.confirm("Weet je zeker dat je deze lead wilt verwijderen?")) {
       setLeads((ls) => ls.filter((l) => l.id !== id));
     }
   }
