@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-const STORAGE_KEY = "crm_spanje_kompas_v1";
+const STORAGE_KEY = "crm_spanje_kompas_v2";
 
 const STATUS_CONFIG = {
   "Nieuwe lead": { color: "#6366f1", bg: "#eef2ff" },
@@ -392,12 +392,18 @@ function loadData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const data = raw ? JSON.parse(raw) : DEMO_LEADS;
-    return data.map(normalizeLead);
+
+    const normalizedData = data.map(normalizeLead);
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedData));
+
+    return normalizedData;
   } catch {
-    return DEMO_LEADS.map(normalizeLead);
+    const normalizedDemoData = DEMO_LEADS.map(normalizeLead);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedDemoData));
+    return normalizedDemoData;
   }
 }
-
 function saveData(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
