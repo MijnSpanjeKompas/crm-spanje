@@ -1,4 +1,14 @@
 import { useState, useEffect, useMemo } from "react";
+import {
+  collection,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+} from "firebase/firestore";
+
+import { db } from "./firebase";
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const STORAGE_KEY = "crm_spanje_kompas_v2";
@@ -1766,7 +1776,7 @@ function LeadModal({ lead, onClose, onSave, isNieuw }) {
 
 // ─── MAIN APP ────────────────────────────────────────────────────────────────
 export default function App() {
-  const [leads, setLeads] = useState(loadData);
+  const [leads, setLeads] = useState([]);
   const [zoek, setZoek] = useState("");
   const [filterStatus, setFilterStatus] = useState("Alle");
   const [filterRegio, setFilterRegio] = useState("Alle");
@@ -1779,9 +1789,20 @@ export default function App() {
   const [modal, setModal] = useState(null);
   const [followUpModal, setFollowUpModal] = useState(null);
 
-  useEffect(() => {
-    saveData(leads);
-  }, [leads]);
+useEffect(() => {
+  const unsubscribe = onSnapshot(collection(db, "leads"), (snapshot) => {
+    const firebaseLeads = snapshot.docs.map((document) =>
+      normalizeLead({
+        id: document.id,
+        ...document.data(),
+      })
+    );
+
+    setLeads(firebaseLeads);
+  });
+
+  return () => unsubscribe();
+}, []);
 
   const regioOpties = useMemo(
     () => ["Alle", ...Array.from(new Set(leads.map((l) => l.regio).filter(Boolean)))],
@@ -1864,6 +1885,10 @@ export default function App() {
     }),
     [leads]
   );
+function removeIdFromLead(lead) {
+  const { id, ...leadWithoutId } = lead;
+  return leadWithoutId;
+}
 
   function opslaanLead(form) {
     if (form.id) {
@@ -1881,9 +1906,9 @@ export default function App() {
     setModal(null);
   }
 
-function verwijderLead(id) {
+async function verwijderLead(id) {
   if (window.confirm("Weet je zeker dat je deze lead wilt verwijderen?")) {
-    setLeads((ls) => ls.filter((l) => l.id !== id));
+    await deleteDoc(doc(db, "leads", id));
   }
 }
 
