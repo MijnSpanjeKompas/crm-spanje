@@ -1875,11 +1875,11 @@ export default function App() {
     setModal(null);
   }
 
-  function verwijderLead(id) {
-    if (confirm("Weet je zeker dat je deze lead wilt verwijderen?")) {
-      setLeads((ls) => ls.filter((l) => l.id !== id));
-    }
+function verwijderLead(id) {
+  if (window.confirm("Weet je zeker dat je deze lead wilt verwijderen?")) {
+    setLeads((ls) => ls.filter((l) => l.id !== id));
   }
+}
 
   function wijzigStatus(id, status) {
     setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, status } : l)));
