@@ -7,12 +7,9 @@ import {
   deleteDoc,
   doc,
 } from "firebase/firestore";
-
 import { db } from "./firebase";
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-const STORAGE_KEY = "crm_spanje_kompas_v2";
-
 const STATUS_CONFIG = {
   "Nieuwe lead": { color: "#6366f1", bg: "#eef2ff" },
   "Intake gepland": { color: "#0ea5e9", bg: "#e0f2fe" },
@@ -193,72 +190,6 @@ const LEEG_LEAD = {
   voortgangsnotitie: "",
 };
 
-// ─── DEMO DATA ───────────────────────────────────────────────────────────────
-const DEMO_LEADS = [
-  {
-    id: "1",
-    naam: "Familie Van den Berg",
-    telefoon: "+31 6 12 34 56 78",
-    email: "vandenberg@gmail.com",
-    regio: "Costa Blanca Noord",
-    status: "Doorgegeven",
-    startdatum: "2026-04-18",
-    leadbron: "Website",
-    leadscore: "Hot lead",
-    volgendeActie: "Woningvoorstellen sturen",
-    pinned: true,
-    opvolgdatum: "2026-05-12",
-    geenStrengeDatum: false,
-    laatsteContactdatum: "2026-05-04",
-    contactmethode: "Telefoon",
-    tags: ["Emigratie", "Tweede woning", "Urgent"],
-    gewensteRegio: "Costa Blanca Noord",
-    gewenstePlaats: "Altea / Jávea",
-    woningtype: "Villa",
-    bouwtype: "Resale / bestaande bouw",
-    slaapkamers: "3",
-    budget: "€ 300.000 – € 400.000",
-    doelAankoop: "Pensioen / langere verblijven",
-    verhuurinteresse: "Nee",
-    tijdshorizon: "Binnen 6 maanden",
-    extraWensen: "Rustige omgeving, zee in de buurt en duidelijke begeleiding.",
-    notities:
-      "Vriendelijk stel dat zich serieus oriënteert op een woning voor hun pensioen.",
-    voortgangsnotitie: "Zoekprofiel is duidelijk. Volgende stap: passende woningen sturen.",
-  },
-  {
-    id: "2",
-    naam: "Marieke Janssen",
-    telefoon: "+31 6 98 76 54 32",
-    email: "marieke.janssen@outlook.com",
-    regio: "Costa del Sol",
-    status: "Intake gepland",
-    startdatum: "2026-04-25",
-    leadbron: "Meta Ads",
-    leadscore: "Warm lead",
-    volgendeActie: "Wensen controleren",
-    pinned: false,
-    opvolgdatum: "2026-05-10",
-    geenStrengeDatum: false,
-    laatsteContactdatum: "2026-05-02",
-    contactmethode: "Videocall",
-    tags: ["Vakantiehuis", "Verhuurinteresse", "Oriënterend"],
-    gewensteRegio: "Costa del Sol",
-    gewenstePlaats: "Málaga omgeving",
-    woningtype: "Appartement",
-    bouwtype: "Nieuwbouw of resale",
-    slaapkamers: "2",
-    budget: "€ 200.000 – € 300.000",
-    doelAankoop: "Combinatie eigen gebruik en verhuur",
-    verhuurinteresse: "Ja, belangrijk",
-    tijdshorizon: "6 tot 12 maanden",
-    extraWensen: "Wil graag realistische verhuurverwachtingen begrijpen.",
-    notities:
-      "Marieke zoekt een appartement dat ze zelf kan gebruiken en deels wil verhuren.",
-    voortgangsnotitie: "Nog controleren of Costa del Sol binnen budget realistisch genoeg is.",
-  },
-];
-
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function todayISO() {
   return new Date().toISOString().split("T")[0];
@@ -398,24 +329,10 @@ function normalizeLead(lead) {
   };
 }
 
-function loadData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const data = raw ? JSON.parse(raw) : DEMO_LEADS;
-
-    const normalizedData = data.map(normalizeLead);
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedData));
-
-    return normalizedData;
-  } catch {
-    const normalizedDemoData = DEMO_LEADS.map(normalizeLead);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedDemoData));
-    return normalizedDemoData;
-  }
-}
-function saveData(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+function stripId(lead) {
+  const copy = { ...lead };
+  delete copy.id;
+  return copy;
 }
 
 // ─── ICONS ───────────────────────────────────────────────────────────────────
@@ -1016,7 +933,7 @@ function LeadCard({ lead, onOpen, onDelete, onStatusChange, onTogglePin }) {
             </button>
 
             <div style={{ fontWeight: 900, fontSize: 15, color: "#0f172a" }}>
-              {lead.naam}
+              {lead.naam || "Naam onbekend"}
             </div>
           </div>
 
@@ -1236,7 +1153,7 @@ function LeadTable({ leads, onOpen, onDelete, onTogglePin }) {
                       cursor: "pointer",
                     }}
                   >
-                    {lead.naam}
+                    {lead.naam || "Naam onbekend"}
                   </button>
                 </td>
                 <td style={tdStyle}>
@@ -1369,7 +1286,7 @@ function FollowUpListModal({ type, leads, onClose, onOpenLead }) {
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 900, color: "#0f172a" }}>
                     {lead.pinned ? "★ " : ""}
-                    {lead.naam}
+                    {lead.naam || "Naam onbekend"}
                   </div>
                   <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
                     {lead.regio || "Regio onbekend"} · {lead.volgendeActie || "Geen actie"}
@@ -1501,14 +1418,7 @@ function LeadModal({ lead, onClose, onSave, isNieuw }) {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-          <div
-            style={{
-              background: "#fff",
-              border: "1px solid #f1f5f9",
-              borderRadius: 14,
-              padding: 16,
-            }}
-          >
+          <div style={{ background: "#fff", border: "1px solid #f1f5f9", borderRadius: 14, padding: 16 }}>
             <SectionTitle>Contactgegevens</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <Field label="Naam" fieldKey="naam" value={form.naam} onChange={set} />
@@ -1520,14 +1430,7 @@ function LeadModal({ lead, onClose, onSave, isNieuw }) {
             </div>
           </div>
 
-          <div
-            style={{
-              background: "#fff",
-              border: "1px solid #f1f5f9",
-              borderRadius: 14,
-              padding: 16,
-            }}
-          >
+          <div style={{ background: "#fff", border: "1px solid #f1f5f9", borderRadius: 14, padding: 16 }}>
             <SectionTitle>Status en opvolging</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <Field label="Status" fieldKey="status" as="select" options={STATUSSEN} value={form.status} onChange={set} />
@@ -1576,14 +1479,7 @@ function LeadModal({ lead, onClose, onSave, isNieuw }) {
           </div>
         </div>
 
-        <div
-          style={{
-            background: "#fff",
-            border: "1px solid #f1f5f9",
-            borderRadius: 14,
-            padding: 16,
-          }}
-        >
+        <div style={{ background: "#fff", border: "1px solid #f1f5f9", borderRadius: 14, padding: 16 }}>
           <SectionTitle>Belangrijkste wensen</SectionTitle>
 
           <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>
@@ -1591,104 +1487,17 @@ function LeadModal({ lead, onClose, onSave, isNieuw }) {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <WensAccordion
-              title="Budget"
-              fieldKey="budget"
-              andersKey="budgetAnders"
-              value={form.budget}
-              andersValue={form.budgetAnders}
-              options={WENS_OPTIES.budget}
-              onChange={set}
-            />
+            <WensAccordion title="Budget" fieldKey="budget" andersKey="budgetAnders" value={form.budget} andersValue={form.budgetAnders} options={WENS_OPTIES.budget} onChange={set} />
+            <WensAccordion title="Regio" fieldKey="gewensteRegio" andersKey="gewensteRegioAnders" value={form.gewensteRegio} andersValue={form.gewensteRegioAnders} options={WENS_OPTIES.gewensteRegio} onChange={set} />
+            <WensAccordion title="Woningtype" fieldKey="woningtype" andersKey="woningtypeAnders" value={form.woningtype} andersValue={form.woningtypeAnders} options={WENS_OPTIES.woningtype} onChange={set} />
+            <WensAccordion title="Nieuwbouw of resale" fieldKey="bouwtype" andersKey="bouwtypeAnders" value={form.bouwtype} andersValue={form.bouwtypeAnders} options={WENS_OPTIES.bouwtype} onChange={set} />
+            <WensAccordion title="Aantal slaapkamers" fieldKey="slaapkamers" andersKey="slaapkamersAnders" value={form.slaapkamers} andersValue={form.slaapkamersAnders} options={WENS_OPTIES.slaapkamers} onChange={set} />
+            <WensAccordion title="Verhuurpotentie / investering" fieldKey="verhuurinteresse" andersKey="verhuurinteresseAnders" value={form.verhuurinteresse} andersValue={form.verhuurinteresseAnders} options={WENS_OPTIES.verhuurinteresse} onChange={set} />
+            <WensAccordion title="Doel van aankoop" fieldKey="doelAankoop" andersKey="doelAankoopAnders" value={form.doelAankoop} andersValue={form.doelAankoopAnders} options={WENS_OPTIES.doelAankoop} onChange={set} />
+            <WensAccordion title="Gewenste plaats of omgeving" fieldKey="gewenstePlaats" andersKey="gewenstePlaatsAnders" value={form.gewenstePlaats} andersValue={form.gewenstePlaatsAnders} options={WENS_OPTIES.gewenstePlaats} onChange={set} />
+            <WensAccordion title="Tijdlijn aankoop" fieldKey="tijdshorizon" andersKey="tijdshorizonAnders" value={form.tijdshorizon} andersValue={form.tijdshorizonAnders} options={WENS_OPTIES.tijdshorizon} onChange={set} />
 
-            <WensAccordion
-              title="Regio"
-              fieldKey="gewensteRegio"
-              andersKey="gewensteRegioAnders"
-              value={form.gewensteRegio}
-              andersValue={form.gewensteRegioAnders}
-              options={WENS_OPTIES.gewensteRegio}
-              onChange={set}
-            />
-
-            <WensAccordion
-              title="Woningtype"
-              fieldKey="woningtype"
-              andersKey="woningtypeAnders"
-              value={form.woningtype}
-              andersValue={form.woningtypeAnders}
-              options={WENS_OPTIES.woningtype}
-              onChange={set}
-            />
-
-            <WensAccordion
-              title="Nieuwbouw of resale"
-              fieldKey="bouwtype"
-              andersKey="bouwtypeAnders"
-              value={form.bouwtype}
-              andersValue={form.bouwtypeAnders}
-              options={WENS_OPTIES.bouwtype}
-              onChange={set}
-            />
-
-            <WensAccordion
-              title="Aantal slaapkamers"
-              fieldKey="slaapkamers"
-              andersKey="slaapkamersAnders"
-              value={form.slaapkamers}
-              andersValue={form.slaapkamersAnders}
-              options={WENS_OPTIES.slaapkamers}
-              onChange={set}
-            />
-
-            <WensAccordion
-              title="Verhuurpotentie / investering"
-              fieldKey="verhuurinteresse"
-              andersKey="verhuurinteresseAnders"
-              value={form.verhuurinteresse}
-              andersValue={form.verhuurinteresseAnders}
-              options={WENS_OPTIES.verhuurinteresse}
-              onChange={set}
-            />
-
-            <WensAccordion
-              title="Doel van aankoop"
-              fieldKey="doelAankoop"
-              andersKey="doelAankoopAnders"
-              value={form.doelAankoop}
-              andersValue={form.doelAankoopAnders}
-              options={WENS_OPTIES.doelAankoop}
-              onChange={set}
-            />
-
-            <WensAccordion
-              title="Gewenste plaats of omgeving"
-              fieldKey="gewenstePlaats"
-              andersKey="gewenstePlaatsAnders"
-              value={form.gewenstePlaats}
-              andersValue={form.gewenstePlaatsAnders}
-              options={WENS_OPTIES.gewenstePlaats}
-              onChange={set}
-            />
-
-            <WensAccordion
-              title="Tijdlijn aankoop"
-              fieldKey="tijdshorizon"
-              andersKey="tijdshorizonAnders"
-              value={form.tijdshorizon}
-              andersValue={form.tijdshorizonAnders}
-              options={WENS_OPTIES.tijdshorizon}
-              onChange={set}
-            />
-
-            <div
-              style={{
-                border: "1px solid #e2e8f0",
-                borderRadius: 12,
-                padding: 12,
-                background: "#fff",
-              }}
-            >
+            <div style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 12, background: "#fff" }}>
               <Field
                 label="Extra wensen"
                 fieldKey="extraWensen"
@@ -1701,14 +1510,7 @@ function LeadModal({ lead, onClose, onSave, isNieuw }) {
           </div>
         </div>
 
-        <div
-          style={{
-            background: "#fff",
-            border: "1px solid #f1f5f9",
-            borderRadius: 14,
-            padding: 16,
-          }}
-        >
+        <div style={{ background: "#fff", border: "1px solid #f1f5f9", borderRadius: 14, padding: 16 }}>
           <SectionTitle>Tags</SectionTitle>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {TAGS.map((tag) => {
@@ -1788,21 +1590,23 @@ export default function App() {
   const [weergave, setWeergave] = useState("kaarten");
   const [modal, setModal] = useState(null);
   const [followUpModal, setFollowUpModal] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-useEffect(() => {
-  const unsubscribe = onSnapshot(collection(db, "leads"), (snapshot) => {
-    const firebaseLeads = snapshot.docs.map((document) =>
-      normalizeLead({
-        id: document.id,
-        ...document.data(),
-      })
-    );
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "leads"), (snapshot) => {
+      const firebaseLeads = snapshot.docs.map((document) =>
+        normalizeLead({
+          id: document.id,
+          ...document.data(),
+        })
+      );
 
-    setLeads(firebaseLeads);
-  });
+      setLeads(firebaseLeads);
+      setLoading(false);
+    });
 
-  return () => unsubscribe();
-}, []);
+    return () => unsubscribe();
+  }, []);
 
   const regioOpties = useMemo(
     () => ["Alle", ...Array.from(new Set(leads.map((l) => l.regio).filter(Boolean)))],
@@ -1885,39 +1689,43 @@ useEffect(() => {
     }),
     [leads]
   );
-function removeIdFromLead(lead) {
-  const { id, ...leadWithoutId } = lead;
-  return leadWithoutId;
-}
 
-  function opslaanLead(form) {
+  async function opslaanLead(form) {
+    const cleanForm = normalizeLead({
+      ...form,
+      startdatum: form.startdatum || todayISO(),
+    });
+
+    const leadData = stripId(cleanForm);
+
     if (form.id) {
-      setLeads((ls) => ls.map((l) => (l.id === form.id ? normalizeLead(form) : l)));
+      await updateDoc(doc(db, "leads", form.id), leadData);
     } else {
-      setLeads((ls) => [
-        ...ls,
-        normalizeLead({
-          ...form,
-          id: Date.now().toString(),
-          startdatum: form.startdatum || todayISO(),
-        }),
-      ]);
+      await addDoc(collection(db, "leads"), leadData);
     }
+
     setModal(null);
   }
 
-async function verwijderLead(id) {
-  if (window.confirm("Weet je zeker dat je deze lead wilt verwijderen?")) {
-    await deleteDoc(doc(db, "leads", id));
-  }
-}
-
-  function wijzigStatus(id, status) {
-    setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, status } : l)));
+  async function verwijderLead(id) {
+    if (window.confirm("Weet je zeker dat je deze lead wilt verwijderen?")) {
+      await deleteDoc(doc(db, "leads", id));
+    }
   }
 
-  function togglePin(id) {
-    setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, pinned: !l.pinned } : l)));
+  async function wijzigStatus(id, status) {
+    await updateDoc(doc(db, "leads", id), {
+      status,
+    });
+  }
+
+  async function togglePin(id) {
+    const lead = leads.find((l) => l.id === id);
+    if (!lead) return;
+
+    await updateDoc(doc(db, "leads", id), {
+      pinned: !lead.pinned,
+    });
   }
 
   function resetFilters() {
@@ -2122,7 +1930,7 @@ async function verwijderLead(id) {
             }}
           >
             <div style={{ fontSize: 12, color: "#94a3b8" }}>
-              {gefilterd.length} resultaten · Gepinde leads staan altijd bovenaan
+              {loading ? "Leads laden..." : `${gefilterd.length} resultaten · Gepinde leads staan altijd bovenaan`}
             </div>
 
             <div
@@ -2157,7 +1965,11 @@ async function verwijderLead(id) {
           </div>
         </div>
 
-        {gefilterd.length === 0 ? (
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "#94a3b8" }}>
+            Leads laden vanuit Firebase...
+          </div>
+        ) : gefilterd.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 20px", color: "#94a3b8" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
             <div style={{ fontSize: 16, fontWeight: 800 }}>Geen leads gevonden</div>
