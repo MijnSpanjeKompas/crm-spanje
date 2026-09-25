@@ -1,0 +1,78 @@
+rules_version = '2';
+
+// ─── Mijn Spanje Kompas CRM – Firestore security rules ─────────────────────
+// Toegang alleen voor ingelogde gebruikers met een actief document in
+// users/{uid}. Die documenten maak je handmatig aan in de Firebase console.
+//
+// LET OP: staan er in hetzelfde Firebase-project ook andere collecties
+// (bijv. growth_* van het Growth Dashboard)? Neem hun bestaande regels dan
+// over in het blok onderaan VOORDAT je dit bestand publiceert. Publiceren
+// vervangt alle huidige rules. Laat geen "allow read, write: if true;" of
+// andere catch-all regel staan: die heft alle beveiliging hieronder op.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isStaff() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && profile().get('active', true) == true;
+    }
+
+    function isAdmin() {
+      return isStaff() && profile().get('role', 'member') == 'admin';
+    }
+
+    // Gebruikers: eigen profiel altijd leesbaar (nodig voor de toegangscheck).
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isStaff());
+      allow write: if isAdmin();
+    }
+
+    // Leads: iedereen van het team leest/schrijft, alleen beheerders verwijderen.
+    match /leads/{leadId} {
+      allow read, create, update: if isStaff();
+      allow delete: if isAdmin();
+
+      // Activiteitenhistorie: toevoegen mag, wijzigen/verwijderen alleen beheerder.
+      match /activities/{activityId} {
+        allow read, create: if isStaff();
+        allow update, delete: if isAdmin();
+      }
+
+      match /files/{fileId} {
+        allow read, create, update, delete: if isStaff();
+      }
+
+      match /partnerLinks/{linkId} {
+        allow read, create, update, delete: if isStaff();
+      }
+
+      match /tasks/{taskId} {
+        allow read, create, update, delete: if isStaff();
+      }
+    }
+
+    // Partnerdatabase
+    match /partners/{partnerId} {
+      allow read, create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Andere apps in hetzelfde project ──────────────────────────────────
+    // Voorbeeld voor het Growth Dashboard (alleen gebruiken als dat hier ook
+    // draait; pas aan naar hoe dat dashboard nu beveiligd is):
+    //
+    // match /{collection}/{docId=**} {
+    //   allow read, write: if collection.matches('growth_.*') && isStaff();
+    // }
+  }
+}

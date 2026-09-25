@@ -1,3 +1,56 @@
+# Mijn Spanje Kompas – CRM
+
+Intern lead- en klantvolgsysteem (React + Firebase, deploy via GitHub → Vercel).
+
+## Structuur
+
+- `src/App.js` – inloggen, live data, dashboard, lijst en modals
+- `src/crm/` – businesslogica: constants, datamodel (`types.js`), legacy-mapping (`normalize.js`), validatie, signalen/KPI's, filters, alle Firebase-schrijfacties (`services.js`), login (`useCrmAuth.js`)
+- `src/components/` – UI (dashboard, filters, kaarten/tabel, leaddetail met tabs, partnerdatabase, login)
+- `src/testing/fakeFirebase.js` – in-memory Firestore/Storage voor tests
+- `firestore.rules`, `storage.rules`, `firestore.indexes.json`, `firebase.json`, `cors.json` – Firebase-configuratie
+
+Drempelwaarden voor signalen (24 uur zonder contact, 14 dagen inactief, 7 dagen partner) staan in `THRESHOLDS` in `src/crm/constants.js`.
+
+## Eenmalige setup in Firebase
+
+1. **Authentication** → Sign-in method → *Email/Password* aanzetten. Maak onder *Users* een account voor elk teamlid.
+2. **Firestore** → maak per teamlid een document `users/{UID}`:
+   ```
+   displayName: "Luke van Spronsen"
+   email: "..."
+   role: "admin"        // of "member"
+   active: true
+   ```
+   De UID staat bij Authentication → Users, en wordt ook getoond op het scherm "Geen toegang".
+3. **Firestore rules**: publiceer `firestore.rules` (console → Rules, of `firebase deploy --only firestore:rules`).
+   ⚠️ Publiceren vervangt alle bestaande rules. Draaien er andere apps in hetzelfde project (bijv. `growth_*`-collecties)? Neem hun regels eerst over in het blok onderaan het bestand.
+4. **Storage** aanzetten (voor `*.firebasestorage.app`-buckets is waarschijnlijk het Blaze-plan nodig) en `storage.rules` publiceren. Geef de gevraagde toestemming om Firestore te raadplegen vanuit Storage-rules.
+5. **Optioneel – CORS** (voor direct downloaden met de juiste bestandsnaam). Vul je domein in `cors.json` in en voer uit:
+   ```
+   gsutil cors set cors.json gs://mijn-spanje-kompas-crm.firebasestorage.app
+   ```
+   Zonder CORS opent "downloaden" het bestand in een nieuw tabblad.
+
+## Environment variables (Vercel)
+
+Niet verplicht. De Firebase web-config staat als fallback in `src/firebase.js` (dit is geen geheim; de beveiliging zit in Auth + rules). Overschrijven kan met:
+`REACT_APP_FIREBASE_API_KEY`, `REACT_APP_FIREBASE_AUTH_DOMAIN`, `REACT_APP_FIREBASE_PROJECT_ID`, `REACT_APP_FIREBASE_STORAGE_BUCKET`, `REACT_APP_FIREBASE_MESSAGING_SENDER_ID`, `REACT_APP_FIREBASE_APP_ID`, `REACT_APP_FIREBASE_MEASUREMENT_ID`.
+
+## Oude leads
+
+Leads uit de vorige versie worden bij het uitlezen automatisch vertaald naar de nieuwe velden. Pas bij de eerste keer opslaan worden de nieuwe velden weggeschreven (`schemaVersion: 2`, `legacyInfo`, `legacyTags`). Oude velden worden nooit verwijderd.
+
+## Testen
+
+```
+CI=true npm test -- --watchAll=false
+CI=true npm run build
+```
+Let op: Vercel bouwt met `CI=true`, dus ESLint-warnings laten de build falen.
+
+---
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
