@@ -13,13 +13,13 @@ import {
 } from "../../crm/constants";
 import { getNextActionInfo } from "../../crm/signals";
 import { formatDate, formatDateTime } from "../../crm/dates";
-import { Panel, TextField, SelectField, UserSelectField, TextAreaField, btnStyle } from "../ui";
+import { Panel, TextField, SelectField, UserSelectField, TextAreaField, btnStyle, C } from "../ui";
 
 function Row({ label, children }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12, padding: "6px 0", borderBottom: "1px solid #f8fafc" }}>
-      <span style={{ color: "#64748b", fontWeight: 700 }}>{label}</span>
-      <span style={{ color: "#0f172a", textAlign: "right" }}>{children}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 16, fontSize: 13, padding: "9px 0", borderBottom: `1px solid ${C.borderSoft}` }}>
+      <span style={{ color: C.textMuted, fontWeight: 500, flexShrink: 0 }}>{label}</span>
+      <span style={{ color: C.text, textAlign: "right" }}>{children}</span>
     </div>
   );
 }
@@ -39,7 +39,7 @@ export function OverviewTab({ form, set, setMany, errors, users, lead, isNew, st
           <TextField label="Telefoon" type="tel" value={form.phone} onChange={(v) => set("phone", v)} error={errors.phone} />
           <TextField label="E-mail" type="email" value={form.email} onChange={(v) => set("email", v)} error={errors.email} />
         </div>
-        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>Minimaal een e-mailadres of telefoonnummer is verplicht.</div>
+        <div style={{ fontSize: 11.5, color: C.textSubtle, marginTop: 8 }}>Minimaal een e-mailadres of telefoonnummer is verplicht.</div>
       </Panel>
 
       <Panel title="Status en kwalificatie">
@@ -67,7 +67,7 @@ export function OverviewTab({ form, set, setMany, errors, users, lead, isNew, st
           )}
         </div>
         {form.ownerName && !form.ownerId && (
-          <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 8 }}>
+          <div style={{ fontSize: 11.5, color: C.goldText, marginTop: 8 }}>
             Oude verantwoordelijke "{form.ownerName}" is niet gekoppeld aan een gebruiker. Kies hierboven de juiste persoon.
           </div>
         )}
@@ -89,7 +89,7 @@ export function OverviewTab({ form, set, setMany, errors, users, lead, isNew, st
       {!isNew && (
         <Panel title="Stand van zaken">
           <Row label="Volgende actie">
-            <span style={{ color: na.color, fontWeight: 700 }}>
+            <span style={{ color: na.color, fontWeight: 600 }}>
               {nextActionText(form)}
               {form.nextActionDate ? ` · ${formatDate(form.nextActionDate)}` : ""}
             </span>
@@ -108,14 +108,14 @@ export function OverviewTab({ form, set, setMany, errors, users, lead, isNew, st
           </Row>
           <Row label="Open taken">{lead.openTaskCount || 0}</Row>
           <Row label="Bestanden">{stats.files}</Row>
-          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-            <button type="button" onClick={() => onGoTab("activities")} style={btnStyle("#6366f1")}>
+          <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+            <button type="button" onClick={() => onGoTab("activities")} style={btnStyle("primary", true)}>
               + Activiteit toevoegen
             </button>
-            <button type="button" onClick={() => onGoTab("followup")} style={btnStyle("#0ea5e9")}>
+            <button type="button" onClick={() => onGoTab("followup")} style={btnStyle("primary")}>
               Opvolging plannen
             </button>
-            <button type="button" onClick={() => onGoTab("partners")} style={btnStyle("#10b981")}>
+            <button type="button" onClick={() => onGoTab("partners")} style={btnStyle("primary")}>
               Partner koppelen
             </button>
           </div>

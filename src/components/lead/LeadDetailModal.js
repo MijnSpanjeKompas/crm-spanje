@@ -4,7 +4,7 @@ import { emptyLead, findDuplicateLeads } from "../../crm/normalize";
 import { validateLead, FIELD_TABS } from "../../crm/validation";
 import { getLeadSignals, SEVERITY_STYLE } from "../../crm/signals";
 import { createLead, updateLead, setPinned, subscribeLeadSub } from "../../crm/services";
-import { Modal, Tabs, Icon, OptionBadge, Badge, Notice, btnStyle } from "../ui";
+import { Modal, Tabs, Icon, OptionBadge, Badge, Notice, btnStyle, C, CloseButton, MODAL_PAD_X, MODAL_PAD_Y } from "../ui";
 import { OverviewTab } from "./OverviewTab";
 import { ProfileTab } from "./ProfileTab";
 import { FollowUpTab } from "./FollowUpTab";
@@ -98,7 +98,7 @@ export function LeadDetailModal({
   if (!base) {
     return (
       <Modal onClose={onClose}>
-        <div style={{ color: "#94a3b8", fontSize: 13 }}>Lead laden...</div>
+        <div style={{ color: C.textMuted, fontSize: 13 }}>Lead laden...</div>
       </Modal>
     );
   }
@@ -173,44 +173,65 @@ export function LeadDetailModal({
 
   return (
     <Modal onClose={requestClose}>
-      {/* HEADER */}
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 18 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <button
-              type="button"
-              onClick={togglePin}
-              title={form.pinned ? "Lead losmaken" : "Lead vastpinnen"}
-              style={{ border: "none", background: "transparent", color: form.pinned ? "#f59e0b" : "#cbd5e1", cursor: "pointer", padding: 0, display: "flex" }}
-            >
-              <Icon name="star" size={20} />
-            </button>
-            <div style={{ fontSize: 20, fontWeight: 900, color: "#0f172a" }}>{isNew ? "Nieuwe lead toevoegen" : base.name || "Lead"}</div>
-          </div>
-          {!isNew && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-              <OptionBadge options={PIPELINE_STAGES} value={base.pipelineStage} />
-              <OptionBadge options={PURCHASE_INTENTS} value={base.purchaseIntent} />
-              <OptionBadge options={PRIORITIES} value={base.priority} prefix="Prio: " />
-              {base.ownerName && <Badge color="#0f172a" bg="#f1f5f9">{base.ownerName}</Badge>}
-              {base.archived && <Badge>Gearchiveerd</Badge>}
+      {/* HEADER + TABS (sticky op desktop) */}
+      <div
+        className="msk-sticky-head"
+        style={{
+          background: C.surface,
+          margin: `-${MODAL_PAD_Y}px -${MODAL_PAD_X}px 0`,
+          padding: `${MODAL_PAD_Y}px ${MODAL_PAD_X}px 0`,
+          borderRadius: "20px 20px 0 0",
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 18, alignItems: "flex-start" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button
+                type="button"
+                onClick={togglePin}
+                title={form.pinned ? "Lead losmaken" : "Lead vastpinnen"}
+                aria-label={form.pinned ? "Lead losmaken" : "Lead vastpinnen"}
+                aria-pressed={Boolean(form.pinned)}
+                style={{ border: "none", background: "transparent", color: form.pinned ? C.gold : "#cfc8bb", cursor: "pointer", padding: 2, display: "flex", borderRadius: 6 }}
+              >
+                <Icon name="star" size={20} />
+              </button>
+              <div style={{ fontFamily: C.fontDisplay, fontSize: 26, fontWeight: 600, color: C.navy, lineHeight: 1.15, letterSpacing: "-0.01em", minWidth: 0, overflowWrap: "anywhere" }}>
+                {isNew ? "Nieuwe lead toevoegen" : base.name || "Lead"}
+              </div>
             </div>
-          )}
+            {!isNew && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+                <OptionBadge options={PIPELINE_STAGES} value={base.pipelineStage} />
+                <OptionBadge options={PURCHASE_INTENTS} value={base.purchaseIntent} />
+                <OptionBadge options={PRIORITIES} value={base.priority} prefix="Prio: " />
+                {base.ownerName && (
+                  <Badge color="#334a5e" bg="#ffffff" icon="user">
+                    {base.ownerName}
+                  </Badge>
+                )}
+                {base.archived && <Badge icon="archive">Gearchiveerd</Badge>}
+              </div>
+            )}
+          </div>
+          <CloseButton onClick={requestClose} />
         </div>
-        <button type="button" onClick={requestClose} aria-label="Sluiten" style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>
-          <Icon name="x" size={22} />
-        </button>
-      </div>
 
-      {signals.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {signals.map((s) => (
-            <Badge key={s.key} color={SEVERITY_STYLE[s.severity].color} bg={SEVERITY_STYLE[s.severity].bg}>
-              {s.label}
-            </Badge>
-          ))}
-        </div>
-      )}
+        {signals.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {signals.map((s) => (
+              <Badge key={s.key} color={SEVERITY_STYLE[s.severity].color} bg={SEVERITY_STYLE[s.severity].bg} icon="alertCircle">
+                {s.label}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        <Tabs tabs={tabs} active={tab} onChange={setTab} />
+      </div>
 
       {base._isLegacy && !isNew && (
         <Notice tone="info">
@@ -221,7 +242,7 @@ export function LeadDetailModal({
 
       {duplicates && (
         <Notice tone="warn">
-          <div style={{ fontWeight: 800, marginBottom: 6 }}>Er bestaat mogelijk al een lead met dit e-mailadres of telefoonnummer.</div>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Er bestaat mogelijk al een lead met dit e-mailadres of telefoonnummer.</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {duplicates.map((d) => (
               <div key={d.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
@@ -229,24 +250,22 @@ export function LeadDetailModal({
                   <strong>{d.name || "Naam onbekend"}</strong> · {d.email || "–"} · {d.phone || "–"}
                   {d.archived ? " · gearchiveerd" : ""}
                 </span>
-                <button type="button" onClick={() => onOpenLead(d)} style={btnStyle("#6366f1")}>
+                <button type="button" onClick={() => onOpenLead(d)} style={btnStyle("primary")}>
                   Bestaande lead openen
                 </button>
               </div>
             ))}
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <button type="button" onClick={() => save(true)} style={btnStyle("#f59e0b", true)}>
+            <button type="button" onClick={() => save(true)} style={btnStyle("gold", true)}>
               Toch nieuwe lead aanmaken
             </button>
-            <button type="button" onClick={() => setDuplicates(null)} style={btnStyle("#64748b")}>
+            <button type="button" onClick={() => setDuplicates(null)} style={btnStyle("neutral")}>
               Terug naar formulier
             </button>
           </div>
         </Notice>
       )}
-
-      <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
       <div style={{ minHeight: 280 }}>
         {tab === "overview" && <OverviewTab {...ctx} stats={{ activities: activities.items.length, partnerLinks: partnerLinks.items, files: files.items.length }} onGoTab={setTab} />}
@@ -262,27 +281,39 @@ export function LeadDetailModal({
 
       {showFooter && (
         <div
+          className="msk-modal-footer"
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             gap: 12,
-            position: "sticky",
-            bottom: -24,
-            background: "#fff",
-            padding: "12px 0 4px",
-            borderTop: "1px solid #f1f5f9",
+            flexWrap: "wrap",
+            background: C.surfaceWarm,
+            margin: `0 -${MODAL_PAD_X}px -${MODAL_PAD_Y}px`,
+            padding: `14px ${MODAL_PAD_X}px`,
+            borderTop: `1px solid ${C.border}`,
+            borderRadius: "0 0 20px 20px",
           }}
         >
-          <div style={{ fontSize: 12, color: dirty ? "#f59e0b" : "#94a3b8", fontWeight: 700 }}>
-            {dirty ? "Niet-opgeslagen wijzigingen" : isNew ? "" : "Alles opgeslagen"}
+          <div style={{ fontSize: 12.5, color: dirty ? C.goldText : C.textMuted, fontWeight: dirty ? 600 : 500, display: "flex", gap: 7, alignItems: "center" }}>
+            {dirty ? (
+              <>
+                <span style={{ width: 7, height: 7, borderRadius: 99, background: C.gold }} /> Niet-opgeslagen wijzigingen
+              </>
+            ) : isNew ? (
+              ""
+            ) : (
+              <>
+                <Icon name="checkCircle" size={14} /> Alles opgeslagen
+              </>
+            )}
           </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <button type="button" onClick={requestClose} style={{ ...btnStyle("#64748b"), padding: "9px 18px" }}>
+          <div style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
+            <button type="button" onClick={requestClose} style={{ ...btnStyle("neutral"), padding: "9px 18px", minHeight: 40, fontSize: 13 }}>
               {dirty ? "Annuleren" : "Sluiten"}
             </button>
-            <button type="button" onClick={() => save(false)} disabled={saving} style={{ ...btnStyle("#6366f1", true), padding: "10px 22px", fontSize: 13, opacity: saving ? 0.7 : 1 }}>
-              <Icon name="save" size={14} /> {saving ? "Opslaan..." : isNew ? "Lead aanmaken" : "Opslaan"}
+            <button type="button" onClick={() => save(false)} disabled={saving} style={{ ...btnStyle("primary", true), padding: "9px 20px", minHeight: 40, fontSize: 13 }}>
+              <Icon name="save" size={15} /> {saving ? "Opslaan..." : isNew ? "Lead aanmaken" : "Opslaan"}
             </button>
           </div>
         </div>

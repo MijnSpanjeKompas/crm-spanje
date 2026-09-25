@@ -17,19 +17,19 @@ export function optionOf(options, value) {
 
 // ─── PIPELINE ────────────────────────────────────────────────────────────────
 export const PIPELINE_STAGES = [
-  { value: "new_lead", label: "Nieuwe lead", group: "main", color: "#6366f1", bg: "#eef2ff" },
-  { value: "contact_phase", label: "Contactfase", group: "main", color: "#0ea5e9", bg: "#e0f2fe" },
-  { value: "appointment_scheduled", label: "Kennismaking gepland", group: "main", color: "#0891b2", bg: "#ecfeff" },
-  { value: "appointment_completed", label: "Kennismaking gehad", group: "main", color: "#0d9488", bg: "#f0fdfa" },
-  { value: "qualified", label: "Gekwalificeerd", group: "main", color: "#16a34a", bg: "#f0fdf4" },
-  { value: "partner_connected", label: "Gekoppeld aan partner", group: "main", color: "#10b981", bg: "#ecfdf5" },
-  { value: "active_search", label: "Actief zoektraject", group: "main", color: "#8b5cf6", bg: "#f5f3ff" },
-  { value: "purchase_process", label: "Aankooptraject", group: "main", color: "#d946ef", bg: "#fdf4ff" },
-  { value: "completed", label: "Afgerond / woning gekocht", group: "main", closed: true, color: "#64748b", bg: "#f1f5f9" },
-  { value: "follow_up_later", label: "Later opvolgen", group: "side", color: "#f59e0b", bg: "#fffbeb" },
-  { value: "unreachable", label: "Niet bereikbaar", group: "side", color: "#f97316", bg: "#fff7ed" },
-  { value: "disqualified", label: "Niet gekwalificeerd", group: "side", closed: true, color: "#94a3b8", bg: "#f8fafc" },
-  { value: "stopped", label: "Gestopt", group: "side", closed: true, color: "#94a3b8", bg: "#f8fafc" },
+  { value: "new_lead", label: "Nieuwe lead", group: "main", color: "#33506b", bg: "#edf1f5" },
+  { value: "contact_phase", label: "Contactfase", group: "main", color: "#3a6788", bg: "#eaf1f6" },
+  { value: "appointment_scheduled", label: "Kennismaking gepland", group: "main", color: "#2f6f82", bg: "#e8f2f4" },
+  { value: "appointment_completed", label: "Kennismaking gehad", group: "main", color: "#2e7268", bg: "#e7f2ef" },
+  { value: "qualified", label: "Gekwalificeerd", group: "main", color: "#2f7a55", bg: "#eaf4ee" },
+  { value: "partner_connected", label: "Gekoppeld aan partner", group: "main", color: "#85663a", bg: "#f4ede2" },
+  { value: "active_search", label: "Actief zoektraject", group: "main", color: "#2f5e86", bg: "#e6eef6" },
+  { value: "purchase_process", label: "Aankooptraject", group: "main", color: "#8c6010", bg: "#fbefd2" },
+  { value: "completed", label: "Afgerond / woning gekocht", group: "main", closed: true, color: "#4e5d6c", bg: "#eef0f2" },
+  { value: "follow_up_later", label: "Later opvolgen", group: "side", color: "#97581a", bg: "#fbefe3" },
+  { value: "unreachable", label: "Niet bereikbaar", group: "side", color: "#a0522d", bg: "#f8ece4" },
+  { value: "disqualified", label: "Niet gekwalificeerd", group: "side", closed: true, color: "#636d78", bg: "#f3f2ef" },
+  { value: "stopped", label: "Gestopt", group: "side", closed: true, color: "#9b4a43", bg: "#f6eae8" },
 ];
 
 export const CLOSED_STAGES = PIPELINE_STAGES.filter((s) => s.closed).map((s) => s.value);
@@ -60,18 +60,18 @@ export function isClosedStage(stage) {
 
 // ─── KWALIFICATIE ────────────────────────────────────────────────────────────
 export const PURCHASE_INTENTS = [
-  { value: "unknown", label: "Nog onbekend", color: "#64748b", bg: "#f8fafc", rank: 0 },
-  { value: "orienting", label: "Oriënterend", color: "#0ea5e9", bg: "#e0f2fe", rank: 1 },
-  { value: "serious_orientation", label: "Serieus oriënterend", color: "#6366f1", bg: "#eef2ff", rank: 2 },
-  { value: "concrete_plans", label: "Concrete koopplannen", color: "#f59e0b", bg: "#fffbeb", rank: 3 },
-  { value: "ready_to_buy", label: "Koopklaar", color: "#ef4444", bg: "#fef2f2", rank: 4 },
+  { value: "unknown", label: "Nog onbekend", color: "#636d78", bg: "#f3f2ef", rank: 0 },
+  { value: "orienting", label: "Oriënterend", color: "#3a6788", bg: "#eaf1f6", rank: 1 },
+  { value: "serious_orientation", label: "Serieus oriënterend", color: "#33506b", bg: "#edf1f5", rank: 2 },
+  { value: "concrete_plans", label: "Concrete koopplannen", color: "#8c6010", bg: "#fbefd2", rank: 3 },
+  { value: "ready_to_buy", label: "Koopklaar", color: "#2f7a55", bg: "#eaf4ee", rank: 4 },
 ];
 
 export const PRIORITIES = [
-  { value: "low", label: "Laag", color: "#64748b", bg: "#f8fafc", rank: 0 },
-  { value: "normal", label: "Normaal", color: "#0ea5e9", bg: "#e0f2fe", rank: 1 },
-  { value: "high", label: "Hoog", color: "#f59e0b", bg: "#fffbeb", rank: 2 },
-  { value: "urgent", label: "Urgent", color: "#ef4444", bg: "#fef2f2", rank: 3 },
+  { value: "low", label: "Laag", color: "#636d78", bg: "#f3f2ef", rank: 0 },
+  { value: "normal", label: "Normaal", color: "#3a6788", bg: "#eaf1f6", rank: 1 },
+  { value: "high", label: "Hoog", color: "#97581a", bg: "#fbefe3", rank: 2 },
+  { value: "urgent", label: "Urgent", color: "#b3453a", bg: "#fbedeb", rank: 3 },
 ];
 
 // ─── VOLGENDE ACTIE ──────────────────────────────────────────────────────────
@@ -350,13 +350,13 @@ export const PARTNER_TYPES = [
 
 // order = hoe "ver" een koppeling is (voor samenvatting op lead)
 export const PARTNER_LINK_STATUSES = [
-  { value: "not_sent", label: "Nog niet verstuurd", order: 1, color: "#64748b", bg: "#f8fafc" },
-  { value: "sent", label: "Verstuurd", order: 2, waiting: true, color: "#0ea5e9", bg: "#e0f2fe" },
-  { value: "received", label: "Ontvangen", order: 3, waiting: true, color: "#6366f1", bg: "#eef2ff" },
-  { value: "contacted", label: "Contact opgenomen", order: 4, waiting: true, color: "#8b5cf6", bg: "#f5f3ff" },
-  { value: "active", label: "Actief", order: 5, color: "#10b981", bg: "#ecfdf5" },
-  { value: "completed", label: "Afgerond", order: 6, color: "#64748b", bg: "#f1f5f9" },
-  { value: "no_match", label: "Geen match", order: 0, color: "#94a3b8", bg: "#f8fafc" },
+  { value: "not_sent", label: "Nog niet verstuurd", order: 1, color: "#636d78", bg: "#f3f2ef" },
+  { value: "sent", label: "Verstuurd", order: 2, waiting: true, color: "#3a6788", bg: "#eaf1f6" },
+  { value: "received", label: "Ontvangen", order: 3, waiting: true, color: "#33506b", bg: "#edf1f5" },
+  { value: "contacted", label: "Contact opgenomen", order: 4, waiting: true, color: "#8c6010", bg: "#fbefd2" },
+  { value: "active", label: "Actief", order: 5, color: "#2f7a55", bg: "#eaf4ee" },
+  { value: "completed", label: "Afgerond", order: 6, color: "#4e5d6c", bg: "#eef0f2" },
+  { value: "no_match", label: "Geen match", order: 0, color: "#9b4a43", bg: "#f6eae8" },
 ];
 
 /** Statussen waarbij we op terugkoppeling van de partner wachten. */

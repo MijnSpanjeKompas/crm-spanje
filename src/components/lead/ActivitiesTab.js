@@ -11,7 +11,7 @@ import {
 } from "../../crm/constants";
 import { addActivity } from "../../crm/services";
 import { toDateTimeLocal, fromDateTimeLocal, formatDateTime, toMillis, todayISO, addDaysISO } from "../../crm/dates";
-import { Panel, SelectField, TextField, TextAreaField, UserSelectField, Notice, Empty, Icon, btnStyle, labelStyle, inputStyle } from "../ui";
+import { Panel, SelectField, TextField, TextAreaField, UserSelectField, Notice, Empty, Icon, btnStyle, labelStyle, inputStyle, C } from "../ui";
 
 const NEXT_ACTION_KEYS = ["nextActionType", "nextActionLabel", "nextActionDate", "nextActionAssignedTo", "nextActionAssignedToName", "nextActionNotes"];
 
@@ -35,36 +35,54 @@ function freshDraft(user) {
   };
 }
 
-function ActivityItem({ a }) {
+const TYPE_TONE = {
+  phone_call: { color: C.navy, bg: C.navySoft },
+  whatsapp: { color: C.success, bg: C.successBg },
+  email: { color: C.info, bg: C.infoBg },
+  appointment: { color: C.goldText, bg: C.goldSoft },
+  note: { color: C.textBody, bg: C.surfaceSunken },
+  partner_contact: { color: "#85663a", bg: "#f4ede2" },
+  document: { color: C.info, bg: C.infoBg },
+  viewing: { color: C.success, bg: C.successBg },
+  other: { color: C.textMuted, bg: C.surfaceSunken },
+  system: { color: C.textSubtle, bg: C.surfaceSoft },
+};
+
+function ActivityItem({ a, last }) {
   const t = optionOf(ACTIVITY_TYPES, a.type);
   const isSystem = a.type === "system";
+  const tone = TYPE_TONE[a.type] || TYPE_TONE.other;
   return (
-    <div style={{ display: "flex", gap: 12, padding: "10px 0", borderBottom: "1px solid #f1f5f9" }}>
+    <div style={{ display: "flex", gap: 14, position: "relative", paddingBottom: last ? 0 : 18 }}>
+      {!last && <span aria-hidden="true" style={{ position: "absolute", left: 15, top: 34, bottom: 2, width: 1, background: C.border }} />}
       <div
         style={{
-          width: 30,
-          height: 30,
+          width: 32,
+          height: 32,
           borderRadius: 99,
           flexShrink: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: isSystem ? "#f1f5f9" : "#eef2ff",
-          color: isSystem ? "#94a3b8" : "#6366f1",
+          background: tone.bg,
+          color: tone.color,
+          border: `1px solid ${C.surface}`,
+          boxShadow: `0 0 0 1px ${C.borderSoft}`,
+          position: "relative",
         }}
       >
         <Icon name={t?.icon || "dot"} size={14} />
       </div>
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: isSystem ? "#475569" : "#0f172a" }}>
+      <div style={{ minWidth: 0, flex: 1, paddingTop: 5 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
+          <div style={{ fontSize: 13.5, fontWeight: isSystem ? 500 : 600, color: isSystem ? C.textMuted : C.text }}>
             {a.title || labelOf(ACTIVITY_TYPES, a.type)}
-            {a.outcome && <span style={{ fontWeight: 700, color: "#6366f1" }}> · {labelOf(CONTACT_OUTCOMES, a.outcome)}</span>}
+            {a.outcome && <span style={{ fontWeight: 500, color: C.goldText }}> · {labelOf(CONTACT_OUTCOMES, a.outcome)}</span>}
           </div>
-          <div style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>{formatDateTime(a.occurredAt || a.createdAt)}</div>
+          <div style={{ fontSize: 11.5, color: C.textSubtle, whiteSpace: "nowrap" }}>{formatDateTime(a.occurredAt || a.createdAt)}</div>
         </div>
-        {a.description && <div style={{ fontSize: 12, color: "#475569", marginTop: 3, whiteSpace: "pre-wrap" }}>{a.description}</div>}
-        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>
+        {a.description && <div style={{ fontSize: 13, color: C.textBody, marginTop: 4, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{a.description}</div>}
+        <div style={{ fontSize: 11.5, color: C.textSubtle, marginTop: 4 }}>
           {labelOf(ACTIVITY_TYPES, a.type)}
           {(a.performedByName || a.createdByName) && ` · ${a.performedByName || a.createdByName}`}
         </div>
@@ -149,7 +167,7 @@ export function ActivitiesTab({ lead, user, users, activities, clearEdits, setMe
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       {!open ? (
-        <button type="button" onClick={() => setOpen(true)} style={{ ...btnStyle("#6366f1", true), alignSelf: "flex-start", padding: "9px 16px", fontSize: 13 }}>
+        <button type="button" onClick={() => setOpen(true)} style={{ ...btnStyle("primary", true), alignSelf: "flex-start", padding: "9px 16px", fontSize: 13 }}>
           <Icon name="plus" size={14} /> Activiteit toevoegen
         </button>
       ) : (
@@ -165,7 +183,8 @@ export function ActivitiesTab({ lead, user, users, activities, clearEdits, setMe
                       key={t.value}
                       type="button"
                       onClick={() => upd({ type: t.value, outcome: "" })}
-                      style={{ ...btnStyle(on ? "#6366f1" : "#64748b", on), padding: "7px 11px" }}
+                      aria-pressed={on}
+                      style={{ ...btnStyle(on ? "primary" : "neutral", on), padding: "7px 12px", boxShadow: "none" }}
                     >
                       <Icon name={t.icon} size={13} /> {t.label}
                     </button>
@@ -186,23 +205,23 @@ export function ActivitiesTab({ lead, user, users, activities, clearEdits, setMe
             <TextAreaField label="Beschrijving" value={draft.description} onChange={(v) => upd({ description: v })} rows={3} placeholder="Wat is er besproken of gebeurd?" />
 
             {isContact && draft.outcome && !success && (
-              <div style={{ fontSize: 11, color: "#94a3b8" }}>Deze uitkomst telt als contactpoging, niet als 'laatste contact'.</div>
+              <div style={{ fontSize: 11.5, color: C.textSubtle }}>Deze uitkomst telt als contactpoging, niet als 'laatste contact'.</div>
             )}
 
             {offerStageMove && (
-              <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: "#0f172a" }}>
+              <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: C.text }}>
                 <input type="checkbox" checked={draft.moveToContact} onChange={(e) => upd({ moveToContact: e.target.checked })} />
                 Pipelinefase direct naar "Contactfase" zetten
               </label>
             )}
 
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: "#0f172a", fontWeight: 700 }}>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: C.text, fontWeight: 600 }}>
               <input type="checkbox" checked={draft.planNext} onChange={(e) => upd({ planNext: e.target.checked })} />
               Direct volgende actie plannen
             </label>
 
             {draft.planNext && (
-              <div style={{ background: "#f8fafc", borderRadius: 12, padding: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+              <div style={{ background: C.surfaceSoft, border: `1px solid ${C.borderSoft}`, borderRadius: 14, padding: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
                 <SelectField
                   label="Volgende actie"
                   value={draft.nextActionType}
@@ -220,17 +239,17 @@ export function ActivitiesTab({ lead, user, users, activities, clearEdits, setMe
                 <div style={{ gridColumn: "1 / -1" }}>
                   <TextField label="Toelichting" value={draft.nextActionNotes} onChange={(v) => upd({ nextActionNotes: v })} />
                 </div>
-                <div style={{ gridColumn: "1 / -1", fontSize: 11, color: "#94a3b8" }}>Dit vervangt de huidige volgende actie van de lead.</div>
+                <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: C.textSubtle }}>Dit vervangt de huidige volgende actie van de lead.</div>
               </div>
             )}
 
             {error && <Notice tone="error">{error}</Notice>}
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button type="button" onClick={() => { setOpen(false); setError(""); }} style={btnStyle("#64748b")}>
+              <button type="button" onClick={() => { setOpen(false); setError(""); }} style={btnStyle("neutral")}>
                 Annuleren
               </button>
-              <button type="button" onClick={submit} disabled={busy} style={{ ...btnStyle("#6366f1", true), padding: "8px 16px" }}>
+              <button type="button" onClick={submit} disabled={busy} style={{ ...btnStyle("primary", true), padding: "8px 16px" }}>
                 <Icon name="save" size={13} /> {busy ? "Opslaan..." : draft.planNext ? "Opslaan + actie plannen" : "Activiteit opslaan"}
               </button>
             </div>
@@ -241,14 +260,14 @@ export function ActivitiesTab({ lead, user, users, activities, clearEdits, setMe
       <Panel
         title="Tijdlijn"
         right={
-          <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#64748b", fontWeight: 700 }}>
+          <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: C.textMuted, fontWeight: 600 }}>
             <input type="checkbox" checked={showSystem} onChange={(e) => setShowSystem(e.target.checked)} />
             Systeemmeldingen tonen
           </label>
         }
       >
         {activities.error && <Notice tone="error">Activiteiten konden niet worden geladen.</Notice>}
-        {activities.loading ? <Empty>Activiteiten laden...</Empty> : sorted.length ? sorted.map((a) => <ActivityItem key={a.id} a={a} />) : <Empty>Nog geen activiteiten.</Empty>}
+        {activities.loading ? <Empty>Activiteiten laden...</Empty> : sorted.length ? <div style={{ paddingTop: 4 }}>{sorted.map((a, i) => <ActivityItem key={a.id} a={a} last={i === sorted.length - 1} />)}</div> : <Empty>Nog geen activiteiten.</Empty>}
       </Panel>
     </div>
   );

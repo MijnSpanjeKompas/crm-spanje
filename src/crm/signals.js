@@ -21,20 +21,20 @@ export function isOpenLead(lead) {
 /** Status van de volgende actie, voor kleuren en sortering. */
 export function getNextActionInfo(lead, now = new Date()) {
   if (!hasNextAction(lead)) {
-    return { state: "none", label: "Geen actie gepland", color: "#94a3b8", bg: "#f8fafc", sort: 99999 };
+    return { state: "none", label: "Geen actie gepland", color: "#636d78", bg: "#f3f2ef", sort: 99999 };
   }
   if (!lead.nextActionDate) {
-    return { state: "nodate", label: "Datum ontbreekt", color: "#f97316", bg: "#fff7ed", sort: -99999 };
+    return { state: "nodate", label: "Datum ontbreekt", color: "#97581a", bg: "#fbefe3", sort: -99999 };
   }
   const diff = diffInDays(lead.nextActionDate, now);
   if (diff < 0) {
     const d = Math.abs(diff);
-    return { state: "overdue", label: `${d} ${d === 1 ? "dag" : "dagen"} te laat`, color: "#ef4444", bg: "#fef2f2", sort: diff };
+    return { state: "overdue", label: `${d} ${d === 1 ? "dag" : "dagen"} te laat`, color: "#b3453a", bg: "#fbedeb", sort: diff };
   }
-  if (diff === 0) return { state: "today", label: "Vandaag", color: "#f59e0b", bg: "#fffbeb", sort: 0 };
-  if (diff === 1) return { state: "soon", label: "Morgen", color: "#0ea5e9", bg: "#e0f2fe", sort: 1 };
-  if (diff <= THRESHOLDS.UPCOMING_DAYS) return { state: "soon", label: `Over ${diff} dagen`, color: "#0ea5e9", bg: "#e0f2fe", sort: diff };
-  return { state: "later", label: formatDate(lead.nextActionDate), color: "#64748b", bg: "#f8fafc", sort: diff };
+  if (diff === 0) return { state: "today", label: "Vandaag", color: "#8c6010", bg: "#fbefd2", sort: 0 };
+  if (diff === 1) return { state: "soon", label: "Morgen", color: "#3a6788", bg: "#eaf1f6", sort: 1 };
+  if (diff <= THRESHOLDS.UPCOMING_DAYS) return { state: "soon", label: `Over ${diff} dagen`, color: "#3a6788", bg: "#eaf1f6", sort: diff };
+  return { state: "later", label: formatDate(lead.nextActionDate), color: "#5f6e80", bg: "#f3f2ef", sort: diff };
 }
 
 /** Welke kernvelden van het zoekprofiel ontbreken. */
@@ -126,9 +126,9 @@ export function getLeadSignals(lead, now = new Date()) {
 
 export const SEVERITY_RANK = { high: 0, medium: 1, low: 2 };
 export const SEVERITY_STYLE = {
-  high: { color: "#ef4444", bg: "#fef2f2" },
-  medium: { color: "#f59e0b", bg: "#fffbeb" },
-  low: { color: "#64748b", bg: "#f8fafc" },
+  high: { color: "#b3453a", bg: "#fbedeb" },
+  medium: { color: "#8c6010", bg: "#fbefd2" },
+  low: { color: "#5f6e80", bg: "#f3f2ef" },
 };
 
 /** Items voor de sectie "Vandaag": acties, taken en kennismakingen van vandaag. */

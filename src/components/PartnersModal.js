@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PARTNER_TYPES, REGIONS, labelOf } from "../crm/constants";
 import { savePartner } from "../crm/services";
-import { Modal, Panel, TextField, SelectField, TextAreaField, ChipMultiSelect, Notice, Empty, Badge, Icon, btnStyle, inputStyle, formatList } from "./ui";
+import { Modal, ModalTitle, CloseButton, Panel, TextField, SelectField, TextAreaField, ChipMultiSelect, Notice, Empty, Badge, Icon, btnStyle, inputStyle, formatList, C } from "./ui";
 
 const EMPTY = { name: "", type: "realtor", contactPerson: "", email: "", phone: "", regions: [], notes: "", active: true };
 
@@ -47,14 +47,9 @@ export function PartnersModal({ partners, leads, user, onClose }) {
 
   return (
     <Modal onClose={onClose} maxWidth={900} zIndex={1100}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={{ fontSize: 20, fontWeight: 900, color: "#0f172a" }}>Partners</div>
-          <div style={{ fontSize: 13, color: "#64748b" }}>Makelaars en andere partijen waaraan we leads koppelen.</div>
-        </div>
-        <button type="button" onClick={onClose} aria-label="Sluiten" style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>
-          <Icon name="x" size={22} />
-        </button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+        <ModalTitle sub="Makelaars en andere partijen waaraan we leads koppelen.">Partners</ModalTitle>
+        <CloseButton onClick={onClose} />
       </div>
 
       {error && <Notice tone="error">{error}</Notice>}
@@ -73,16 +68,16 @@ export function PartnersModal({ partners, leads, user, onClose }) {
             <div style={{ gridColumn: "1 / -1" }}>
               <TextAreaField label="Notities" value={editing.notes} onChange={(v) => setEditing({ ...editing, notes: v })} rows={3} />
             </div>
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: C.text }}>
               <input type="checkbox" checked={editing.active !== false} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} />
               Actief (zichtbaar bij koppelen)
             </label>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-            <button type="button" onClick={() => setEditing(null)} style={btnStyle("#64748b")}>
+            <button type="button" onClick={() => setEditing(null)} style={btnStyle("neutral")}>
               Annuleren
             </button>
-            <button type="button" onClick={save} disabled={busy} style={btnStyle("#6366f1", true)}>
+            <button type="button" onClick={save} disabled={busy} style={btnStyle("primary", true)}>
               <Icon name="save" size={13} /> {busy ? "Opslaan..." : "Opslaan"}
             </button>
           </div>
@@ -90,12 +85,12 @@ export function PartnersModal({ partners, leads, user, onClose }) {
       ) : (
         <>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Zoek partner..." style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
-            <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#64748b", fontWeight: 700 }}>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Zoek partner..." aria-label="Zoek partner" style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
+            <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: C.textMuted, fontWeight: 600 }}>
               <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
               Inactieve tonen
             </label>
-            <button type="button" onClick={() => setEditing({ ...EMPTY })} style={{ ...btnStyle("#6366f1", true), padding: "9px 14px" }}>
+            <button type="button" onClick={() => setEditing({ ...EMPTY })} style={{ ...btnStyle("primary", true), padding: "9px 15px", minHeight: 38 }}>
               <Icon name="plus" size={13} /> Nieuwe partner
             </button>
           </div>
@@ -103,26 +98,30 @@ export function PartnersModal({ partners, leads, user, onClose }) {
           {list.length === 0 ? (
             <Empty>{partners.length ? "Geen partners gevonden." : "Nog geen partners. Voeg je eerste makelaar toe."}</Empty>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", flexDirection: "column", border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
               {list.map((p) => (
-                <div key={p.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f1f5f9" }}>
+                <div
+                  key={p.id}
+                  className="msk-row"
+                  style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${C.borderSoft}`, flexWrap: "wrap" }}
+                >
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: p.active === false ? "#94a3b8" : "#0f172a" }}>
+                    <div style={{ fontSize: 14.5, fontWeight: 600, color: p.active === false ? C.textSubtle : C.text, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                       {p.name} {p.active === false && <Badge>Inactief</Badge>}
                     </div>
-                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+                    <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2 }}>
                       {labelOf(PARTNER_TYPES, p.type)}
                       {p.contactPerson && ` · ${p.contactPerson}`}
                       {p.email && ` · ${p.email}`}
                       {p.phone && ` · ${p.phone}`}
                     </div>
-                    {p.regions?.length > 0 && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{formatList(REGIONS, p.regions)}</div>}
+                    {p.regions?.length > 0 && <div style={{ fontSize: 11.5, color: C.textSubtle, marginTop: 2 }}>{formatList(REGIONS, p.regions)}</div>}
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                    <Badge color="#6366f1" bg="#eef2ff">
+                    <Badge color="#33506b" bg="#edf1f5">
                       {linkCount(p.id)} leads
                     </Badge>
-                    <button type="button" onClick={() => setEditing({ ...EMPTY, ...p })} style={btnStyle("#6366f1")}>
+                    <button type="button" onClick={() => setEditing({ ...EMPTY, ...p })} style={btnStyle("neutral")}>
                       <Icon name="edit" size={13} /> Bewerken
                     </button>
                   </div>

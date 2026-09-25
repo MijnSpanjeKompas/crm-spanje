@@ -2,13 +2,13 @@ import { useState } from "react";
 import { LEAD_SOURCES, PREFERRED_CONTACT_METHODS, PREFERRED_CONTACT_MOMENTS, TAG_SUGGESTIONS, CONTACT_METHODS, labelOf } from "../../crm/constants";
 import { archiveLead, restoreLead, deleteLeadPermanently } from "../../crm/services";
 import { formatDateTime, formatDate } from "../../crm/dates";
-import { Panel, SelectField, TextField, TagInput, Notice, Badge, btnStyle, Icon } from "../ui";
+import { Panel, SelectField, TextField, TagInput, Notice, Badge, btnStyle, Icon, C } from "../ui";
 
 function Row({ label, children }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12, padding: "5px 0", borderBottom: "1px solid #f8fafc" }}>
-      <span style={{ color: "#64748b", fontWeight: 700 }}>{label}</span>
-      <span style={{ color: "#0f172a", textAlign: "right", wordBreak: "break-word" }}>{children || "–"}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 16, fontSize: 13, padding: "9px 0", borderBottom: `1px solid ${C.borderSoft}` }}>
+      <span style={{ color: C.textMuted, fontWeight: 500, flexShrink: 0 }}>{label}</span>
+      <span style={{ color: C.text, textAlign: "right", wordBreak: "break-word" }}>{children || "–"}</span>
     </div>
   );
 }
@@ -64,7 +64,7 @@ export function DetailsTab({ form, set, lead, user, users, isNew, onClose }) {
               </Row>
               <Row label="Laatste contactpoging">{form.lastContactAttemptAt ? formatDateTime(form.lastContactAttemptAt) : ""}</Row>
               <Row label="Laatste activiteit">{form.lastActivityAt ? formatDateTime(form.lastActivityAt) : ""}</Row>
-              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>Deze datums worden automatisch bijgewerkt via de activiteiten.</div>
+              <div style={{ fontSize: 11.5, color: C.textSubtle, marginTop: 6 }}>Deze datums worden automatisch bijgewerkt via de activiteiten.</div>
             </div>
           )}
         </Panel>
@@ -102,7 +102,7 @@ export function DetailsTab({ form, set, lead, user, users, isNew, onClose }) {
             {lead.closedAt && <Row label="Afgesloten">{formatDateTime(lead.closedAt)}</Row>}
             {lead.archived && <Row label="Gearchiveerd">{`${formatDateTime(lead.archivedAt)}${lead.archivedByName ? ` · ${lead.archivedByName}` : ""}`}</Row>}
             <Row label="Lead-ID">
-              <code style={{ fontSize: 11 }}>{lead.id}</code>
+              <code style={{ fontSize: 11.5 }}>{lead.id}</code>
             </Row>
           </div>
         )}
@@ -110,7 +110,7 @@ export function DetailsTab({ form, set, lead, user, users, isNew, onClose }) {
 
       {legacy && (
         <Panel title="Gegevens uit de oude CRM-versie">
-          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8 }}>Alleen ter controle. Deze waarden blijven bewaard en worden niet meer gebruikt.</div>
+          <div style={{ fontSize: 11.5, color: C.textSubtle, marginBottom: 8 }}>Alleen ter controle. Deze waarden blijven bewaard en worden niet meer gebruikt.</div>
           <Row label="Oude status">{legacy.status}</Row>
           <Row label="Oud leadtype">{legacy.leadType}</Row>
           <Row label="Oude leadbron">{legacy.source}</Row>
@@ -137,7 +137,7 @@ export function DetailsTab({ form, set, lead, user, users, isNew, onClose }) {
           {error && <Notice tone="error">{error}</Notice>}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: error ? 10 : 0 }}>
             {lead.archived ? (
-              <button type="button" disabled={busy} onClick={() => run(() => restoreLead(lead, user))} style={btnStyle("#10b981")}>
+              <button type="button" disabled={busy} onClick={() => run(() => restoreLead(lead, user))} style={btnStyle("success")}>
                 Terugzetten uit archief
               </button>
             ) : (
@@ -145,7 +145,7 @@ export function DetailsTab({ form, set, lead, user, users, isNew, onClose }) {
                 type="button"
                 disabled={busy}
                 onClick={() => window.confirm(`${lead.name || "Deze lead"} archiveren? Je kunt de lead later terugvinden via het filter "Archief".`) && run(() => archiveLead(lead, user), true)}
-                style={btnStyle("#f59e0b")}
+                style={btnStyle("gold")}
               >
                 <Icon name="archive" size={13} /> Archiveren
               </button>
@@ -160,13 +160,13 @@ export function DetailsTab({ form, set, lead, user, users, isNew, onClose }) {
                   );
                   if (typed === "VERWIJDER") run(() => deleteLeadPermanently(lead), true);
                 }}
-                style={btnStyle("#ef4444")}
+                style={btnStyle("danger")}
               >
                 <Icon name="trash" size={13} /> Definitief verwijderen (beheerder)
               </button>
             )}
           </div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>Archiveren verwijdert niets. Definitief verwijderen kan alleen een beheerder.</div>
+          <div style={{ fontSize: 11.5, color: C.textSubtle, marginTop: 8 }}>Archiveren verwijdert niets. Definitief verwijderen kan alleen een beheerder.</div>
         </Panel>
       )}
     </div>

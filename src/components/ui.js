@@ -1,76 +1,209 @@
 // ─── GEDEELDE UI-COMPONENTEN ─────────────────────────────────────────────────
-// Bestaande huisstijl (kleuren, radius, inline styles) is 1-op-1 overgenomen
-// uit de oude App.js. Alleen nieuwe bouwstenen zijn toegevoegd.
+// Visuele huisstijl van Mijn Spanje Kompas. Alle kleuren lopen via de CSS
+// design tokens in src/index.css (zie het `C`-object hieronder), zodat de
+// CRM dezelfde uitstraling heeft als het Command Center.
 
 import { useState } from "react";
 import { labelOf, optionOf } from "../crm/constants";
+
+// ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
+export const C = {
+  navy: "var(--msk-navy)",
+  navyHover: "var(--msk-navy-hover)",
+  navyDark: "var(--msk-navy-dark)",
+  navyDeep: "var(--msk-navy-deep)",
+  navySoft: "var(--msk-navy-soft)",
+  navyTint: "var(--msk-navy-tint)",
+  gold: "var(--msk-gold)",
+  goldText: "var(--msk-gold-text)",
+  goldSoft: "var(--msk-gold-soft)",
+  goldTint: "var(--msk-gold-tint)",
+  goldBorder: "var(--msk-gold-border)",
+  bg: "var(--msk-bg)",
+  surface: "var(--msk-surface)",
+  surfaceWarm: "var(--msk-surface-warm)",
+  surfaceSoft: "var(--msk-surface-soft)",
+  surfaceSunken: "var(--msk-surface-sunken)",
+  border: "var(--msk-border)",
+  borderSoft: "var(--msk-border-soft)",
+  borderStrong: "var(--msk-border-strong)",
+  text: "var(--msk-text)",
+  textBody: "var(--msk-text-body)",
+  textMuted: "var(--msk-text-muted)",
+  textSubtle: "var(--msk-text-subtle)",
+  textDisabled: "var(--msk-text-disabled)",
+  success: "var(--msk-success)",
+  successBg: "var(--msk-success-bg)",
+  successBorder: "var(--msk-success-border)",
+  warning: "var(--msk-warning)",
+  warningBg: "var(--msk-warning-bg)",
+  warningBorder: "var(--msk-warning-border)",
+  danger: "var(--msk-danger)",
+  dangerBg: "var(--msk-danger-bg)",
+  dangerBorder: "var(--msk-danger-border)",
+  info: "var(--msk-info)",
+  infoBg: "var(--msk-info-bg)",
+  infoBorder: "var(--msk-info-border)",
+  radiusSm: "var(--radius-sm)",
+  radiusMd: "var(--radius-md)",
+  radiusLg: "var(--radius-lg)",
+  radiusXl: "var(--radius-xl)",
+  shadowSm: "var(--shadow-sm)",
+  shadowMd: "var(--shadow-md)",
+  shadowLg: "var(--shadow-lg)",
+  fontUi: "var(--font-ui)",
+  fontDisplay: "var(--font-display)",
+};
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 export const baseTextSelection = { WebkitUserSelect: "text", userSelect: "text" };
 
 export const inputStyle = {
   width: "100%",
-  border: "1px solid #e2e8f0",
-  borderRadius: 8,
-  padding: "8px 12px",
-  fontSize: 14,
-  color: "#0f172a",
-  background: "#f8fafc",
+  border: `1px solid ${C.border}`,
+  borderRadius: 9,
+  padding: "9px 12px",
+  minHeight: 38,
+  fontSize: 13.5,
+  lineHeight: 1.4,
+  color: C.text,
+  background: C.surfaceSoft,
   outline: "none",
   boxSizing: "border-box",
   fontFamily: "inherit",
+  transition: "border-color .15s ease, box-shadow .15s ease, background-color .15s ease",
   WebkitUserSelect: "text",
   userSelect: "text",
 };
 
 export const selectStyle = {
-  border: "1px solid #e2e8f0",
-  borderRadius: 8,
+  border: `1px solid ${C.border}`,
+  borderRadius: 9,
   padding: "8px 12px",
+  height: 38,
   fontSize: 13,
-  color: "#0f172a",
-  background: "#fff",
+  color: C.text,
+  background: C.surface,
   cursor: "pointer",
   outline: "none",
+  fontFamily: "inherit",
 };
 
 export const labelStyle = {
   fontSize: 12,
-  fontWeight: 700,
-  color: "#64748b",
-  marginBottom: 5,
+  fontWeight: 600,
+  color: C.textBody,
+  marginBottom: 6,
   display: "block",
 };
 
 export const cardStyle = {
-  background: "#fff",
-  borderRadius: 14,
-  padding: "16px 18px",
-  border: "1px solid #f1f5f9",
-  boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+  background: C.surface,
+  borderRadius: 16,
+  padding: "20px 22px",
+  border: `1px solid ${C.border}`,
+  boxShadow: C.shadowSm,
 };
 
-export const tdStyle = { padding: "12px 14px", fontSize: 12, color: "#475569", verticalAlign: "middle" };
+export const tdStyle = { padding: "14px 16px", fontSize: 13, color: C.textBody, verticalAlign: "middle" };
 
-export function btnStyle(color, solid = false) {
+/** Kleine koptekst binnen kaarten (sans-serif, rustig). */
+export const cardTitleStyle = { fontSize: 14.5, fontWeight: 600, color: C.text, letterSpacing: "-0.005em" };
+
+/** Kleine subtiele link-knop. */
+export const linkBtnStyle = {
+  border: "none",
+  background: "none",
+  color: C.goldText,
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: "pointer",
+  padding: 0,
+  fontFamily: "inherit",
+};
+
+/** Sluit-/icoonknop zonder rand. */
+export const iconBtnStyle = {
+  background: "transparent",
+  border: "none",
+  cursor: "pointer",
+  color: C.textSubtle,
+  width: 36,
+  height: 36,
+  borderRadius: 10,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+};
+
+// Knopvarianten. `solid` = primaire (gevulde) variant.
+const BUTTON_TONES = {
+  primary: {
+    solid: { bg: C.navy, color: "#fff", border: C.navy, hoverBg: C.navyHover, hoverBorder: C.navyHover },
+    soft: { bg: C.surface, color: C.navy, border: C.border, hoverBg: C.surfaceSoft, hoverBorder: C.borderStrong },
+  },
+  neutral: {
+    solid: { bg: C.textBody, color: "#fff", border: C.textBody, hoverBg: C.text, hoverBorder: C.text },
+    soft: { bg: C.surface, color: C.textBody, border: C.border, hoverBg: C.surfaceSoft, hoverBorder: C.borderStrong },
+  },
+  gold: {
+    solid: { bg: C.gold, color: C.navyDark, border: C.gold, hoverBg: "#cf9c30", hoverBorder: "#cf9c30" },
+    soft: { bg: C.goldSoft, color: C.goldText, border: C.goldBorder, hoverBg: C.goldTint, hoverBorder: C.goldBorder },
+  },
+  success: {
+    solid: { bg: C.success, color: "#fff", border: C.success, hoverBg: "#27684a", hoverBorder: "#27684a" },
+    soft: { bg: C.surface, color: C.success, border: C.successBorder, hoverBg: C.successBg, hoverBorder: C.successBorder },
+  },
+  danger: {
+    solid: { bg: C.danger, color: "#fff", border: C.danger, hoverBg: "#9c3a30", hoverBorder: "#9c3a30" },
+    soft: { bg: C.surface, color: C.danger, border: C.dangerBorder, hoverBg: C.dangerBg, hoverBorder: C.dangerBorder },
+  },
+  info: {
+    solid: { bg: C.info, color: "#fff", border: C.info, hoverBg: "#305a78", hoverBorder: "#305a78" },
+    soft: { bg: C.surface, color: C.info, border: C.infoBorder, hoverBg: C.infoBg, hoverBorder: C.infoBorder },
+  },
+};
+
+// Vangnet voor oude aanroepen met een hexkleur.
+const LEGACY_TONES = {
+  "#6366f1": "primary",
+  "#64748b": "neutral",
+  "#10b981": "success",
+  "#ef4444": "danger",
+  "#f59e0b": "gold",
+  "#0ea5e9": "info",
+  "#0891b2": "info",
+};
+
+export function btnStyle(tone = "neutral", solid = false) {
+  const key = LEGACY_TONES[tone] || tone;
+  const t = (BUTTON_TONES[key] || BUTTON_TONES.neutral)[solid ? "solid" : "soft"];
   return {
-    background: solid ? color : `${color}12`,
-    color: solid ? "#fff" : color,
-    border: solid ? "none" : `1px solid ${color}30`,
-    borderRadius: 8,
-    padding: "6px 10px",
-    fontSize: 12,
+    background: t.bg,
+    color: t.color,
+    border: `1px solid ${t.border}`,
+    borderRadius: 9,
+    padding: solid ? "8px 15px" : "7px 12px",
+    minHeight: 34,
+    fontSize: 12.5,
+    lineHeight: 1.2,
     cursor: "pointer",
-    display: "flex",
-    gap: 5,
+    display: "inline-flex",
+    gap: 6,
     alignItems: "center",
-    fontWeight: 700,
+    justifyContent: "center",
+    fontWeight: 600,
     fontFamily: "inherit",
+    whiteSpace: "nowrap",
+    boxShadow: solid ? "0 1px 2px rgba(10,34,56,0.12)" : "none",
+    "--btn-hover-bg": t.hoverBg,
+    "--btn-hover-border": t.hoverBorder,
   };
 }
 
 // ─── ICONS ───────────────────────────────────────────────────────────────────
-const P = { fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" };
+const P = { fill: "none", stroke: "currentColor", strokeWidth: "1.75", strokeLinecap: "round", strokeLinejoin: "round" };
 
 export const Icon = ({ name, size = 16 }) => {
   const icons = {
@@ -104,10 +237,16 @@ export const Icon = ({ name, size = 16 }) => {
     eye: <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></>,
     check: <polyline points="20 6 9 17 4 12" />,
     filter: <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />,
+    info: <><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></>,
+    alertCircle: <><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></>,
+    checkCircle: <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></>,
+    clock: <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>,
+    userPlus: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></>,
+    arrowRight: <><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></>,
   };
   if (name === "star") {
     return (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5">
+      <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor" stroke="currentColor" strokeWidth="1.5">
         <path d="M12 2.8l2.8 5.67 6.25.91-4.52 4.41 1.07 6.23L12 17.08l-5.6 2.94 1.07-6.23-4.52-4.41 6.25-.91L12 2.8z" />
       </svg>
     );
@@ -115,28 +254,34 @@ export const Icon = ({ name, size = 16 }) => {
   const content = icons[name];
   if (!content) return null;
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...P}>
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false" {...P}>
       {content}
     </svg>
   );
 };
 
 // ─── BADGES ──────────────────────────────────────────────────────────────────
-export function Badge({ children, color = "#64748b", bg = "#f8fafc", title }) {
+export function Badge({ children, color = "#5f6e80", bg = "#f3f0e9", title, icon }) {
+  const isHex = typeof color === "string" && color.startsWith("#") && color.length === 7;
   return (
     <span
       title={title}
       style={{
         background: bg,
         color,
-        border: `1px solid ${color}22`,
+        border: `1px solid ${isHex ? `${color}2b` : C.borderSoft}`,
         borderRadius: 999,
-        padding: "3px 9px",
-        fontSize: 11,
-        fontWeight: 700,
+        padding: "3px 10px",
+        fontSize: 11.5,
+        fontWeight: 600,
+        lineHeight: 1.45,
         whiteSpace: "nowrap",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
       }}
     >
+      {icon && <Icon name={icon} size={12} />}
       {children}
     </span>
   );
@@ -147,7 +292,7 @@ export function OptionBadge({ options, value, prefix = "" }) {
   const opt = optionOf(options, value);
   if (!opt) return null;
   return (
-    <Badge color={opt.color || "#64748b"} bg={opt.bg || "#f8fafc"}>
+    <Badge color={opt.color || "#5f6e80"} bg={opt.bg || "#f3f0e9"}>
       {prefix}
       {opt.label}
     </Badge>
@@ -158,16 +303,15 @@ export function SectionTitle({ children, right }) {
   return (
     <div
       style={{
-        fontSize: 14,
-        fontWeight: 900,
-        color: "#0f172a",
-        marginBottom: 12,
-        paddingBottom: 8,
-        borderBottom: "1px solid #f1f5f9",
+        ...cardTitleStyle,
+        marginBottom: 14,
+        paddingBottom: 12,
+        borderBottom: `1px solid ${C.borderSoft}`,
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
         gap: 10,
+        flexWrap: "wrap",
       }}
     >
       <span>{children}</span>
@@ -178,7 +322,16 @@ export function SectionTitle({ children, right }) {
 
 export function Panel({ title, right, children, style }) {
   return (
-    <div style={{ background: "#fff", border: "1px solid #f1f5f9", borderRadius: 14, padding: 16, ...style }}>
+    <div
+      style={{
+        background: C.surface,
+        border: `1px solid ${C.border}`,
+        borderRadius: 16,
+        padding: "18px 20px",
+        boxShadow: C.shadowSm,
+        ...style,
+      }}
+    >
       {title && <SectionTitle right={right}>{title}</SectionTitle>}
       {children}
     </div>
@@ -188,7 +341,12 @@ export function Panel({ title, right, children, style }) {
 // ─── FORMULIERVELDEN ─────────────────────────────────────────────────────────
 function ErrorText({ error }) {
   if (!error) return null;
-  return <div style={{ fontSize: 11, color: "#ef4444", marginTop: 4, fontWeight: 600 }}>{error}</div>;
+  return (
+    <div style={{ fontSize: 11.5, color: C.danger, marginTop: 5, fontWeight: 500, display: "flex", gap: 5, alignItems: "center" }}>
+      <Icon name="alertCircle" size={12} />
+      {error}
+    </div>
+  );
 }
 
 export function FieldWrap({ label, error, hint, children }) {
@@ -196,13 +354,13 @@ export function FieldWrap({ label, error, hint, children }) {
     <div>
       {label && <label style={labelStyle}>{label}</label>}
       {children}
-      {hint && !error && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>{hint}</div>}
+      {hint && !error && <div style={{ fontSize: 11.5, color: C.textSubtle, marginTop: 5 }}>{hint}</div>}
       <ErrorText error={error} />
     </div>
   );
 }
 
-const errBorder = (error) => (error ? { border: "1px solid #fca5a5", background: "#fff7f7" } : null);
+const errBorder = (error) => (error ? { border: `1px solid ${C.danger}`, background: "#fffafa" } : null);
 
 export function TextField({ label, value, onChange, type = "text", error, hint, placeholder, ...rest }) {
   return (
@@ -212,6 +370,7 @@ export function TextField({ label, value, onChange, type = "text", error, hint, 
         value={value ?? ""}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? true : undefined}
         style={{ ...inputStyle, ...errBorder(error) }}
         {...rest}
       />
@@ -230,6 +389,7 @@ export function NumberField({ label, value, onChange, error, hint, placeholder, 
         value={value === null || value === undefined ? "" : value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+        aria-invalid={error ? true : undefined}
         style={{ ...inputStyle, ...errBorder(error) }}
       />
     </FieldWrap>
@@ -244,6 +404,7 @@ export function TextAreaField({ label, value, onChange, rows = 4, error, hint, p
         rows={rows}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? true : undefined}
         style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6, ...errBorder(error) }}
       />
     </FieldWrap>
@@ -254,7 +415,12 @@ export function TextAreaField({ label, value, onChange, rows = 4, error, hint, p
 export function SelectField({ label, value, onChange, options, error, hint, placeholder = "Selecteer...", allowEmpty = true }) {
   return (
     <FieldWrap label={label} error={error} hint={hint}>
-      <select value={value ?? ""} onChange={(e) => onChange(e.target.value)} style={{ ...inputStyle, ...errBorder(error) }}>
+      <select
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? true : undefined}
+        style={{ ...inputStyle, cursor: "pointer", ...errBorder(error) }}
+      >
         {allowEmpty && <option value="">{placeholder}</option>}
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -276,7 +442,8 @@ export function UserSelectField({ label, value, onChange, users, error, placehol
           const u = users.find((x) => x.id === e.target.value);
           onChange(e.target.value, u?.displayName || "");
         }}
-        style={{ ...inputStyle, ...errBorder(error) }}
+        aria-invalid={error ? true : undefined}
+        style={{ ...inputStyle, cursor: "pointer", ...errBorder(error) }}
       >
         <option value="">{placeholder}</option>
         {users.map((u) => (
@@ -291,15 +458,18 @@ export function UserSelectField({ label, value, onChange, users, error, placehol
 
 function chipStyle(active) {
   return {
-    border: `1px solid ${active ? "#6366f1" : "#e2e8f0"}`,
-    background: active ? "#eef2ff" : "#fff",
-    color: active ? "#6366f1" : "#64748b",
+    border: `1px solid ${active ? "rgba(11,48,76,0.32)" : C.border}`,
+    background: active ? C.navySoft : C.surface,
+    color: active ? C.navy : C.textBody,
     borderRadius: 999,
-    padding: "6px 10px",
-    fontSize: 12,
-    fontWeight: 700,
+    padding: "6px 12px",
+    fontSize: 12.5,
+    fontWeight: active ? 600 : 500,
     cursor: "pointer",
     fontFamily: "inherit",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
   };
 }
 
@@ -309,11 +479,15 @@ export function ChipMultiSelect({ label, options, value = [], onChange, error, h
   return (
     <FieldWrap label={label} error={error} hint={hint}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-        {options.map((o) => (
-          <button type="button" key={o.value} onClick={() => toggle(o.value)} style={chipStyle(value.includes(o.value))}>
-            {o.label}
-          </button>
-        ))}
+        {options.map((o) => {
+          const on = value.includes(o.value);
+          return (
+            <button type="button" key={o.value} className="msk-chip" aria-pressed={on} onClick={() => toggle(o.value)} style={chipStyle(on)}>
+              {on && <Icon name="check" size={12} />}
+              {o.label}
+            </button>
+          );
+        })}
       </div>
     </FieldWrap>
   );
@@ -333,13 +507,13 @@ export function TagInput({ label, value = [], onChange, suggestions = [], placeh
     <FieldWrap label={label} hint={hint}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: value.length ? 8 : 0 }}>
         {value.map((v) => (
-          <span key={v} style={{ ...chipStyle(true), display: "inline-flex", gap: 6, alignItems: "center", cursor: "default" }}>
+          <span key={v} style={{ ...chipStyle(true), cursor: "default", paddingRight: 8 }}>
             {v}
             <button
               type="button"
               aria-label={`${v} verwijderen`}
               onClick={() => onChange(value.filter((x) => x !== v))}
-              style={{ border: "none", background: "none", color: "#6366f1", cursor: "pointer", padding: 0, display: "flex" }}
+              style={{ border: "none", background: "none", color: C.navy, cursor: "pointer", padding: 2, display: "flex", borderRadius: 99 }}
             >
               <Icon name="x" size={12} />
             </button>
@@ -362,7 +536,13 @@ export function TagInput({ label, value = [], onChange, suggestions = [], placeh
       {remaining.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
           {remaining.slice(0, 12).map((s) => (
-            <button type="button" key={s} onClick={() => add(s)} style={{ ...chipStyle(false), padding: "4px 8px", fontSize: 11 }}>
+            <button
+              type="button"
+              key={s}
+              className="msk-chip"
+              onClick={() => add(s)}
+              style={{ ...chipStyle(false), padding: "4px 10px", fontSize: 11.5, color: C.textMuted, borderStyle: "dashed" }}
+            >
               + {s}
             </button>
           ))}
@@ -373,18 +553,22 @@ export function TagInput({ label, value = [], onChange, suggestions = [], placeh
 }
 
 // ─── MODAL & TABS ────────────────────────────────────────────────────────────
+export const MODAL_PAD_X = 28;
+export const MODAL_PAD_Y = 26;
+
 export function Modal({ children, onClose, maxWidth = 980, zIndex = 1000 }) {
   return (
     <div
+      className="msk-modal-overlay"
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(15,23,42,.45)",
+        background: "rgba(14, 36, 56, 0.42)",
         zIndex,
         display: "flex",
         alignItems: "flex-start",
         justifyContent: "center",
-        padding: "24px 16px",
+        padding: "32px 16px",
         overflowY: "auto",
       }}
       onMouseDown={(e) => {
@@ -394,14 +578,16 @@ export function Modal({ children, onClose, maxWidth = 980, zIndex = 1000 }) {
       <div
         role="dialog"
         aria-modal="true"
+        className="msk-modal-dialog"
         style={{
           ...baseTextSelection,
-          background: "#fff",
-          borderRadius: 18,
+          background: C.surface,
+          border: `1px solid ${C.borderSoft}`,
+          borderRadius: 20,
           width: "100%",
           maxWidth,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
-          padding: "24px 26px",
+          boxShadow: C.shadowLg,
+          padding: `${MODAL_PAD_Y}px ${MODAL_PAD_X}px`,
           display: "flex",
           flexDirection: "column",
           gap: 18,
@@ -413,9 +599,27 @@ export function Modal({ children, onClose, maxWidth = 980, zIndex = 1000 }) {
   );
 }
 
+/** Titel + subtitel voor een modal of paginasectie. */
+export function ModalTitle({ children, sub }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontFamily: C.fontDisplay, fontSize: 24, fontWeight: 600, color: C.text, lineHeight: 1.2, letterSpacing: "-0.01em" }}>{children}</div>
+      {sub && <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+}
+
+export function CloseButton({ onClick, label = "Sluiten" }) {
+  return (
+    <button type="button" onClick={onClick} aria-label={label} title={label} className="msk-icon-btn" style={iconBtnStyle}>
+      <Icon name="x" size={20} />
+    </button>
+  );
+}
+
 export function Tabs({ tabs, active, onChange }) {
   return (
-    <div role="tablist" style={{ display: "flex", gap: 4, borderBottom: "1px solid #e2e8f0", overflowX: "auto" }}>
+    <div role="tablist" style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.border}`, overflowX: "auto", scrollbarWidth: "thin" }}>
       {tabs.map((t) => {
         const on = t.key === active;
         return (
@@ -424,28 +628,43 @@ export function Tabs({ tabs, active, onChange }) {
             role="tab"
             aria-selected={on}
             type="button"
+            className="msk-tab"
             onClick={() => onChange(t.key)}
             style={{
               border: "none",
-              borderBottom: `2px solid ${on ? "#6366f1" : "transparent"}`,
+              borderBottom: `2px solid ${on ? C.gold : "transparent"}`,
+              marginBottom: -1,
               background: "none",
-              padding: "9px 12px",
+              padding: "10px 14px 11px",
               fontSize: 13,
-              fontWeight: 800,
-              color: on ? "#6366f1" : t.disabled ? "#cbd5e1" : "#64748b",
+              fontWeight: on ? 600 : 500,
+              color: on ? C.navy : t.disabled ? C.textDisabled : C.textMuted,
               cursor: "pointer",
               whiteSpace: "nowrap",
               fontFamily: "inherit",
               display: "flex",
-              gap: 6,
+              gap: 7,
               alignItems: "center",
+              borderRadius: 0,
             }}
           >
             {t.label}
             {t.count > 0 && (
-              <span style={{ background: on ? "#eef2ff" : "#f1f5f9", borderRadius: 999, padding: "1px 7px", fontSize: 11 }}>{t.count}</span>
+              <span
+                style={{
+                  background: on ? C.navySoft : C.surfaceSunken,
+                  color: on ? C.navy : C.textMuted,
+                  borderRadius: 999,
+                  padding: "1px 7px",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  lineHeight: 1.5,
+                }}
+              >
+                {t.count}
+              </span>
             )}
-            {t.alert && <span style={{ width: 7, height: 7, borderRadius: 99, background: "#ef4444" }} />}
+            {t.alert && <span aria-label="Controleer velden" style={{ width: 7, height: 7, borderRadius: 99, background: C.danger }} />}
           </button>
         );
       })}
@@ -453,23 +672,41 @@ export function Tabs({ tabs, active, onChange }) {
   );
 }
 
+const NOTICE_TONES = {
+  info: { color: C.info, bg: C.infoBg, border: C.infoBorder, icon: "info" },
+  warn: { color: "#7d5710", bg: C.goldSoft, border: C.goldBorder, icon: "alertCircle" },
+  error: { color: "#9a3a30", bg: C.dangerBg, border: C.dangerBorder, icon: "alertCircle" },
+  ok: { color: C.success, bg: C.successBg, border: C.successBorder, icon: "checkCircle" },
+};
+
 export function Notice({ tone = "info", children }) {
-  const tones = {
-    info: { color: "#3730a3", bg: "#eef2ff", border: "#c7d2fe" },
-    warn: { color: "#92400e", bg: "#fffbeb", border: "#fde68a" },
-    error: { color: "#991b1b", bg: "#fef2f2", border: "#fecaca" },
-    ok: { color: "#065f46", bg: "#ecfdf5", border: "#a7f3d0" },
-  };
-  const t = tones[tone];
+  const t = NOTICE_TONES[tone] || NOTICE_TONES.info;
   return (
-    <div style={{ background: t.bg, color: t.color, border: `1px solid ${t.border}`, borderRadius: 10, padding: "10px 12px", fontSize: 12, lineHeight: 1.5 }}>
-      {children}
+    <div
+      role={tone === "error" ? "alert" : undefined}
+      style={{
+        background: t.bg,
+        color: t.color,
+        border: `1px solid ${t.border}`,
+        borderRadius: 12,
+        padding: "11px 14px",
+        fontSize: 12.5,
+        lineHeight: 1.55,
+        display: "flex",
+        gap: 10,
+        alignItems: "flex-start",
+      }}
+    >
+      <span style={{ flexShrink: 0, marginTop: 1, display: "flex" }}>
+        <Icon name={t.icon} size={15} />
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
     </div>
   );
 }
 
 export function Empty({ children }) {
-  return <div style={{ fontSize: 12, color: "#94a3b8", padding: "10px 2px" }}>{children}</div>;
+  return <div style={{ fontSize: 12.5, color: C.textMuted, padding: "12px 2px" }}>{children}</div>;
 }
 
 export function formatEuro(n) {
@@ -493,4 +730,16 @@ export function formatBytes(n) {
   if (!n) return "0 KB";
   if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** Logo van Mijn Spanje Kompas (public/msk-logo.png). */
+export function BrandLogo({ height = 34, style }) {
+  return (
+    <img
+      src={`${process.env.PUBLIC_URL || ""}/msk-logo.png`}
+      alt="Mijn Spanje Kompas"
+      height={height}
+      style={{ height, width: "auto", display: "block", flexShrink: 0, ...style }}
+    />
+  );
 }

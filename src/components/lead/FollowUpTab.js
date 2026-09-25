@@ -21,6 +21,9 @@ import {
   Empty,
   btnStyle,
   inputStyle,
+  labelStyle,
+  Icon,
+  C,
 } from "../ui";
 
 const STAGE_INDEX = (v) => PIPELINE_STAGES.findIndex((s) => s.value === v);
@@ -75,29 +78,60 @@ function TasksSection({ lead, user, users, tasks, isNew }) {
     const diff = t.dueDate ? diffInDays(t.dueDate) : null;
     const late = t.status === "open" && diff !== null && diff < 0;
     return (
-      <div key={t.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", padding: "9px 0", borderBottom: "1px solid #f1f5f9" }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: t.status === "open" ? "#0f172a" : "#94a3b8", textDecoration: t.status === "completed" ? "line-through" : "none" }}>{t.title}</div>
-          <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {t.dueDate && <span style={{ color: late ? "#ef4444" : "#64748b", fontWeight: late ? 800 : 400 }}>Deadline {formatDate(t.dueDate)}</span>}
-            {t.assignedToName && <span>· {t.assignedToName}</span>}
-            {t.priority && t.priority !== "normal" && <span>· Prio {labelOf(PRIORITIES, t.priority).toLowerCase()}</span>}
-            {t.status !== "open" && <span>· {t.status === "completed" ? "Afgerond" : "Geannuleerd"}</span>}
+      <div
+        key={t.id}
+        className="msk-row"
+        style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", padding: "12px 10px", margin: "0 -10px", borderRadius: 12, borderBottom: `1px solid ${C.borderSoft}`, flexWrap: "wrap" }}
+      >
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", minWidth: 0, flex: "1 1 240px" }}>
+          <span
+            aria-hidden="true"
+            style={{
+              width: 20,
+              height: 20,
+              marginTop: 1,
+              borderRadius: 99,
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: `1.5px solid ${t.status === "completed" ? C.success : late ? C.danger : C.borderStrong}`,
+              background: t.status === "completed" ? C.success : C.surface,
+              color: t.status === "completed" ? "#fff" : C.textSubtle,
+            }}
+          >
+            {t.status === "completed" && <Icon name="check" size={12} />}
+            {t.status === "cancelled" && <Icon name="x" size={11} />}
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: t.status === "open" ? C.text : C.textSubtle, textDecoration: t.status === "completed" ? "line-through" : "none" }}>{t.title}</div>
+            <div style={{ fontSize: 12, color: C.textMuted, marginTop: 3, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {t.dueDate && (
+                <span style={{ color: late ? C.danger : C.textMuted, fontWeight: late ? 600 : 400, display: "inline-flex", gap: 4, alignItems: "center" }}>
+                  <Icon name={late ? "alertCircle" : "calendar"} size={12} />
+                  Deadline {formatDate(t.dueDate)}
+                  {late ? " · te laat" : ""}
+                </span>
+              )}
+              {t.assignedToName && <span>· {t.assignedToName}</span>}
+              {t.priority && t.priority !== "normal" && <span>· Prio {labelOf(PRIORITIES, t.priority).toLowerCase()}</span>}
+              {t.status !== "open" && <span>· {t.status === "completed" ? "Afgerond" : "Geannuleerd"}</span>}
+            </div>
+            {t.description && <div style={{ fontSize: 12.5, color: C.textBody, marginTop: 4, whiteSpace: "pre-wrap" }}>{t.description}</div>}
           </div>
-          {t.description && <div style={{ fontSize: 12, color: "#475569", marginTop: 3, whiteSpace: "pre-wrap" }}>{t.description}</div>}
         </div>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           {t.status === "open" ? (
             <>
-              <button type="button" onClick={() => changeStatus(t, "completed")} style={btnStyle("#10b981")}>
+              <button type="button" onClick={() => changeStatus(t, "completed")} style={btnStyle("success")}>
                 Afronden
               </button>
-              <button type="button" onClick={() => changeStatus(t, "cancelled")} style={btnStyle("#64748b")}>
+              <button type="button" onClick={() => changeStatus(t, "cancelled")} style={btnStyle("neutral")}>
                 Annuleren
               </button>
             </>
           ) : (
-            <button type="button" onClick={() => changeStatus(t, "open")} style={btnStyle("#6366f1")}>
+            <button type="button" onClick={() => changeStatus(t, "open")} style={btnStyle("primary")}>
               Heropenen
             </button>
           )}
@@ -111,13 +145,13 @@ function TasksSection({ lead, user, users, tasks, isNew }) {
       {tasks.error && <Notice tone="error">Taken konden niet worden geladen.</Notice>}
       {tasks.loading ? <Empty>Taken laden...</Empty> : open.length ? <div>{open.map(renderTask)}</div> : <Empty>Geen open taken.</Empty>}
       {done.length > 0 && (
-        <button type="button" onClick={() => setShowDone((s) => !s)} style={{ ...btnStyle("#64748b"), alignSelf: "flex-start" }}>
+        <button type="button" onClick={() => setShowDone((s) => !s)} style={{ ...btnStyle("neutral"), alignSelf: "flex-start" }}>
           {showDone ? "Verberg" : "Toon"} afgeronde/geannuleerde taken ({done.length})
         </button>
       )}
       {showDone && <div>{done.map(renderTask)}</div>}
 
-      <div style={{ background: "#f8fafc", borderRadius: 12, padding: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+      <div style={{ background: C.surfaceSoft, border: `1px solid ${C.borderSoft}`, borderRadius: 14, padding: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
         <div style={{ gridColumn: "1 / -1" }}>
           <TextField label="Nieuwe taak" value={draft.title} onChange={(v) => setDraft({ ...draft, title: v })} placeholder="Bijv. 'Financieringsbewijs opvragen'" />
         </div>
@@ -133,7 +167,7 @@ function TasksSection({ lead, user, users, tasks, isNew }) {
           </div>
         )}
         <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" }}>
-          <button type="button" onClick={submit} disabled={busy} style={btnStyle("#6366f1", true)}>
+          <button type="button" onClick={submit} disabled={busy} style={btnStyle("primary", true)}>
             {busy ? "Toevoegen..." : "+ Taak toevoegen"}
           </button>
         </div>
@@ -214,7 +248,7 @@ export function FollowUpTab({ form, set, setMany, errors, users, user, lead, isN
                 />
                 <div style={{ gridColumn: "1 / -1", display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {QUICK_DATES.map((q) => (
-                    <button key={q.label} type="button" onClick={() => set("nextActionDate", addDaysISO(today, q.days))} style={btnStyle("#6366f1")}>
+                    <button key={q.label} type="button" onClick={() => set("nextActionDate", addDaysISO(today, q.days))} style={{ ...btnStyle("neutral"), minHeight: 30, padding: "5px 11px", borderRadius: 999, fontSize: 12 }}>
                       {q.label}
                     </button>
                   ))}
@@ -225,7 +259,7 @@ export function FollowUpTab({ form, set, setMany, errors, users, user, lead, isN
               </>
             )}
             {!planned && (
-              <div style={{ gridColumn: "1 / -1", fontSize: 12, color: "#64748b" }}>
+              <div style={{ gridColumn: "1 / -1", fontSize: 12, color: C.textMuted }}>
                 Geen actie gepland. Voor actieve leads verschijnt dit als signaal onder "Aandacht nodig".
               </div>
             )}
@@ -251,17 +285,17 @@ export function FollowUpTab({ form, set, setMany, errors, users, user, lead, isN
             </div>
             <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, flexWrap: "wrap" }}>
               {form.appointmentStatus !== "scheduled" && form.appointmentStatus !== "completed" && (
-                <button type="button" onClick={planAppointment} disabled={!form.appointmentDate} style={{ ...btnStyle("#0891b2"), opacity: form.appointmentDate ? 1 : 0.5 }}>
+                <button type="button" onClick={planAppointment} disabled={!form.appointmentDate} style={{ ...btnStyle("primary"), opacity: form.appointmentDate ? 1 : 0.5 }}>
                   Afspraak inplannen
                 </button>
               )}
               {form.appointmentStatus === "scheduled" && (
-                <button type="button" onClick={markAppointmentDone} style={btnStyle("#10b981")}>
+                <button type="button" onClick={markAppointmentDone} style={btnStyle("success")}>
                   Markeer als gehad
                 </button>
               )}
             </div>
-            <div style={{ gridColumn: "1 / -1", fontSize: 11, color: "#94a3b8" }}>
+            <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: C.textSubtle }}>
               Wijzigingen worden opgeslagen met de knop Opslaan. Een afgeronde kennismaking telt als klantcontact.
             </div>
           </div>
@@ -278,7 +312,7 @@ export function FollowUpTab({ form, set, setMany, errors, users, user, lead, isN
 function FieldTime({ value, onChange }) {
   return (
     <div>
-      <label style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 5, display: "block" }}>Tijd</label>
+      <label style={labelStyle}>Tijd</label>
       <input type="time" value={value || ""} onChange={(e) => onChange(e.target.value)} style={inputStyle} />
     </div>
   );

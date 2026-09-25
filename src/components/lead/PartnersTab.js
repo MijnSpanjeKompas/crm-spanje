@@ -2,7 +2,7 @@ import { useState } from "react";
 import { PARTNER_TYPES, PARTNER_LINK_STATUSES, PARTNER_WAITING_STATUSES, THRESHOLDS, labelOf } from "../../crm/constants";
 import { addPartnerLink, updatePartnerLink, removePartnerLink, savePartner } from "../../crm/services";
 import { formatDate, formatDateTime, daysSince, diffInDays, toDate } from "../../crm/dates";
-import { Panel, SelectField, TextField, TextAreaField, Notice, Empty, Badge, btnStyle, inputStyle, labelStyle } from "../ui";
+import { Panel, SelectField, TextField, TextAreaField, Notice, Empty, Badge, OptionBadge, btnStyle, inputStyle, labelStyle, C } from "../ui";
 
 function linkWarning(link) {
   if (!PARTNER_WAITING_STATUSES.includes(link.status)) return null;
@@ -33,17 +33,34 @@ function LinkCard({ link, lead, user, onError }) {
   }
 
   return (
-    <div style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 10, opacity: busy ? 0.7 : 1 }}>
+    <div
+      style={{
+        border: `1px solid ${warning ? C.dangerBorder : C.border}`,
+        borderRadius: 14,
+        padding: "16px 18px",
+        background: C.surface,
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        opacity: busy ? 0.7 : 1,
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {warning && <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: C.danger }} />}
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 900, color: "#0f172a" }}>{link.partnerName}</div>
-          <div style={{ fontSize: 11, color: "#64748b" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{link.partnerName}</span>
+            <OptionBadge options={PARTNER_LINK_STATUSES} value={link.status} />
+          </div>
+          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 3 }}>
             {labelOf(PARTNER_TYPES, link.partnerType)}
             {link.contactPerson && ` · ${link.contactPerson}`} · gekoppeld {formatDate(link.linkedAt)}
             {link.linkedByName && ` door ${link.linkedByName}`}
           </div>
         </div>
-        {warning && <Badge color="#ef4444" bg="#fef2f2">{warning}</Badge>}
+        {warning && <Badge color="#b3453a" bg="#fbedeb" icon="alertCircle">{warning}</Badge>}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
@@ -62,7 +79,7 @@ function LinkCard({ link, lead, user, onError }) {
         />
         <div>
           <span style={labelStyle}>Laatste opvolging</span>
-          <div style={{ fontSize: 13, color: "#0f172a", padding: "8px 0" }}>{link.lastFollowUpAt ? formatDateTime(link.lastFollowUpAt) : "Nog niet"}</div>
+          <div style={{ fontSize: 13.5, color: C.text, padding: "9px 0", minHeight: 38 }}>{link.lastFollowUpAt ? formatDateTime(link.lastFollowUpAt) : "Nog niet"}</div>
         </div>
       </div>
 
@@ -78,10 +95,10 @@ function LinkCard({ link, lead, user, onError }) {
       </div>
 
       {showFollowUp && (
-        <div style={{ background: "#f8fafc", borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ background: C.surfaceSoft, border: `1px solid ${C.borderSoft}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
           <TextAreaField label="Wat is er besproken met de partner?" value={followUpNote} onChange={setFollowUpNote} rows={2} />
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button type="button" onClick={() => setShowFollowUp(false)} style={btnStyle("#64748b")}>
+            <button type="button" onClick={() => setShowFollowUp(false)} style={btnStyle("neutral")}>
               Annuleren
             </button>
             <button
@@ -93,7 +110,7 @@ function LinkCard({ link, lead, user, onError }) {
                   setShowFollowUp(false);
                 })
               }
-              style={btnStyle("#10b981", true)}
+              style={btnStyle("success", true)}
             >
               Opvolging opslaan
             </button>
@@ -103,7 +120,7 @@ function LinkCard({ link, lead, user, onError }) {
 
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         {!showFollowUp && (
-          <button type="button" onClick={() => setShowFollowUp(true)} style={btnStyle("#10b981")}>
+          <button type="button" onClick={() => setShowFollowUp(true)} style={btnStyle("success")}>
             Opvolging vastleggen
           </button>
         )}
@@ -114,7 +131,7 @@ function LinkCard({ link, lead, user, onError }) {
               run(() => removePartnerLink(lead, link, user));
             }
           }}
-          style={btnStyle("#ef4444")}
+          style={btnStyle("danger")}
         >
           Ontkoppelen
         </button>
@@ -194,7 +211,7 @@ export function PartnersTab({ lead, user, partners, links, onManagePartners }) {
       <Panel
         title="Partner koppelen"
         right={
-          <button type="button" onClick={onManagePartners} style={btnStyle("#64748b")}>
+          <button type="button" onClick={onManagePartners} style={btnStyle("neutral")}>
             Partnerdatabase beheren
           </button>
         }
@@ -229,17 +246,17 @@ export function PartnersTab({ lead, user, partners, links, onManagePartners }) {
         </div>
 
         {quick && (
-          <div style={{ background: "#f8fafc", borderRadius: 12, padding: 14, marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
+          <div style={{ background: C.surfaceSoft, border: `1px solid ${C.borderSoft}`, borderRadius: 14, padding: 16, marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
             <TextField label="Naam partner *" value={quick.name} onChange={(v) => setQuick({ ...quick, name: v })} />
             <SelectField label="Soort" value={quick.type} onChange={(v) => setQuick({ ...quick, type: v })} options={PARTNER_TYPES} allowEmpty={false} />
             <TextField label="Contactpersoon" value={quick.contactPerson} onChange={(v) => setQuick({ ...quick, contactPerson: v })} />
             <TextField label="E-mail" value={quick.email} onChange={(v) => setQuick({ ...quick, email: v })} />
             <TextField label="Telefoon" value={quick.phone} onChange={(v) => setQuick({ ...quick, phone: v })} />
             <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => setQuick(null)} style={btnStyle("#64748b")}>
+              <button type="button" onClick={() => setQuick(null)} style={btnStyle("neutral")}>
                 Annuleren
               </button>
-              <button type="button" onClick={createQuick} disabled={busy} style={btnStyle("#6366f1", true)}>
+              <button type="button" onClick={createQuick} disabled={busy} style={btnStyle("primary", true)}>
                 Partner opslaan
               </button>
             </div>
@@ -247,11 +264,11 @@ export function PartnersTab({ lead, user, partners, links, onManagePartners }) {
         )}
 
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-          <button type="button" onClick={link} disabled={busy || !partnerId} style={{ ...btnStyle("#6366f1", true), opacity: busy || !partnerId ? 0.6 : 1 }}>
+          <button type="button" onClick={link} disabled={busy || !partnerId} style={{ ...btnStyle("primary", true), opacity: busy || !partnerId ? 0.6 : 1 }}>
             {busy ? "Bezig..." : "Koppelen"}
           </button>
         </div>
-        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>
+        <div style={{ fontSize: 11.5, color: C.textSubtle, marginTop: 8 }}>
           Koppelen verandert de pipelinefase niet automatisch. Zet de lead zelf op "Gekoppeld aan partner" als dat klopt.
         </div>
       </Panel>

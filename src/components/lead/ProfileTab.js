@@ -35,7 +35,7 @@ export function ProfileTab({ form, set, errors }) {
 
       {legacyEntries.length > 0 && (
         <Notice tone="info">
-          <div style={{ fontWeight: 800, marginBottom: 4 }}>Oude invoer die niet automatisch kon worden omgezet:</div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Oude invoer die niet automatisch kon worden omgezet:</div>
           {legacyEntries.map(([k, v]) => (
             <div key={k}>
               {LEGACY_LABELS[k]}: <strong>{v}</strong>

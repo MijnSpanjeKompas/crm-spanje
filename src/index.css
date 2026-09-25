@@ -1,13 +1,306 @@
+/* ─── MIJN SPANJE KOMPAS · CRM ─────────────────────────────────────────────
+   Centrale design tokens. Afgeleid van het Command Center (warm crème,
+   marineblauw, goud) en de aankoopkostencalculator (diep navy + goud).
+   Componenten gebruiken deze tokens via het `C`-object in components/ui.js.
+   ──────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Merk */
+  --msk-navy: #0b304c;
+  --msk-navy-hover: #134066;
+  --msk-navy-dark: #0a2238;
+  --msk-navy-deep: #0e2438;
+  --msk-navy-soft: #edf1f5;
+  --msk-navy-tint: #e3eaf1;
+  --msk-gold: #d9a83e;
+  --msk-gold-text: #946a17;
+  --msk-gold-soft: #fcf7e8;
+  --msk-gold-tint: #f6ecd2;
+  --msk-gold-border: #ead9ae;
+
+  /* Vlakken */
+  --msk-bg: #f7f4ee;
+  --msk-surface: #ffffff;
+  --msk-surface-warm: #fffdf9;
+  --msk-surface-soft: #f9f7f2;
+  --msk-surface-sunken: #f3f0e9;
+  --msk-border: #e6e0d6;
+  --msk-border-soft: #efeae1;
+  --msk-border-strong: #d6cebf;
+
+  /* Tekst */
+  --msk-text: #102a43;
+  --msk-text-body: #334a5e;
+  --msk-text-muted: #5f6e80;
+  --msk-text-subtle: #7a8696;
+  --msk-text-disabled: #aab2bc;
+
+  /* Status */
+  --msk-success: #2f7a55;
+  --msk-success-bg: #eaf4ee;
+  --msk-success-border: #cfe5d8;
+  --msk-warning: #9a6b12;
+  --msk-warning-bg: #fcf5e4;
+  --msk-warning-border: #efdcae;
+  --msk-danger: #b3453a;
+  --msk-danger-bg: #fbedeb;
+  --msk-danger-border: #f0d2cd;
+  --msk-info: #3a6788;
+  --msk-info-bg: #eaf1f6;
+  --msk-info-border: #cfdeea;
+
+  /* Vorm */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --shadow-sm: 0 1px 2px rgba(16, 42, 67, 0.04), 0 2px 8px rgba(16, 42, 67, 0.035);
+  --shadow-md: 0 2px 4px rgba(16, 42, 67, 0.04), 0 8px 22px rgba(16, 42, 67, 0.06);
+  --shadow-lg: 0 24px 64px rgba(10, 34, 56, 0.18);
+  --focus-ring: 0 0 0 3px rgba(217, 168, 62, 0.28);
+
+  /* Typografie */
+  --font-ui: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  background: var(--msk-bg);
+  color: var(--msk-text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv11", "ss01";
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+::selection {
+  background: var(--msk-gold-tint);
+  color: var(--msk-text);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--msk-navy);
+  width: 15px;
+  height: 15px;
+}
+
+::placeholder {
+  color: var(--msk-text-subtle);
+  opacity: 1;
+}
+
+/* ─── Focus ──────────────────────────────────────────────────────────────── */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--msk-gold);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not(.msk-bare):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--msk-navy) !important;
+  box-shadow: var(--focus-ring) !important;
+  background-color: var(--msk-surface) !important;
+  outline: none;
+}
+
+input.msk-bare:focus-visible {
+  outline: none;
+}
+
+.msk-search:focus-within {
+  border-color: var(--msk-navy) !important;
+  box-shadow: var(--focus-ring);
+  background: var(--msk-surface) !important;
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235f6e80' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
+  background-size: 12px !important;
+  padding-right: 30px !important;
+}
+
+/* ─── Knoppen ────────────────────────────────────────────────────────────── */
+/* btnStyle() zet --btn-hover-bg / --btn-hover-border; hier wordt de hover
+   toegepast (inline styles kunnen geen :hover). */
+button {
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+button[style*="--btn-hover-bg"]:hover:not(:disabled) {
+  background: var(--btn-hover-bg) !important;
+  border-color: var(--btn-hover-border) !important;
+}
+
+button:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.55;
+}
+
+.msk-link:hover {
+  color: var(--msk-navy) !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.msk-icon-btn:hover {
+  background: var(--msk-surface-sunken) !important;
+  color: var(--msk-text) !important;
+}
+
+/* ─── Kaarten, rijen ─────────────────────────────────────────────────────── */
+.msk-card-interactive {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.msk-card-interactive:hover {
+  border-color: var(--msk-border-strong) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.msk-kpi:hover {
+  border-color: var(--msk-border-strong) !important;
+}
+
+.msk-row {
+  transition: background-color 0.12s ease;
+}
+
+.msk-row:hover {
+  background: var(--msk-surface-soft) !important;
+}
+
+.msk-list-btn:hover {
+  background: var(--msk-surface-soft) !important;
+  border-color: var(--msk-border) !important;
+}
+
+.msk-stage-row:hover .msk-stage-label {
+  color: var(--msk-text) !important;
+}
+
+.msk-stage-row:hover .msk-stage-track {
+  background: var(--msk-surface-sunken) !important;
+}
+
+.msk-tab:hover:not([aria-selected="true"]):not(:disabled) {
+  color: var(--msk-text) !important;
+}
+
+.msk-chip:hover {
+  border-color: var(--msk-border-strong) !important;
+}
+
+/* ─── Layout ─────────────────────────────────────────────────────────────── */
+.msk-container {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 28px 32px 56px;
+}
+
+.msk-header-inner {
+  padding: 0 32px;
+}
+
+@media (max-width: 720px) {
+  .msk-container {
+    padding: 20px 16px 40px;
+  }
+  .msk-header-inner {
+    padding: 0 16px;
+  }
+  .msk-hide-sm {
+    display: none !important;
+  }
+  .msk-user-chip {
+    padding-right: 4px !important;
+  }
+  .msk-modal-overlay {
+    padding: 0 !important;
+  }
+  .msk-modal-dialog {
+    border-radius: 0 !important;
+    min-height: 100vh;
+    padding: 20px 16px !important;
+  }
+  .msk-modal-dialog .msk-modal-footer {
+    bottom: 0;
+    margin-left: -16px !important;
+    margin-right: -16px !important;
+    margin-bottom: -20px !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    border-radius: 0 !important;
+  }
+  .msk-page-title {
+    font-size: 26px !important;
+  }
+  .msk-sticky-head {
+    margin: -20px -16px 0 !important;
+    padding: 20px 16px 0 !important;
+    border-radius: 0 !important;
+  }
+}
+
+/* Sticky kop in de leaddetail alleen op schermen met genoeg hoogte. */
+@media (min-width: 721px) and (min-height: 700px) {
+  /* -32px = padding-top van de modal-overlay, zodat er geen strook
+     scrollende content boven de kop zichtbaar blijft. */
+  .msk-sticky-head {
+    position: sticky;
+    top: -32px;
+    z-index: 5;
+  }
+}
+
+/* -32px = padding-bottom van de modal-overlay (zie .msk-sticky-head). */
+.msk-modal-footer {
+  position: sticky;
+  bottom: -32px;
+  z-index: 5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
 }

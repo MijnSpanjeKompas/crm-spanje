@@ -10,7 +10,7 @@ import { validateLead, FIELD_TABS } from "./crm/validation";
 import { computeKpis, getTodayItems, getAttentionList } from "./crm/signals";
 import { DEFAULT_FILTERS, applyFilters } from "./crm/filters";
 import { labelOf, PIPELINE_STAGES } from "./crm/constants";
-import { baseTextSelection, Icon, Notice } from "./components/ui";
+import { baseTextSelection, Icon, Notice, C, btnStyle, iconBtnStyle, cardStyle, BrandLogo } from "./components/ui";
 import { LoginScreen, LoadingScreen } from "./components/LoginScreen";
 import { KpiRow, StageChart, TodayPanel, AttentionPanel } from "./components/Dashboard";
 import { LeadFilters } from "./components/LeadFilters";
@@ -156,71 +156,119 @@ export function Crm({ user, onSignOut }) {
     }
   }
 
+  const initials = (user.displayName || user.email || "?")
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0].toUpperCase())
+    .join("");
+  const today = now.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
   return (
     <div
       style={{
         ...baseTextSelection,
         minHeight: "100vh",
-        background: "#f8fafc",
-        fontFamily: "'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+        background: C.bg,
+        color: C.text,
+        fontFamily: C.fontUi,
       }}
     >
-      <div
+      {/* HEADER */}
+      <header
         style={{
-          background: "#fff",
-          borderBottom: "1px solid #f1f5f9",
-          padding: "0 32px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          height: 62,
+          background: C.surfaceWarm,
+          borderBottom: `1px solid ${C.border}`,
           position: "sticky",
           top: 0,
           zIndex: 100,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-          gap: 12,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ fontSize: 22 }}>🇪🇸</div>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a" }}>Mijn Spanje Kompas</div>
-            <div style={{ fontSize: 11, color: "#94a3b8" }}>Lead- en klantvolgsysteem</div>
+        <div
+          className="msk-header-inner"
+          style={{ maxWidth: 1320, margin: "0 auto", height: 68, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+            <BrandLogo height={38} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: C.fontDisplay, fontWeight: 600, fontSize: 17, color: C.navy, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Mijn Spanje Kompas</div>
+              <div className="msk-hide-sm" style={{ fontSize: 11.5, color: C.textMuted, marginTop: 1 }}>
+                CRM · Lead- en klantvolgsysteem
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div
+              title={user.email}
+              className="msk-user-chip"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: 4,
+                paddingRight: 12,
+                border: `1px solid ${C.border}`,
+                borderRadius: 999,
+                background: C.surface,
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 99,
+                  background: C.gold,
+                  color: C.navyDark,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  letterSpacing: ".02em",
+                }}
+              >
+                {initials}
+              </span>
+              <span className="msk-hide-sm" style={{ lineHeight: 1.2 }}>
+                <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: C.text }}>{user.displayName}</span>
+                <span style={{ display: "block", fontSize: 11, color: C.textMuted }}>
+                  {user.isAdmin ? "Beheerder" : "Medewerker"}
+                </span>
+              </span>
+            </div>
+            <button type="button" onClick={onSignOut} title="Uitloggen" aria-label="Uitloggen" style={btnStyle("neutral")}>
+              <Icon name="logout" size={15} />
+              <span className="msk-hide-sm">Uitloggen</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="msk-container">
+        {/* PAGINAKOP */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 6, textTransform: "capitalize" }}>{today}</div>
+            <h1
+              className="msk-page-title"
+              style={{ fontFamily: C.fontDisplay, fontSize: 32, fontWeight: 600, color: C.navy, margin: 0, lineHeight: 1.1, letterSpacing: "-0.015em" }}
+            >
+              Leads
+            </h1>
+            <div style={{ fontSize: 14, color: C.textMuted, marginTop: 6 }}>Beheer en volg alle potentiële kopers.</div>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button type="button" onClick={() => setPartnersOpen(true)} style={{ ...btnStyle("primary"), padding: "9px 15px", minHeight: 40, fontSize: 13 }}>
+              <Icon name="users" size={15} /> Partners
+            </button>
+            <button type="button" onClick={openNew} style={{ ...btnStyle("primary", true), padding: "9px 18px", minHeight: 40, fontSize: 13 }}>
+              <Icon name="plus" size={15} /> Nieuwe lead
+            </button>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }} title={user.email}>
-            {user.displayName}
-            {user.isAdmin ? " · beheerder" : ""}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPartnersOpen(true)}
-            style={{ background: "#fff", color: "#475569", border: "1px solid #e2e8f0", borderRadius: 9, padding: "8px 14px", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", gap: 7, alignItems: "center", fontFamily: "inherit" }}
-          >
-            <Icon name="users" size={14} /> Partners
-          </button>
-          <button
-            type="button"
-            onClick={openNew}
-            style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: 9, padding: "9px 18px", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", gap: 7, alignItems: "center", fontFamily: "inherit" }}
-          >
-            <Icon name="plus" size={14} /> Nieuwe lead
-          </button>
-          <button
-            type="button"
-            onClick={onSignOut}
-            title="Uitloggen"
-            aria-label="Uitloggen"
-            style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", display: "flex" }}
-          >
-            <Icon name="logout" size={18} />
-          </button>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "26px 24px" }}>
         {error && (
           <div style={{ marginBottom: 16 }}>
             <Notice tone="error">{error}</Notice>
@@ -231,15 +279,15 @@ export function Crm({ user, onSignOut }) {
             <div style={{ flex: 1 }}>
               <Notice tone={notice.tone}>{notice.text}</Notice>
             </div>
-            <button type="button" onClick={() => setNotice(null)} aria-label="Melding sluiten" style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", marginTop: 6 }}>
-              <Icon name="x" size={14} />
+            <button type="button" onClick={() => setNotice(null)} aria-label="Melding sluiten" className="msk-icon-btn" style={{ ...iconBtnStyle, width: 32, height: 32, marginTop: 4 }}>
+              <Icon name="x" size={15} />
             </button>
           </div>
         )}
 
         <KpiRow kpis={kpis} activeQuick={filters.quick} onQuick={setQuick} />
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 16, marginBottom: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, marginBottom: 28 }}>
           <StageChart
             leads={leads}
             onPick={(stage) => {
@@ -265,19 +313,25 @@ export function Crm({ user, onSignOut }) {
         />
 
         {loading ? (
-          <div style={{ fontSize: 13, color: "#94a3b8" }}>Leads laden...</div>
+          <div style={{ ...cardStyle, fontSize: 13, color: C.textMuted, textAlign: "center", padding: "36px 20px" }}>Leads laden...</div>
         ) : filtered.length === 0 ? (
-          <div style={{ fontSize: 13, color: "#94a3b8", padding: "20px 0" }}>Geen leads gevonden met deze filters.</div>
+          <div style={{ ...cardStyle, textAlign: "center", padding: "44px 20px" }}>
+            <div style={{ color: C.textSubtle, display: "flex", justifyContent: "center", marginBottom: 10 }}>
+              <Icon name="search" size={22} />
+            </div>
+            <div style={{ fontSize: 14.5, fontWeight: 600, color: C.text }}>Geen leads gevonden met deze filters</div>
+            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Pas de filters aan of klik op Reset om alles te tonen.</div>
+          </div>
         ) : view === "tabel" ? (
           <LeadTable leads={filtered} onOpen={(l) => openLead(l)} onArchive={handleArchive} onTogglePin={handleTogglePin} />
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(340px, 100%), 1fr))", gap: 16 }}>
             {filtered.map((lead) => (
               <LeadCard key={lead.id} lead={lead} onOpen={(l) => openLead(l)} onArchive={handleArchive} onStageChange={handleStageChange} onTogglePin={handleTogglePin} />
             ))}
           </div>
         )}
-      </div>
+      </main>
 
       {modal && (
         <LeadDetailModal

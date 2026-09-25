@@ -1,73 +1,98 @@
 import { useState } from "react";
 import { PIPELINE_STAGES } from "../crm/constants";
 import { QUICK_FILTERS, SEVERITY_STYLE } from "../crm/signals";
-import { Icon, cardStyle, Empty } from "./ui";
+import { Icon, cardStyle, cardTitleStyle, linkBtnStyle, Empty, C } from "./ui";
 
+// Kleur zit alleen in het icoon; de kaart zelf blijft rustig wit.
 const KPI_CONFIG = [
-  { key: "new", accent: "#6366f1", icon: "plus" },
-  { key: "today", accent: "#f59e0b", icon: "bell" },
-  { key: "overdue", accent: "#ef4444", icon: "alert" },
-  { key: "appointments", accent: "#0891b2", icon: "calendar" },
-  { key: "waiting_partner", accent: "#10b981", icon: "users" },
-  { key: "active_search", accent: "#8b5cf6", icon: "search" },
+  { key: "new", icon: "userPlus", hint: "Met status nieuwe lead", color: C.navy, bg: C.navySoft },
+  { key: "today", icon: "bell", hint: "Acties en afspraken vandaag", color: C.goldText, bg: C.goldSoft },
+  { key: "overdue", icon: "alertCircle", hint: "Datum is verstreken", color: C.danger, bg: C.dangerBg },
+  { key: "appointments", icon: "calendar", hint: "Kennismakingen ingepland", color: C.info, bg: C.infoBg },
+  { key: "waiting_partner", icon: "users", hint: "Wacht op terugkoppeling", color: "#85663a", bg: "#f4ede2" },
+  { key: "active_search", icon: "search", hint: "Lopende zoektrajecten", color: C.success, bg: C.successBg },
 ];
 
-function StatCard({ label, value, accent, icon, active, onClick }) {
+function StatCard({ label, value, hint, icon, color, bg, active, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       title="Klik om de lijst hierop te filteren"
+      className="msk-kpi"
       style={{
-        background: active ? `${accent}0d` : "#fff",
-        borderRadius: 14,
-        padding: "14px 16px",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-        border: `1px solid ${active ? accent : "#f1f5f9"}`,
-        flex: 1,
-        minWidth: 150,
+        background: active ? C.surfaceWarm : C.surface,
+        borderRadius: 16,
+        padding: "16px 18px 14px",
+        boxShadow: active ? `inset 0 0 0 1px ${C.gold}, ${C.shadowSm}` : C.shadowSm,
+        border: `1px solid ${active ? C.gold : C.border}`,
         textAlign: "left",
         cursor: "pointer",
         fontFamily: "inherit",
+        display: "flex",
+        flexDirection: "column",
+        minWidth: 0,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 7,
-          color: accent,
-          fontSize: 11,
-          fontWeight: 800,
-          letterSpacing: ".04em",
-          textTransform: "uppercase",
-          marginBottom: 8,
-        }}
-      >
-        <Icon name={icon} size={13} />
-        {label}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <span style={{ fontSize: 13, fontWeight: 500, color: C.textMuted, lineHeight: 1.3, minWidth: 0, overflowWrap: "anywhere" }}>{label}</span>
+        <span
+          aria-hidden="true"
+          style={{ width: 34, height: 34, borderRadius: 10, background: bg, color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+        >
+          <Icon name={icon} size={17} />
+        </span>
       </div>
-      <div style={{ fontSize: 26, fontWeight: 900, color: "#0f172a", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontFamily: C.fontDisplay, fontSize: 32, fontWeight: 600, color: C.navy, lineHeight: 1, margin: "4px 0 14px" }}>{value}</div>
+      <div style={{ marginTop: "auto", borderTop: `1px solid ${C.borderSoft}`, paddingTop: 10, fontSize: 11.5, color: active ? C.goldText : C.textSubtle, fontWeight: active ? 600 : 400 }}>
+        {active ? "Filter actief · klik om te wissen" : hint}
+      </div>
     </button>
   );
 }
 
 export function KpiRow({ kpis, activeQuick, onQuick }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 42vw), 1fr))", gap: 14, marginBottom: 16 }}>
       {KPI_CONFIG.map((k) => (
         <StatCard
           key={k.key}
           label={QUICK_FILTERS[k.key].label}
           value={kpis[k.key] ?? 0}
-          accent={k.accent}
+          hint={k.hint}
           icon={k.icon}
+          color={k.color}
+          bg={k.bg}
           active={activeQuick === k.key}
           onClick={() => onQuick(activeQuick === k.key ? null : k.key)}
         />
       ))}
     </div>
   );
+}
+
+function CardHead({ icon, children, right, iconColor = C.textMuted }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}>
+      <span style={{ ...cardTitleStyle, display: "flex", gap: 9, alignItems: "center" }}>
+        <span style={{ color: iconColor, display: "flex" }}>
+          <Icon name={icon} size={16} />
+        </span>
+        {children}
+      </span>
+      {right}
+    </div>
+  );
+}
+
+function CountPill({ children, tone = "neutral" }) {
+  const tones = {
+    neutral: { bg: C.surfaceSunken, color: C.textMuted },
+    gold: { bg: C.goldTint, color: C.goldText },
+  };
+  const t = tones[tone];
+  return <span style={{ background: t.bg, color: t.color, borderRadius: 999, padding: "1px 8px", fontSize: 11.5, fontWeight: 600 }}>{children}</span>;
 }
 
 export function StageChart({ leads, onPick }) {
@@ -77,22 +102,24 @@ export function StageChart({ leads, onPick }) {
   const max = Math.max(...Object.values(counts), 1);
   return (
     <div style={cardStyle}>
-      <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
-        <Icon name="chart" size={14} /> Leads per fase
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <CardHead icon="chart">Leads per fase</CardHead>
+      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
         {PIPELINE_STAGES.map((s) => (
           <button
             type="button"
             key={s.value}
             onClick={() => onPick(s.value)}
-            style={{ display: "flex", alignItems: "center", gap: 8, border: "none", background: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}
+            className="msk-stage-row"
+            title={`Toon leads in fase '${s.label}'`}
+            style={{ display: "flex", alignItems: "center", gap: 10, border: "none", background: "none", padding: "3px 0", cursor: "pointer", fontFamily: "inherit" }}
           >
-            <div style={{ width: 150, fontSize: 11, color: "#64748b", flexShrink: 0, textAlign: "left" }}>{s.label}</div>
-            <div style={{ flex: 1, background: "#f1f5f9", borderRadius: 6, height: 9, overflow: "hidden" }}>
-              <div style={{ width: `${(counts[s.value] / max) * 100}%`, height: "100%", background: s.color, borderRadius: 6 }} />
+            <div className="msk-stage-label" style={{ width: 150, fontSize: 12, color: C.textMuted, flexShrink: 0, textAlign: "left" }}>
+              {s.label}
             </div>
-            <div style={{ width: 20, fontSize: 11, fontWeight: 800, color: "#0f172a", textAlign: "right" }}>{counts[s.value]}</div>
+            <div className="msk-stage-track" style={{ flex: 1, background: C.surfaceSoft, borderRadius: 99, height: 8, overflow: "hidden" }}>
+              <div style={{ width: `${(counts[s.value] / max) * 100}%`, height: "100%", background: s.color, borderRadius: 99, opacity: 0.85 }} />
+            </div>
+            <div style={{ width: 22, fontSize: 12, fontWeight: 600, color: counts[s.value] ? C.text : C.textDisabled, textAlign: "right" }}>{counts[s.value]}</div>
           </button>
         ))}
       </div>
@@ -101,26 +128,39 @@ export function StageChart({ leads, onPick }) {
 }
 
 const KIND_META = {
-  appointment: { icon: "calendar", color: "#0891b2" },
-  action: { icon: "bell", color: "#f59e0b" },
-  task: { icon: "check", color: "#6366f1" },
-  partner: { icon: "users", color: "#10b981" },
+  appointment: { icon: "calendar", color: C.info, bg: C.infoBg },
+  action: { icon: "bell", color: C.goldText, bg: C.goldSoft },
+  task: { icon: "check", color: C.navy, bg: C.navySoft },
+  partner: { icon: "users", color: "#85663a", bg: "#f4ede2" },
 };
 
-function rowBtn() {
+function rowBtn(warm = false) {
   return {
     textAlign: "left",
-    background: "#fff",
-    border: "1px solid #e2e8f0",
-    borderRadius: 8,
-    padding: "8px 10px",
+    background: warm ? C.surface : C.surface,
+    border: `1px solid ${warm ? C.goldBorder : C.borderSoft}`,
+    borderRadius: 12,
+    padding: "10px 12px",
     cursor: "pointer",
     display: "flex",
-    gap: 10,
+    gap: 11,
     alignItems: "flex-start",
     width: "100%",
     fontFamily: "inherit",
   };
+}
+
+function LeadName({ lead }) {
+  return (
+    <span style={{ display: "flex", gap: 5, alignItems: "center", fontSize: 13, fontWeight: 600, color: C.text }}>
+      {lead.pinned && (
+        <span style={{ color: C.gold, display: "flex" }} title="Vastgepind">
+          <Icon name="star" size={12} />
+        </span>
+      )}
+      {lead.name || "Naam onbekend"}
+    </span>
+  );
 }
 
 export function TodayPanel({ items, onOpen }) {
@@ -128,25 +168,28 @@ export function TodayPanel({ items, onOpen }) {
   const visible = showAll ? items : items.slice(0, 6);
   return (
     <div style={cardStyle}>
-      <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
-        <Icon name="calendar" size={14} /> Vandaag ({items.length})
-      </div>
+      <CardHead icon="calendar" right={<CountPill>{items.length}</CountPill>}>
+        Vandaag
+      </CardHead>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {visible.map((it, i) => {
           const meta = KIND_META[it.kind];
           return (
-            <button type="button" key={`${it.lead.id}-${it.kind}-${i}`} onClick={() => onOpen(it.lead, it.kind === "partner" ? "partners" : "followup")} style={rowBtn()}>
-              <span style={{ color: meta.color, marginTop: 1 }}>
+            <button
+              type="button"
+              key={`${it.lead.id}-${it.kind}-${i}`}
+              onClick={() => onOpen(it.lead, it.kind === "partner" ? "partners" : "followup")}
+              className="msk-list-btn"
+              style={rowBtn()}
+            >
+              <span style={{ width: 28, height: 28, borderRadius: 8, background: meta.bg, color: meta.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <Icon name={meta.icon} size={14} />
               </span>
-              <span style={{ flex: 1 }}>
-                <span style={{ display: "block", fontSize: 12, fontWeight: 800, color: "#0f172a" }}>
-                  {it.lead.pinned ? "★ " : ""}
-                  {it.lead.name || "Naam onbekend"}
-                </span>
-                <span style={{ display: "block", fontSize: 11, color: "#64748b", marginTop: 2 }}>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <LeadName lead={it.lead} />
+                <span style={{ display: "block", fontSize: 12, color: C.textMuted, marginTop: 2 }}>
                   {it.label}
-                  {it.who ? ` – ${it.who}` : ""}
+                  {it.who ? ` · ${it.who}` : ""}
                 </span>
               </span>
             </button>
@@ -154,7 +197,7 @@ export function TodayPanel({ items, onOpen }) {
         })}
         {!items.length && <Empty>Niets gepland voor vandaag.</Empty>}
         {items.length > 6 && (
-          <button type="button" onClick={() => setShowAll((v) => !v)} style={{ border: "none", background: "none", color: "#6366f1", fontSize: 11, fontWeight: 800, cursor: "pointer", textAlign: "left" }}>
+          <button type="button" onClick={() => setShowAll((v) => !v)} className="msk-link" style={{ ...linkBtnStyle, textAlign: "left", marginTop: 4 }}>
             {showAll ? "Minder tonen" : `Alle ${items.length} tonen`}
           </button>
         )}
@@ -165,37 +208,48 @@ export function TodayPanel({ items, onOpen }) {
 
 export function AttentionPanel({ list, onOpen, onShowAll }) {
   const visible = list.slice(0, 6);
+  const hasItems = list.length > 0;
   return (
-    <div style={cardStyle}>
-      <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", marginBottom: 12, display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <Icon name="alert" size={14} /> Aandacht nodig ({list.length})
-        </span>
-        {list.length > 0 && (
-          <button type="button" onClick={onShowAll} style={{ border: "none", background: "none", color: "#6366f1", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>
-            Toon in lijst
-          </button>
-        )}
-      </div>
+    <div
+      style={{
+        ...cardStyle,
+        background: hasItems ? C.goldSoft : C.surface,
+        border: `1px solid ${hasItems ? C.goldBorder : C.border}`,
+      }}
+    >
+      <CardHead
+        icon="alertCircle"
+        iconColor={hasItems ? C.goldText : C.textMuted}
+        right={
+          hasItems ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <CountPill tone="gold">{list.length}</CountPill>
+              <button type="button" onClick={onShowAll} className="msk-link" style={linkBtnStyle}>
+                Toon in lijst
+              </button>
+            </span>
+          ) : null
+        }
+      >
+        Aandacht nodig
+      </CardHead>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {visible.map(({ lead, signals }) => (
-          <button type="button" key={lead.id} onClick={() => onOpen(lead)} style={rowBtn()}>
-            <span style={{ flex: 1 }}>
-              <span style={{ display: "block", fontSize: 12, fontWeight: 800, color: "#0f172a" }}>
-                {lead.pinned ? "★ " : ""}
-                {lead.name || "Naam onbekend"}
-              </span>
+          <button type="button" key={lead.id} onClick={() => onOpen(lead)} className="msk-list-btn" style={rowBtn(true)}>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <LeadName lead={lead} />
               {signals.slice(0, 3).map((s) => (
-                <span key={s.key} style={{ display: "block", fontSize: 11, color: SEVERITY_STYLE[s.severity].color, marginTop: 2 }}>
-                  • {s.label}
+                <span key={s.key} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: SEVERITY_STYLE[s.severity].color, marginTop: 3 }}>
+                  <span style={{ width: 5, height: 5, borderRadius: 99, background: "currentColor", flexShrink: 0 }} />
+                  {s.label}
                 </span>
               ))}
-              {signals.length > 3 && <span style={{ display: "block", fontSize: 11, color: "#94a3b8" }}>+{signals.length - 3} meer</span>}
+              {signals.length > 3 && <span style={{ display: "block", fontSize: 11.5, color: C.textSubtle, marginTop: 3 }}>+{signals.length - 3} meer</span>}
             </span>
           </button>
         ))}
-        {!list.length && <Empty>Alles is bijgewerkt. Geen signalen.</Empty>}
-        {list.length > 6 && <div style={{ fontSize: 11, color: "#94a3b8" }}>+{list.length - 6} meer — klik op "Toon in lijst"</div>}
+        {!hasItems && <Empty>Alles is bijgewerkt. Geen signalen.</Empty>}
+        {list.length > 6 && <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>+{list.length - 6} meer · klik op "Toon in lijst"</div>}
       </div>
     </div>
   );
