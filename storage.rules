@@ -1,23 +1,19 @@
 rules_version = '2';
 
 // ─── Mijn Spanje Kompas CRM – Storage security rules ───────────────────────
-// Bestanden staan onder leads/{leadId}/{fileId}_{naam}. Alleen actieve
-// teamleden (users/{uid} in Firestore) kunnen ze lezen, uploaden en verwijderen.
-// Bij het publiceren vraagt Firebase eenmalig toestemming om Firestore te
-// raadplegen vanuit Storage-rules: die toestemming is nodig.
+// Bestanden zijn alleen toegankelijk voor ingelogde Firebase Auth-gebruikers.
+// Een users/{uid}-document in Firestore is niet vereist.
 
 service firebase.storage {
   match /b/{bucket}/o {
 
-    function isStaff() {
-      return request.auth != null
-        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
-        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.get('active', true) == true;
+    function signedIn() {
+      return request.auth != null;
     }
 
     match /leads/{leadId}/{fileName} {
-      allow read, delete: if isStaff();
-      allow create: if isStaff()
+      allow read, delete: if signedIn();
+      allow create: if signedIn()
         && request.resource.size <= 15 * 1024 * 1024
         && request.resource.contentType.matches(
           'application/pdf|image/jpeg|image/png|application/msword|application/vnd\\.openxmlformats-officedocument\\.wordprocessingml\\.document'
@@ -25,7 +21,6 @@ service firebase.storage {
       allow update: if false;
     }
 
-    // Al het andere is dicht.
     match /{allPaths=**} {
       allow read, write: if false;
     }

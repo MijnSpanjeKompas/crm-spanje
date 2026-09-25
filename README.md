@@ -14,18 +14,18 @@ Drempelwaarden voor signalen (24 uur zonder contact, 14 dagen inactief, 7 dagen 
 
 ## Eenmalige setup in Firebase
 
-1. **Authentication** → Sign-in method → *Email/Password* aanzetten. Maak onder *Users* een account voor elk teamlid.
-2. **Firestore** → maak per teamlid een document `users/{UID}`:
+1. **Authentication** → Sign-in method → *Email/Password* aanzetten. Maak onder *Users* een account voor elk teamlid. Zodra iemand succesvol is ingelogd met Firebase Authentication krijgt diegene toegang tot het CRM.
+2. **Optioneel – teamprofielen**: je mag per teamlid een document `users/{UID}` gebruiken voor naam/rol in het CRM:
    ```
    displayName: "Luke van Spronsen"
    email: "..."
    role: "admin"        // of "member"
    active: true
    ```
-   De UID staat bij Authentication → Users, en wordt ook getoond op het scherm "Geen toegang".
+   Zo'n document is **niet verplicht om in te loggen**. Ontbreekt het, dan gebruikt het CRM de naam/e-mail uit Firebase Authentication als fallback.
 3. **Firestore rules**: publiceer `firestore.rules` (console → Rules, of `firebase deploy --only firestore:rules`).
    ⚠️ Publiceren vervangt alle bestaande rules. Draaien er andere apps in hetzelfde project (bijv. `growth_*`-collecties)? Neem hun regels eerst over in het blok onderaan het bestand.
-4. **Storage** aanzetten (voor `*.firebasestorage.app`-buckets is waarschijnlijk het Blaze-plan nodig) en `storage.rules` publiceren. Geef de gevraagde toestemming om Firestore te raadplegen vanuit Storage-rules.
+4. **Storage** aanzetten (voor `*.firebasestorage.app`-buckets is waarschijnlijk het Blaze-plan nodig) en `storage.rules` publiceren. De meegeleverde Storage-rules controleren alleen Firebase Authentication; er is geen users-profielcheck nodig.
 5. **Optioneel – CORS** (voor direct downloaden met de juiste bestandsnaam). Vul je domein in `cors.json` in en voer uit:
    ```
    gsutil cors set cors.json gs://mijn-spanje-kompas-crm.firebasestorage.app

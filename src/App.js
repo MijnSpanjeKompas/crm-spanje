@@ -11,7 +11,7 @@ import { computeKpis, getTodayItems, getAttentionList } from "./crm/signals";
 import { DEFAULT_FILTERS, applyFilters } from "./crm/filters";
 import { labelOf, PIPELINE_STAGES } from "./crm/constants";
 import { baseTextSelection, Icon, Notice } from "./components/ui";
-import { LoginScreen, NoAccessScreen, LoadingScreen } from "./components/LoginScreen";
+import { LoginScreen, LoadingScreen } from "./components/LoginScreen";
 import { KpiRow, StageChart, TodayPanel, AttentionPanel } from "./components/Dashboard";
 import { LeadFilters } from "./components/LeadFilters";
 import { LeadCard, LeadTable } from "./components/LeadList";
@@ -25,7 +25,7 @@ function scrollToList() {
 
 function subscriptionError(e) {
   if (e?.code === "permission-denied") {
-    return "Geen toegang tot de CRM-gegevens. Controleer of je gebruikersaccount actief is en of de Firestore rules zijn gepubliceerd.";
+    return "Geen toegang tot de CRM-gegevens. Controleer of je bent ingelogd en of de Firestore rules zijn gepubliceerd.";
   }
   return `Gegevens laden mislukt: ${e?.message || "onbekende fout"}`;
 }
@@ -34,7 +34,6 @@ export default function App() {
   const auth = useCrmAuth();
   if (auth.status === "loading") return <LoadingScreen />;
   if (auth.status === "signed_out") return <LoginScreen onSignIn={auth.signIn} onResetPassword={auth.resetPassword} />;
-  if (auth.status === "no_access") return <NoAccessScreen authUser={auth.authUser} onSignOut={auth.signOut} />;
   return <Crm user={auth.user} onSignOut={auth.signOut} />;
 }
 

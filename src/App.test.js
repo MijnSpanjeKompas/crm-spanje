@@ -39,12 +39,6 @@ test("toont inlogscherm als je niet bent ingelogd", () => {
   expect(screen.getByRole("button", { name: /inloggen/i })).toBeInTheDocument();
 });
 
-test("toont geen-toegang scherm voor gebruiker zonder users-document", () => {
-  mockAuth.current = { status: "no_access", authUser: { uid: "abc123", email: "x@y.nl" }, signOut: jest.fn() };
-  render(<App />);
-  expect(screen.getByText(/abc123/)).toBeInTheDocument();
-});
-
 test("dashboard en lijst renderen oude leads", async () => {
   render(<App />);
   expect(await cardTitle("Ewoud Kremer")).toBeTruthy();

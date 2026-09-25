@@ -99,28 +99,6 @@ export function LoginScreen({ onSignIn, onResetPassword }) {
   );
 }
 
-export function NoAccessScreen({ authUser, onSignOut }) {
-  return (
-    <div style={shell}>
-      <div style={box}>
-        <Brand />
-        <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", marginTop: 6 }}>Nog geen toegang</div>
-        <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>
-          Je bent ingelogd als <strong>{authUser?.email}</strong>, maar dit account is nog niet geactiveerd voor het CRM.
-          Een beheerder moet in Firestore een document aanmaken in <code>users</code> met dit ID:
-        </div>
-        <code style={{ background: "#f1f5f9", borderRadius: 8, padding: "8px 10px", fontSize: 12, wordBreak: "break-all" }}>{authUser?.uid}</code>
-        <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.6 }}>
-          Velden: <code>displayName</code> (tekst), <code>email</code> (tekst), <code>role</code> ("admin" of "member"), <code>active</code> (boolean: true).
-        </div>
-        <button onClick={onSignOut} style={{ ...btnStyle("#64748b"), justifyContent: "center", padding: "9px 16px" }}>
-          Uitloggen
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export function LoadingScreen({ text = "Laden..." }) {
   return (
     <div style={shell}>
