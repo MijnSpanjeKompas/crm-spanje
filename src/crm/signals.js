@@ -2,17 +2,8 @@
 // Alles werkt op de (gedenormaliseerde) velden van het leaddocument, zodat het
 // dashboard nooit per lead subcollections hoeft op te halen.
 
-import {
-  THRESHOLDS,
-  STAGES_REQUIRING_NEXT_ACTION,
-  STAGES_REQUIRING_SEARCH_PROFILE,
-  STAGES_REQUIRING_CLOSURE_REASON,
-  isClosedStage,
-  hasNextAction,
-  nextActionText,
-} from "./constants";
-import { diffInDays, daysSince, hoursSince, todayISO, toDate, formatDate } from "./dates";
-import { getCreatedDate } from "./normalize";
+import { THRESHOLDS, isClosedStage, hasNextAction, nextActionText } from "./constants";
+import { diffInDays, todayISO, formatDate } from "./dates";
 
 export function isOpenLead(lead) {
   return !lead.archived && !isClosedStage(lead.pipelineStage);
@@ -48,78 +39,19 @@ export function getMissingProfileFields(lead) {
   return missing;
 }
 
-function lastActivityDate(lead) {
-  return toDate(lead.lastActivityAt) || toDate(lead.lastContactAt) || toDate(lead.updatedAt) || getCreatedDate(lead);
-}
-
 /**
- * Automatische aandachtssignalen voor één lead.
+ * Meldingen voor één lead. Bewust beperkt tot de volgende actie: een verlopen
+ * actie of een actie zonder datum. Overige automatische signalen (geen contact,
+ * inactiviteit, zoekprofiel, partneropvolging, ...) worden niet meer getoond.
  * @returns {{key:string,label:string,severity:"high"|"medium"|"low"}[]}
  */
 export function getLeadSignals(lead, now = new Date()) {
   const signals = [];
-  if (lead.archived) return signals;
-
-  // Afsluitreden ontbreekt (vaak oude "Niet doorgegaan"-leads)
-  if (STAGES_REQUIRING_CLOSURE_REASON.includes(lead.pipelineStage) && !lead.closureReason) {
-    signals.push({ key: "missing_closure_reason", label: "Afsluitreden ontbreekt", severity: "low" });
-  }
   if (!isOpenLead(lead)) return signals;
 
-  // Nieuwe lead zonder klantcontact
-  const created = getCreatedDate(lead);
-  if (!lead.lastContactAt && created && hoursSince(created, now) > THRESHOLDS.NEW_LEAD_NO_CONTACT_HOURS) {
-    signals.push({
-      key: "no_contact",
-      label: lead.lastContactAttemptAt
-        ? `Nog geen klantcontact (alleen pogingen)`
-        : `Nog geen klantcontact na ${THRESHOLDS.NEW_LEAD_NO_CONTACT_HOURS} uur`,
-      severity: "high",
-    });
-  }
-
-  // Volgende actie
   const na = getNextActionInfo(lead, now);
   if (na.state === "overdue") signals.push({ key: "overdue_action", label: `Actie verlopen: ${nextActionText(lead)} (${na.label})`, severity: "high" });
   if (na.state === "nodate") signals.push({ key: "action_no_date", label: `Actie zonder datum: ${nextActionText(lead)}`, severity: "medium" });
-  if (na.state === "none" && STAGES_REQUIRING_NEXT_ACTION.includes(lead.pipelineStage)) {
-    signals.push({ key: "no_next_action", label: "Actieve lead zonder volgende actie", severity: "high" });
-  }
-
-  // Taken
-  if (lead.openTaskCount > 0 && lead.nextTaskDueDate && diffInDays(lead.nextTaskDueDate, now) < 0) {
-    signals.push({ key: "overdue_task", label: `Taak verlopen: ${lead.nextTaskTitle || "open taak"}`, severity: "high" });
-  }
-
-  // Kennismaking in het verleden maar nog "gepland"
-  if (lead.appointmentStatus === "scheduled" && lead.appointmentDate && diffInDays(lead.appointmentDate, now) < 0) {
-    signals.push({ key: "appointment_unresolved", label: "Kennismaking geweest? Status nog niet bijgewerkt", severity: "medium" });
-  }
-
-  // Partnerkoppelingen
-  const ps = lead.partnerSummary || {};
-  if (ps.waitingCount > 0) {
-    const waitingDays = daysSince(ps.waitingSince, now);
-    const followUpOverdue = ps.nextFollowUpAt && diffInDays(ps.nextFollowUpAt, now) < 0;
-    if (followUpOverdue) {
-      signals.push({ key: "partner_follow_up_overdue", label: "Partneropvolging verlopen", severity: "high" });
-    } else if (waitingDays !== null && waitingDays >= THRESHOLDS.PARTNER_FOLLOW_UP_DAYS) {
-      signals.push({ key: "partner_waiting", label: `Partner al ${waitingDays} dagen zonder terugkoppeling`, severity: "medium" });
-    }
-  }
-
-  // Lang geen activiteit
-  const last = lastActivityDate(lead);
-  const idle = daysSince(last, now);
-  if (idle !== null && idle >= THRESHOLDS.INACTIVITY_DAYS) {
-    signals.push({ key: "inactive", label: `${idle} dagen geen activiteit`, severity: "medium" });
-  }
-
-  // Incompleet zoekprofiel
-  if (STAGES_REQUIRING_SEARCH_PROFILE.includes(lead.pipelineStage)) {
-    const missing = getMissingProfileFields(lead);
-    if (missing.length) signals.push({ key: "incomplete_profile", label: `Zoekprofiel mist: ${missing.join(", ")}`, severity: "low" });
-  }
 
   return signals;
 }
@@ -140,7 +72,7 @@ export function getTodayItems(leads, now = new Date()) {
       items.push({ lead, kind: "action", label: nextActionText(lead), who: lead.nextActionAssignedToName, sort: 1 });
     }
     if (lead.appointmentStatus === "scheduled" && lead.appointmentDate === today) {
-      items.push({ lead, kind: "appointment", label: `Kennismaking${lead.appointmentTime ? ` om ${lead.appointmentTime}` : ""}`, who: lead.appointmentAssignedToName, sort: 0, time: lead.appointmentTime });
+      items.push({ lead, kind: "appointment", label: `Gesprek${lead.appointmentTime ? ` om ${lead.appointmentTime}` : ""}`, who: lead.appointmentAssignedToName, sort: 0, time: lead.appointmentTime });
     }
     if (lead.openTaskCount > 0 && lead.nextTaskDueDate === today) {
       items.push({ lead, kind: "task", label: `Taak: ${lead.nextTaskTitle || "open taak"}`, who: "", sort: 2 });
@@ -192,7 +124,7 @@ export const QUICK_FILTERS = {
         (l.openTaskCount > 0 && l.nextTaskDueDate && diffInDays(l.nextTaskDueDate, now) < 0)),
   },
   appointments: {
-    label: "Kennismakingen gepland",
+    label: "Gesprekken gepland",
     test: (l, now) => isOpenLead(l) && l.appointmentStatus === "scheduled" && l.appointmentDate && diffInDays(l.appointmentDate, now) >= 0,
   },
   waiting_partner: {
@@ -200,11 +132,11 @@ export const QUICK_FILTERS = {
     test: (l) => isOpenLead(l) && (l.partnerSummary?.waitingCount || 0) > 0,
   },
   active_search: {
-    label: "Actieve zoektrajecten",
-    test: (l) => isOpenLead(l) && ["active_search", "purchase_process"].includes(l.pipelineStage),
+    label: "Doorgestuurd & gereserveerd",
+    test: (l) => isOpenLead(l) && ["partner_connected", "purchase_process"].includes(l.pipelineStage),
   },
   attention: {
-    label: "Aandacht nodig",
+    label: "Verlopen acties",
     test: (l, now) => getLeadSignals(l, now).length > 0,
   },
 };

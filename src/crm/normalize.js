@@ -8,6 +8,7 @@
 import {
   SCHEMA_VERSION,
   PIPELINE_STAGES,
+  resolveStage,
   PURCHASE_INTENTS,
   PRIORITIES,
   NEXT_ACTION_TYPES,
@@ -149,8 +150,8 @@ const LEGACY_STATUS_MAP = {
 
 /** Oude status → nieuwe pipelinefase. Onbekend → "new_lead". */
 export function mapLegacyStatus(status) {
-  if (isValidKey(PIPELINE_STAGES, status)) return status;
-  return LEGACY_STATUS_MAP[simplify(status)] || "new_lead";
+  if (isValidKey(PIPELINE_STAGES, resolveStage(status))) return resolveStage(status);
+  return resolveStage(LEGACY_STATUS_MAP[simplify(status)]) || "new_lead";
 }
 
 /**
@@ -448,7 +449,7 @@ export function normalizeLead(raw, ctx = {}) {
 
     // Status / leadtype
     derived.pipelineStage = mapLegacyStatus(raw.status);
-    if (raw.status && !LEGACY_STATUS_MAP[simplify(raw.status)] && !isValidKey(PIPELINE_STAGES, raw.status)) {
+    if (raw.status && !LEGACY_STATUS_MAP[simplify(raw.status)] && !isValidKey(PIPELINE_STAGES, resolveStage(raw.status))) {
       unmapped.status = raw.status;
     }
     const lt = mapLegacyLeadType(raw.leadscore || raw.leadType);
@@ -561,7 +562,7 @@ export function normalizeLead(raw, ctx = {}) {
     phone: str(raw.phone ?? raw.telefoon),
     preferredContactMethod: pickKey(PREFERRED_CONTACT_METHODS, raw.preferredContactMethod, "no_preference"),
     preferredContactMoment: pickKey(PREFERRED_CONTACT_MOMENTS, raw.preferredContactMoment, "no_preference"),
-    pipelineStage: pickKey(PIPELINE_STAGES, pick("pipelineStage"), "new_lead"),
+    pipelineStage: pickKey(PIPELINE_STAGES, resolveStage(pick("pipelineStage")), "new_lead"),
     purchaseIntent: pickKey(PURCHASE_INTENTS, pick("purchaseIntent"), "unknown"),
     priority: pickKey(PRIORITIES, pick("priority"), "normal"),
     ownerId: owner.ownerId,
@@ -602,7 +603,8 @@ export function normalizeLead(raw, ctx = {}) {
     // "tags" bestaat in het oude én nieuwe schema. Bij oude docs gebruiken we de
     // opgeschoonde lijst (zonder structurele tags); het origineel blijft in Firestore staan.
     tags: uniq((isLegacy ? derived.tags || [] : Array.isArray(raw.tags) ? raw.tags : []).map((t) => str(t).trim())),
-    closureReason: pickKey(CLOSURE_REASONS, raw.closureReason, ""),
+    // Oude fase "Niet gekwalificeerd" is opgegaan in "Gestopt" met die reden.
+    closureReason: pickKey(CLOSURE_REASONS, raw.closureReason, pick("pipelineStage") === "disqualified" ? "not_qualified" : ""),
     closureNotes: str(raw.closureNotes),
     pinned: Boolean(raw.pinned),
     archived: Boolean(raw.archived),

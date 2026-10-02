@@ -97,7 +97,7 @@ function Fact({ label, children }) {
 }
 
 // ─── KAART ───────────────────────────────────────────────────────────────────
-export function LeadCard({ lead, onOpen, onArchive, onStageChange, onTogglePin }) {
+export function LeadCard({ lead, onOpen, onArchive, onDelete, onStageChange, onTogglePin }) {
   const na = nextActionLine(lead);
   const signals = getLeadSignals(lead);
   const budget = formatBudget(lead);
@@ -240,6 +240,11 @@ export function LeadCard({ lead, onOpen, onArchive, onStageChange, onTogglePin }
               <Icon name="archive" size={14} />
             </button>
           )}
+          {onDelete && (
+            <button type="button" onClick={() => onDelete(lead)} style={{ ...btnStyle("danger"), width: 34, padding: 0 }} title="Verwijderen" aria-label="Verwijderen">
+              <Icon name="trash" size={14} />
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -259,7 +264,7 @@ const thStyle = {
   background: C.surfaceSoft,
 };
 
-export function LeadTable({ leads, onOpen, onArchive, onTogglePin }) {
+export function LeadTable({ leads, onOpen, onArchive, onDelete, onTogglePin }) {
   const headers = ["", "Naam", "Fase", "Koopintentie", "Prio", "Regio / plaats", "Budget", "Verantwoordelijke", "Volgende actie", "Laatste contact", ""];
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "auto", boxShadow: C.shadowSm }}>
@@ -326,6 +331,11 @@ export function LeadTable({ leads, onOpen, onArchive, onTogglePin }) {
                     {!lead.archived && (
                       <button type="button" onClick={() => onArchive(lead)} style={{ ...btnStyle("neutral"), width: 34, padding: 0, color: C.textMuted }} title="Archiveren" aria-label="Archiveren">
                         <Icon name="archive" size={14} />
+                      </button>
+                    )}
+                    {onDelete && (
+                      <button type="button" onClick={() => onDelete(lead)} style={{ ...btnStyle("danger"), width: 34, padding: 0 }} title="Verwijderen" aria-label="Verwijderen">
+                        <Icon name="trash" size={14} />
                       </button>
                     )}
                   </div>

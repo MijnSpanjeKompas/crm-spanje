@@ -133,7 +133,7 @@ export function DetailsTab({ form, set, lead, user, users, isNew, onClose }) {
       )}
 
       {!isNew && (
-        <Panel title="Archief">
+        <Panel title="Archiveren of verwijderen">
           {error && <Notice tone="error">{error}</Notice>}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: error ? 10 : 0 }}>
             {lead.archived ? (
@@ -150,23 +150,23 @@ export function DetailsTab({ form, set, lead, user, users, isNew, onClose }) {
                 <Icon name="archive" size={13} /> Archiveren
               </button>
             )}
-            {user?.isAdmin && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  const typed = window.prompt(
-                    `LET OP: dit verwijdert ${lead.name || "deze lead"} definitief, inclusief activiteiten, taken, partnerkoppelingen en bestanden.\n\nTyp VERWIJDER om te bevestigen.`
-                  );
-                  if (typed === "VERWIJDER") run(() => deleteLeadPermanently(lead), true);
-                }}
-                style={btnStyle("danger")}
-              >
-                <Icon name="trash" size={13} /> Definitief verwijderen (beheerder)
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                const ok = window.confirm(
+                  `${lead.name || "Deze lead"} definitief verwijderen?\n\nDit verwijdert ook alle activiteiten, taken, partnerkoppelingen en bestanden. Dit kan niet ongedaan worden gemaakt.`
+                );
+                if (ok) run(() => deleteLeadPermanently(lead), true);
+              }}
+              style={btnStyle("danger")}
+            >
+              <Icon name="trash" size={13} /> Lead verwijderen
+            </button>
           </div>
-          <div style={{ fontSize: 11.5, color: C.textSubtle, marginTop: 8 }}>Archiveren verwijdert niets. Definitief verwijderen kan alleen een beheerder.</div>
+          <div style={{ fontSize: 11.5, color: C.textSubtle, marginTop: 8 }}>
+            Archiveren haalt de lead uit beeld; je vindt hem terug via het filter "Archief". Verwijderen is definitief.
+          </div>
         </Panel>
       )}
     </div>

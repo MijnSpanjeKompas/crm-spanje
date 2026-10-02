@@ -202,7 +202,8 @@ describe("normalizeLead op echte oude records", () => {
   test("nieuwe velden hebben voorrang, schema v2 wordt niet opnieuw afgeleid", () => {
     const l = normalizeLead({ ...EWOUD, schemaVersion: 2, pipelineStage: "active_search", purchaseIntent: "ready_to_buy", priority: "normal", name: "Ewoud K." });
     expect(l._isLegacy).toBe(false);
-    expect(l.pipelineStage).toBe("active_search");
+    // Oude fase "active_search" bestaat niet meer en valt nu onder "Doorgestuurd".
+    expect(l.pipelineStage).toBe("partner_connected");
     expect(l.purchaseIntent).toBe("ready_to_buy");
     expect(l.name).toBe("Ewoud K.");
   });
@@ -269,28 +270,34 @@ describe("signalen, KPI's en filters", () => {
   const today = todayISO(now);
   const mk = (over) => ({ ...emptyLead(null), id: Math.random().toString(36), name: "X", email: "x@x.nl", createdAt: now, ...over });
 
-  test("nieuwe lead > 24 uur zonder contact", () => {
-    const l = mk({ createdAt: new Date(now.getTime() - 30 * 3600 * 1000) });
-    expect(getLeadSignals(l, now).map((s) => s.key)).toContain("no_contact");
-  });
-  test("actieve lead zonder volgende actie", () => {
-    const l = mk({ pipelineStage: "qualified", nextActionType: "none", nextActionDate: "" });
-    expect(getLeadSignals(l, now).map((s) => s.key)).toContain("no_next_action");
-  });
-  test("partner te lang zonder terugkoppeling", () => {
-    const l = mk({
+  test("alleen meldingen over de volgende actie", () => {
+    const quiet = mk({
+      createdAt: new Date(now.getTime() - 30 * 3600 * 1000),
       pipelineStage: "partner_connected",
       nextActionDate: today,
       partnerSummary: { count: 1, waitingCount: 1, waitingSince: new Date(now.getTime() - 10 * 86400000), nextFollowUpAt: "" },
     });
-    expect(getLeadSignals(l, now).map((s) => s.key)).toContain("partner_waiting");
+    expect(getLeadSignals(quiet, now)).toEqual([]);
+    expect(getLeadSignals(mk({ nextActionType: "none", nextActionDate: "" }), now)).toEqual([]);
+    expect(getLeadSignals(mk({ nextActionDate: addDaysISO(today, -1) }), now).map((s) => s.key)).toEqual(["overdue_action"]);
+    expect(getLeadSignals(mk({ nextActionDate: "" }), now).map((s) => s.key)).toEqual(["action_no_date"]);
+    expect(getLeadSignals(mk({ pipelineStage: "stopped", nextActionDate: addDaysISO(today, -1) }), now)).toEqual([]);
+  });
+  test("oude fases worden op de nieuwe pipeline gezet", () => {
+    const n = (stage) => normalizeLead({ id: "x", schemaVersion: 2, name: "X", pipelineStage: stage });
+    expect(n("appointment_completed").pipelineStage).toBe("appointment_scheduled");
+    expect(n("qualified").pipelineStage).toBe("appointment_scheduled");
+    expect(n("active_search").pipelineStage).toBe("partner_connected");
+    const d = n("disqualified");
+    expect(d.pipelineStage).toBe("stopped");
+    expect(d.closureReason).toBe("not_qualified");
   });
   test("KPI's en Vandaag", () => {
     const leads = [
       mk({ nextActionDate: today }),
       mk({ nextActionDate: addDaysISO(today, -2), pipelineStage: "contact_phase" }),
       mk({ pipelineStage: "appointment_scheduled", appointmentStatus: "scheduled", appointmentDate: today, nextActionDate: addDaysISO(today, 3) }),
-      mk({ pipelineStage: "active_search", nextActionDate: addDaysISO(today, 5) }),
+      mk({ pipelineStage: "purchase_process", nextActionDate: addDaysISO(today, 5) }),
       mk({ pipelineStage: "stopped", closureReason: "no_response", nextActionType: "none", nextActionDate: "" }),
     ];
     const k = computeKpis(leads, now);
@@ -321,7 +328,7 @@ describe("systeemactiviteiten bij wijzigingen", () => {
     const before = buildLeadPayload({ ...emptyLead(null), name: "A", pipelineStage: "qualified", priority: "normal" });
     const after = buildLeadPayload({ ...before, pipelineStage: "partner_connected", priority: "high", notities: "iets" });
     const titles = describeLeadChanges(before, after).map((a) => a.title);
-    expect(titles).toEqual(expect.arrayContaining(["Pipelinefase gewijzigd van Gekwalificeerd naar Gekoppeld aan partner"]));
+    expect(titles).toEqual(expect.arrayContaining(["Pipelinefase gewijzigd van Gesprek gepland naar Doorgestuurd"]));
     expect(titles.some((t) => /Prioriteit/.test(t))).toBe(true);
     expect(titles.some((t) => /otitie/.test(t))).toBe(false);
   });

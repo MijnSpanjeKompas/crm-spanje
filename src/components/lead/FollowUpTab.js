@@ -197,10 +197,8 @@ export function FollowUpTab({ form, set, setMany, errors, users, user, lead, isN
   }
 
   function markAppointmentDone() {
+    // De fase blijft "Gesprek gepland" tot de lead wordt doorgestuurd.
     const patch = { appointmentStatus: "completed" };
-    if (STAGE_INDEX(form.pipelineStage) >= 0 && STAGE_INDEX(form.pipelineStage) < STAGE_INDEX("appointment_completed")) {
-      patch.pipelineStage = "appointment_completed";
-    }
     if (form.nextActionType === "conduct_appointment") {
       patch.nextActionType = "complete_search_profile";
       patch.nextActionDate = today;
@@ -260,14 +258,14 @@ export function FollowUpTab({ form, set, setMany, errors, users, user, lead, isN
             )}
             {!planned && (
               <div style={{ gridColumn: "1 / -1", fontSize: 12, color: C.textMuted }}>
-                Geen actie gepland. Voor actieve leads verschijnt dit als signaal onder "Aandacht nodig".
+                Geen actie gepland.
               </div>
             )}
           </div>
         </Panel>
 
         <Panel
-          title="Kennismaking"
+          title="Gesprek"
           right={form.appointmentStatus ? <Badge>{labelOf(APPOINTMENT_STATUSES, form.appointmentStatus)}</Badge> : null}
         >
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
@@ -296,7 +294,7 @@ export function FollowUpTab({ form, set, setMany, errors, users, user, lead, isN
               )}
             </div>
             <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: C.textSubtle }}>
-              Wijzigingen worden opgeslagen met de knop Opslaan. Een afgeronde kennismaking telt als klantcontact.
+              Wijzigingen worden opgeslagen met de knop Opslaan. Een afgerond gesprek telt als klantcontact.
             </div>
           </div>
         </Panel>

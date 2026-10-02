@@ -43,13 +43,13 @@ test("dashboard en lijst renderen oude leads", async () => {
   render(<App />);
   expect(await cardTitle("Ewoud Kremer")).toBeTruthy();
   expect(await cardTitle("Ed en Norma Heerschap")).toBeTruthy();
-  // William is 'Gestopt' (gesloten): geen kaart in de open lijst, wel een signaal
-  // onder "Aandacht nodig" omdat de afsluitreden ontbreekt.
-  expect(screen.getAllByText("William de Wit").filter((el) => el.tagName === "DIV")).toHaveLength(0);
-  expect(screen.getByText(/Afsluitreden ontbreekt/)).toBeInTheDocument();
+  // William is 'Gestopt' (gesloten): geen kaart in de open lijst.
+  expect(screen.queryAllByText("William de Wit").filter((el) => el.tagName === "DIV")).toHaveLength(0);
+  // Alleen meldingen over de volgende actie; "Afsluitreden ontbreekt" e.d. niet meer.
+  expect(screen.queryByText(/Afsluitreden ontbreekt/)).not.toBeInTheDocument();
   expect(screen.getAllByText(/Vandaag opvolgen/i).length).toBeGreaterThan(0);
-  expect(screen.getAllByText(/Aandacht nodig/i).length).toBeGreaterThan(0);
-  expect(screen.getAllByText("Gekoppeld aan partner").length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/Verlopen acties/i).length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Doorgestuurd").length).toBeGreaterThan(0);
   expect(screen.queryByText(/Geen strenge datum/i)).not.toBeInTheDocument();
 });
 
@@ -122,4 +122,20 @@ test("archiveren via kaart vraagt bevestiging en verwijdert niets", async () => 
   expect(window.confirm).toHaveBeenCalled();
   const archived = ["ewoud", "heerschap"].map((id) => fake.__getDoc(`leads/${id}`)).filter((d) => d.archived);
   expect(archived).toHaveLength(1);
+});
+
+test("verwijderen via kaart: na bevestiging is de lead echt weg, zonder bevestiging niet", async () => {
+  render(<App />);
+  await cardTitle("Ed en Norma Heerschap");
+  window.confirm = jest.fn(() => false);
+  await act(async () => {
+    fireEvent.click(screen.getAllByTitle("Verwijderen")[0]);
+  });
+  expect(["ewoud", "heerschap"].every((id) => fake.__getDoc(`leads/${id}`))).toBe(true);
+
+  window.confirm = jest.fn(() => true);
+  await act(async () => {
+    fireEvent.click(screen.getAllByTitle("Verwijderen")[0]);
+  });
+  await waitFor(() => expect(["ewoud", "heerschap"].filter((id) => fake.__getDoc(`leads/${id}`))).toHaveLength(1));
 });

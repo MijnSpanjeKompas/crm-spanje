@@ -32,7 +32,7 @@ export function validateLead(lead, ctx = {}) {
   if (phone && phone.replace(/\D/g, "").length < 6) errors.phone = "Dit telefoonnummer lijkt te kort.";
 
   if (stage === "appointment_scheduled" && !lead.appointmentDate) {
-    errors.appointmentDate = "Bij 'Kennismaking gepland' hoort een afspraakdatum (tabblad Opvolging).";
+    errors.appointmentDate = "Bij 'Gesprek gepland' hoort een afspraakdatum (tabblad Opvolging).";
   }
   if (lead.appointmentStatus && !lead.appointmentDate) {
     errors.appointmentDate = "Vul een afspraakdatum in of maak de afspraakstatus leeg.";
@@ -59,7 +59,7 @@ export function validateLead(lead, ctx = {}) {
   }
 
   if (stage === "partner_connected" && !(ctx.partnerCount > 0)) {
-    warnings.push("Deze lead staat op 'Gekoppeld aan partner', maar er is nog geen partnerkoppeling vastgelegd.");
+    warnings.push("Deze lead staat op 'Doorgestuurd', maar er is nog geen partnerkoppeling vastgelegd.");
   }
   if (STAGES_REQUIRING_NEXT_ACTION.includes(stage) && !hasNextAction(lead) && !lead.archived) {
     warnings.push("Deze actieve lead heeft geen volgende actie. Zo raakt hij makkelijk uit beeld.");

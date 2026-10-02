@@ -16,43 +16,46 @@ export function optionOf(options, value) {
 }
 
 // ─── PIPELINE ────────────────────────────────────────────────────────────────
+// Bewust simpel: nieuwe lead → contact → gesprek gepland → doorgestuurd →
+// gereserveerd → gekocht. Keys zijn hergebruikt uit de vorige versie, zodat
+// bestaande Firestore-data niet gemigreerd hoeft te worden.
 export const PIPELINE_STAGES = [
   { value: "new_lead", label: "Nieuwe lead", group: "main", color: "#33506b", bg: "#edf1f5" },
   { value: "contact_phase", label: "Contactfase", group: "main", color: "#3a6788", bg: "#eaf1f6" },
-  { value: "appointment_scheduled", label: "Kennismaking gepland", group: "main", color: "#2f6f82", bg: "#e8f2f4" },
-  { value: "appointment_completed", label: "Kennismaking gehad", group: "main", color: "#2e7268", bg: "#e7f2ef" },
-  { value: "qualified", label: "Gekwalificeerd", group: "main", color: "#2f7a55", bg: "#eaf4ee" },
-  { value: "partner_connected", label: "Gekoppeld aan partner", group: "main", color: "#85663a", bg: "#f4ede2" },
-  { value: "active_search", label: "Actief zoektraject", group: "main", color: "#2f5e86", bg: "#e6eef6" },
-  { value: "purchase_process", label: "Aankooptraject", group: "main", color: "#8c6010", bg: "#fbefd2" },
-  { value: "completed", label: "Afgerond / woning gekocht", group: "main", closed: true, color: "#4e5d6c", bg: "#eef0f2" },
+  { value: "appointment_scheduled", label: "Gesprek gepland", group: "main", color: "#2f6f82", bg: "#e8f2f4" },
+  { value: "partner_connected", label: "Doorgestuurd", group: "main", color: "#85663a", bg: "#f4ede2" },
+  { value: "purchase_process", label: "Gereserveerd", group: "main", color: "#8c6010", bg: "#fbefd2" },
+  { value: "completed", label: "Gekocht", group: "main", closed: true, color: "#2f7a55", bg: "#eaf4ee" },
   { value: "follow_up_later", label: "Later opvolgen", group: "side", color: "#97581a", bg: "#fbefe3" },
   { value: "unreachable", label: "Niet bereikbaar", group: "side", color: "#a0522d", bg: "#f8ece4" },
-  { value: "disqualified", label: "Niet gekwalificeerd", group: "side", closed: true, color: "#636d78", bg: "#f3f2ef" },
   { value: "stopped", label: "Gestopt", group: "side", closed: true, color: "#9b4a43", bg: "#f6eae8" },
 ];
 
+/** Fases uit de vorige versie → fase in de huidige, vereenvoudigde pipeline. */
+export const STAGE_ALIASES = {
+  appointment_completed: "appointment_scheduled",
+  qualified: "appointment_scheduled",
+  active_search: "partner_connected",
+  disqualified: "stopped",
+};
+
+export function resolveStage(value) {
+  return STAGE_ALIASES[value] || value;
+}
+
 export const CLOSED_STAGES = PIPELINE_STAGES.filter((s) => s.closed).map((s) => s.value);
-export const STAGES_REQUIRING_CLOSURE_REASON = ["stopped", "disqualified"];
+export const STAGES_REQUIRING_CLOSURE_REASON = ["stopped"];
 /** Fases waarin een lead altijd een volgende actie hoort te hebben. */
 export const STAGES_REQUIRING_NEXT_ACTION = [
   "new_lead",
   "contact_phase",
   "appointment_scheduled",
-  "appointment_completed",
-  "qualified",
   "partner_connected",
-  "active_search",
   "purchase_process",
   "follow_up_later",
 ];
 /** Vanaf deze fases verwachten we een ingevuld zoekprofiel. */
-export const STAGES_REQUIRING_SEARCH_PROFILE = [
-  "qualified",
-  "partner_connected",
-  "active_search",
-  "purchase_process",
-];
+export const STAGES_REQUIRING_SEARCH_PROFILE = ["partner_connected", "purchase_process"];
 
 export function isClosedStage(stage) {
   return CLOSED_STAGES.includes(stage);
@@ -80,8 +83,8 @@ export const NEXT_ACTION_TYPES = [
   { value: "call_back", label: "Terugbellen" },
   { value: "send_whatsapp", label: "WhatsApp sturen" },
   { value: "send_email", label: "E-mail sturen" },
-  { value: "schedule_appointment", label: "Kennismaking inplannen" },
-  { value: "conduct_appointment", label: "Kennismaking uitvoeren" },
+  { value: "schedule_appointment", label: "Gesprek inplannen" },
+  { value: "conduct_appointment", label: "Gesprek voeren" },
   { value: "complete_search_profile", label: "Zoekprofiel aanvullen" },
   { value: "select_partner", label: "Partner selecteren" },
   { value: "connect_partner", label: "Koppelen aan partner" },
@@ -109,7 +112,7 @@ export const ACTIVITY_TYPES = [
   { value: "phone_call", label: "Telefoongesprek", customerContact: true, contactMethod: "phone", icon: "phone" },
   { value: "whatsapp", label: "WhatsApp", customerContact: true, contactMethod: "whatsapp", icon: "chat" },
   { value: "email", label: "E-mail", customerContact: true, contactMethod: "email", icon: "mail" },
-  { value: "appointment", label: "Kennismaking", customerContact: true, contactMethod: "appointment", icon: "calendar" },
+  { value: "appointment", label: "Gesprek", customerContact: true, contactMethod: "appointment", icon: "calendar" },
   { value: "note", label: "Notitie", icon: "edit" },
   { value: "partner_contact", label: "Partnercontact", icon: "users" },
   { value: "document", label: "Document", icon: "file" },
@@ -146,7 +149,7 @@ export const CONTACT_METHODS = [
   { value: "phone", label: "Telefoon" },
   { value: "whatsapp", label: "WhatsApp" },
   { value: "email", label: "E-mail" },
-  { value: "appointment", label: "Kennismaking" },
+  { value: "appointment", label: "Gesprek" },
   { value: "video", label: "Videocall" },
   { value: "form", label: "Formulier" },
 ];

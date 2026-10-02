@@ -3,6 +3,7 @@
 
 import {
   PIPELINE_STAGES,
+  resolveStage,
   PURCHASE_INTENTS,
   PRIORITIES,
   REGIONS,
@@ -64,7 +65,7 @@ export function describeLeadChanges(before, after) {
     const wasClosed = isClosedStage(before.pipelineStage);
     const isClosed = isClosedStage(after.pipelineStage);
     out.push({
-      title: `Pipelinefase gewijzigd van ${labelOf(PIPELINE_STAGES, before.pipelineStage)} naar ${labelOf(PIPELINE_STAGES, after.pipelineStage)}`,
+      title: `Pipelinefase gewijzigd van ${labelOf(PIPELINE_STAGES, resolveStage(before.pipelineStage))} naar ${labelOf(PIPELINE_STAGES, resolveStage(after.pipelineStage))}`,
       metadata: { field: "pipelineStage", from: before.pipelineStage || null, to: after.pipelineStage },
     });
     if (!wasClosed && isClosed) {
@@ -117,13 +118,13 @@ export function describeLeadChanges(before, after) {
       // Echte kennismaking = klantcontact → telt mee voor lastContactAt
       out.push({
         type: "appointment",
-        title: "Kennismaking gehad",
+        title: "Gesprek gehad",
         description: after.appointmentDate ? `Datum: ${formatDate(after.appointmentDate)}${after.appointmentTime ? ` ${after.appointmentTime}` : ""}` : "",
         metadata: { event: "appointment_completed", appointmentType: after.appointmentType || null },
       });
     } else if (after.appointmentDate) {
       out.push({
-        title: `Kennismaking ${labelOf(APPOINTMENT_STATUSES, after.appointmentStatus || "scheduled").toLowerCase()}: ${formatDate(after.appointmentDate)}${after.appointmentTime ? ` ${after.appointmentTime}` : ""}`,
+        title: `Gesprek ${labelOf(APPOINTMENT_STATUSES, after.appointmentStatus || "scheduled").toLowerCase()}: ${formatDate(after.appointmentDate)}${after.appointmentTime ? ` ${after.appointmentTime}` : ""}`,
         metadata: { field: "appointment", status: after.appointmentStatus || null, date: after.appointmentDate },
       });
     }

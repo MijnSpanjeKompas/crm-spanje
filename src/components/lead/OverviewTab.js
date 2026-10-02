@@ -79,7 +79,7 @@ export function OverviewTab({ form, set, setMany, errors, users, lead, isNew, st
           value={form.leadSummary}
           onChange={(v) => set("leadSummary", v)}
           rows={4}
-          placeholder="Bijv.: Wil emigreren naar Torrevieja. Nederlandse woning moet nog verkocht worden. Staat open voor een kennismaking."
+          placeholder="Bijv.: Wil emigreren naar Torrevieja. Nederlandse woning moet nog verkocht worden. Staat open voor een gesprek."
         />
         <div style={{ marginTop: 12 }}>
           <TextAreaField label="Notities" value={form.notities} onChange={(v) => set("notities", v)} rows={4} hint="Losse gespreksnotities horen bij voorkeur als activiteit in de tijdlijn." />
@@ -98,7 +98,7 @@ export function OverviewTab({ form, set, setMany, errors, users, lead, isNew, st
             {lead.lastContactAt ? `${formatDateTime(lead.lastContactAt)}${lead.lastContactMethod ? ` · ${labelOf(CONTACT_METHODS, lead.lastContactMethod)}` : ""}` : "Nog geen contact"}
           </Row>
           <Row label="Laatste activiteit">{lead.lastActivityAt ? formatDateTime(lead.lastActivityAt) : "–"}</Row>
-          <Row label="Kennismaking">
+          <Row label="Gesprek">
             {lead.appointmentDate ? `${formatDate(lead.appointmentDate)} ${lead.appointmentTime || ""} · ${labelOf(APPOINTMENT_STATUSES, lead.appointmentStatus)}` : "–"}
           </Row>
           <Row label="Partners">

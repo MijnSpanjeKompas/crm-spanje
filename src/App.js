@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCrmAuth } from "./crm/useCrmAuth";
-import { subscribeLeads, subscribeUsers, subscribePartners, setPinned, archiveLead, updateLead } from "./crm/services";
+import { subscribeLeads, subscribeUsers, subscribePartners, setPinned, archiveLead, updateLead, deleteLeadPermanently } from "./crm/services";
 import { normalizeLead } from "./crm/normalize";
 import { validateLead, FIELD_TABS } from "./crm/validation";
 import { computeKpis, getTodayItems, getAttentionList } from "./crm/signals";
@@ -144,6 +144,18 @@ export function Crm({ user, onSignOut }) {
     } catch (e) {
       console.error(e);
       setNotice({ tone: "error", text: `Archiveren mislukt: ${e.message || "onbekende fout"}` });
+    }
+  }
+
+  async function handleDelete(lead) {
+    const name = lead.name || "deze lead";
+    if (!window.confirm(`${name} definitief verwijderen?\n\nDit verwijdert ook alle activiteiten, taken, partnerkoppelingen en bestanden. Dit kan niet ongedaan worden gemaakt.\n\nWil je de lead alleen uit beeld halen? Kies dan Archiveren.`)) return;
+    try {
+      await deleteLeadPermanently(lead);
+      setNotice({ tone: "ok", text: `${lead.name || "Lead"} is verwijderd.` });
+    } catch (e) {
+      console.error(e);
+      setNotice({ tone: "error", text: e?.code === "permission-denied" ? "Verwijderen mislukt: geen rechten." : `Verwijderen mislukt: ${e.message || "onbekende fout"}` });
     }
   }
 
@@ -323,11 +335,11 @@ export function Crm({ user, onSignOut }) {
             <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Pas de filters aan of klik op Reset om alles te tonen.</div>
           </div>
         ) : view === "tabel" ? (
-          <LeadTable leads={filtered} onOpen={(l) => openLead(l)} onArchive={handleArchive} onTogglePin={handleTogglePin} />
+          <LeadTable leads={filtered} onOpen={(l) => openLead(l)} onArchive={handleArchive} onDelete={handleDelete} onTogglePin={handleTogglePin} />
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(340px, 100%), 1fr))", gap: 16 }}>
             {filtered.map((lead) => (
-              <LeadCard key={lead.id} lead={lead} onOpen={(l) => openLead(l)} onArchive={handleArchive} onStageChange={handleStageChange} onTogglePin={handleTogglePin} />
+              <LeadCard key={lead.id} lead={lead} onOpen={(l) => openLead(l)} onArchive={handleArchive} onDelete={handleDelete} onStageChange={handleStageChange} onTogglePin={handleTogglePin} />
             ))}
           </div>
         )}

@@ -8,9 +8,9 @@ const KPI_CONFIG = [
   { key: "new", icon: "userPlus", hint: "Met status nieuwe lead", color: C.navy, bg: C.navySoft },
   { key: "today", icon: "bell", hint: "Acties en afspraken vandaag", color: C.goldText, bg: C.goldSoft },
   { key: "overdue", icon: "alertCircle", hint: "Datum is verstreken", color: C.danger, bg: C.dangerBg },
-  { key: "appointments", icon: "calendar", hint: "Kennismakingen ingepland", color: C.info, bg: C.infoBg },
+  { key: "appointments", icon: "calendar", hint: "Gesprekken ingepland", color: C.info, bg: C.infoBg },
   { key: "waiting_partner", icon: "users", hint: "Wacht op terugkoppeling", color: "#85663a", bg: "#f4ede2" },
-  { key: "active_search", icon: "search", hint: "Lopende zoektrajecten", color: C.success, bg: C.successBg },
+  { key: "active_search", icon: "search", hint: "Bij partner of gereserveerd", color: C.success, bg: C.successBg },
 ];
 
 function StatCard({ label, value, hint, icon, color, bg, active, onClick }) {
@@ -231,7 +231,7 @@ export function AttentionPanel({ list, onOpen, onShowAll }) {
           ) : null
         }
       >
-        Aandacht nodig
+        Verlopen acties
       </CardHead>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {visible.map(({ lead, signals }) => (
@@ -248,7 +248,7 @@ export function AttentionPanel({ list, onOpen, onShowAll }) {
             </span>
           </button>
         ))}
-        {!hasItems && <Empty>Alles is bijgewerkt. Geen signalen.</Empty>}
+        {!hasItems && <Empty>Geen verlopen acties. Alles is bij.</Empty>}
         {list.length > 6 && <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>+{list.length - 6} meer · klik op "Toon in lijst"</div>}
       </div>
     </div>

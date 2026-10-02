@@ -93,21 +93,20 @@ test("volledige leadflow", async () => {
   expect(lead.appointmentStatus).toBe("scheduled");
   expect(computeKpis([lead]).appointments).toBe(1);
 
-  // 5. Kennismaking gehad → telt als klantcontact
+  // 5. Gesprek gehad → telt als klantcontact; fase blijft "Gesprek gepland"
   const beforeContact = toMillis(lead.lastContactAt);
-  await updateLead(lead, { ...lead, appointmentStatus: "completed", pipelineStage: "appointment_completed", nextActionType: "complete_search_profile", nextActionDate: today }, LUKE);
+  await updateLead(lead, { ...lead, appointmentStatus: "completed", nextActionType: "complete_search_profile", nextActionDate: today }, LUKE);
   lead = read(id);
-  expect(lead.pipelineStage).toBe("appointment_completed");
+  expect(lead.pipelineStage).toBe("appointment_scheduled");
   expect(sub(id, "activities").some((a) => a.type === "appointment")).toBe(true);
   expect(toMillis(lead.lastContactAt)).toBeGreaterThanOrEqual(beforeContact);
   expect(lead.lastContactMethod).toBe("appointment");
 
-  // 6. Kwalificeren + zoekprofiel
-  await updateLead(lead, { ...lead, pipelineStage: "qualified", purchaseIntent: "concrete_plans", priority: "high", budgetMin: 250000, budgetMax: 350000, regions: ["costa_blanca_zuid"], places: ["Torrevieja", "Rojales"], propertyTypes: ["villa", "townhouse"], purchaseGoal: "emigration", purchaseTimeline: "3_to_6_months", financingType: "own_funds", currentHousingSituation: "house_needs_to_be_sold", requirements: ["private_pool"], nextActionType: "select_partner", nextActionDate: today }, LUKE);
+  // 6. Zoekprofiel aanvullen
+  await updateLead(lead, { ...lead, purchaseIntent: "concrete_plans", priority: "high", budgetMin: 250000, budgetMax: 350000, regions: ["costa_blanca_zuid"], places: ["Torrevieja", "Rojales"], propertyTypes: ["villa", "townhouse"], purchaseGoal: "emigration", purchaseTimeline: "3_to_6_months", financingType: "own_funds", currentHousingSituation: "house_needs_to_be_sold", requirements: ["private_pool"], nextActionType: "select_partner", nextActionDate: today }, LUKE);
   lead = read(id);
-  expect(lead.pipelineStage).toBe("qualified");
+  expect(lead.pipelineStage).toBe("appointment_scheduled");
   expect(lead.places).toEqual(["Torrevieja", "Rojales"]);
-  expect(getLeadSignals(lead).map((s) => s.key)).not.toContain("incomplete_profile");
   expect(titles(id).some((t) => /Koopintentie/.test(t))).toBe(true);
 
   // 7. Partner aanmaken + koppelen + fase + opvolging
@@ -120,7 +119,8 @@ test("volledige leadflow", async () => {
   expect(lead.partnerNames).toEqual(["Casa Sol Makelaars"]);
   expect(lead.partnerStatus).toBe("sent");
   expect(lead.partnerSummary).toMatchObject({ count: 1, waitingCount: 1 });
-  expect(getLeadSignals(lead).map((s) => s.key)).toContain("partner_follow_up_overdue");
+  // Partneropvolging geeft geen aparte melding meer; alleen de volgende actie telt.
+  expect(getLeadSignals(lead)).toEqual([]);
   expect(validateLead({ ...lead, pipelineStage: "partner_connected" }, { partnerCount: 1 }).warnings).toHaveLength(0);
   await updateLead(lead, { ...lead, pipelineStage: "partner_connected", nextActionType: "follow_up_partner", nextActionDate: addDaysISO(today, 7) }, LUKE);
   lead = read(id);
@@ -129,7 +129,6 @@ test("volledige leadflow", async () => {
   lead = read(id);
   expect(lead.partnerStatus).toBe("contacted");
   expect(sub(id, "partnerLinks")[0].lastFollowUpAt).toBeInstanceOf(Date);
-  expect(getLeadSignals(lead).map((s) => s.key)).not.toContain("partner_follow_up_overdue");
   expect(titles(id)).toContain("Partner opgevolgd: Casa Sol Makelaars");
 
   // 8. Bestanden: validatie + upload + hernoemen + verwijderen
@@ -163,7 +162,7 @@ test("volledige leadflow", async () => {
   lead = read(id);
   expect(lead.openTaskCount).toBe(2);
   expect(lead.nextTaskTitle).toBe("Financieringsbewijs opvragen");
-  expect(getLeadSignals(lead).map((s) => s.key)).toContain("overdue_task");
+  expect(getLeadSignals(lead).map((s) => s.key)).not.toContain("overdue_task");
   const task = sub(id, "tasks").find((t) => t.title === "Financieringsbewijs opvragen");
   await setTaskStatus(lead, task, "completed", INDY);
   lead = read(id);
@@ -198,7 +197,7 @@ test("volledige leadflow", async () => {
   // Er is onderweg niets verwijderd: alle activiteiten staan er nog
   expect(sub(id, "activities").length).toBeGreaterThan(15);
 
-  // 13. Partner ontkoppelen en definitief verwijderen (beheerder) ruimt alles op
+  // 13. Partner ontkoppelen en definitief verwijderen ruimt alles op
   await removePartnerLink(read(id), { id: link.id, ...sub(id, "partnerLinks")[0] }, LUKE);
   expect(read(id).partnerSummary.count).toBe(0);
   await deleteLeadPermanently(read(id));

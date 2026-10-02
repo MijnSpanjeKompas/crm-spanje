@@ -269,7 +269,7 @@ export function PartnersTab({ lead, user, partners, links, onManagePartners }) {
           </button>
         </div>
         <div style={{ fontSize: 11.5, color: C.textSubtle, marginTop: 8 }}>
-          Koppelen verandert de pipelinefase niet automatisch. Zet de lead zelf op "Gekoppeld aan partner" als dat klopt.
+          Koppelen verandert de pipelinefase niet automatisch. Zet de lead zelf op "Doorgestuurd" als dat klopt.
         </div>
       </Panel>
     </div>
