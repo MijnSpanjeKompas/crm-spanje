@@ -22,6 +22,23 @@ import {
 } from "./constants";
 import { formatDate } from "./dates";
 
+function euro(n) {
+  return n === null || n === undefined || n === "" ? "–" : `€ ${Number(n).toLocaleString("nl-NL")}`;
+}
+
+/** Korte omschrijving van een verkoop, voor de tijdlijn. */
+export function saleSummary(lead) {
+  return [
+    lead.saleProperty ? `Woning: ${lead.saleProperty}` : "",
+    `Aankoopprijs: ${euro(lead.salePrice)}`,
+    `Commissie: ${euro(lead.saleCommission)}`,
+    lead.saleDate ? `Datum: ${formatDate(lead.saleDate)}` : "",
+    lead.saleNotes ? `Notitie: ${lead.saleNotes}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 function same(a, b) {
   if (Array.isArray(a) || Array.isArray(b)) {
     const x = [...(a || [])].sort();
@@ -37,8 +54,6 @@ function same(a, b) {
 export function changedKeys(before, after) {
   return Object.keys(after).filter((k) => !same(before[k], after[k]));
 }
-
-const euro = (n) => (n === null || n === undefined || n === "" ? "–" : `€ ${Number(n).toLocaleString("nl-NL")}`);
 
 const PROFILE_FIELDS = [
   { key: "budgetMin", label: "Budget min.", fmt: euro },
@@ -68,7 +83,7 @@ export function describeLeadChanges(before, after) {
       title: `Pipelinefase gewijzigd van ${labelOf(PIPELINE_STAGES, resolveStage(before.pipelineStage))} naar ${labelOf(PIPELINE_STAGES, resolveStage(after.pipelineStage))}`,
       metadata: { field: "pipelineStage", from: before.pipelineStage || null, to: after.pipelineStage },
     });
-    if (!wasClosed && isClosed) {
+    if (!wasClosed && isClosed && after.pipelineStage !== "completed") {
       out.push({
         title: "Lead gesloten",
         description: after.closureReason
@@ -128,6 +143,16 @@ export function describeLeadChanges(before, after) {
         metadata: { field: "appointment", status: after.appointmentStatus || null, date: after.appointmentDate },
       });
     }
+  }
+
+  // Verkoopgegevens later aangepast (de verkoop zelf logt markLeadSold).
+  const SALE_KEYS = ["saleDate", "salePrice", "saleProperty", "saleCommission", "saleNotes"];
+  if (before.pipelineStage === "completed" && after.pipelineStage === "completed" && SALE_KEYS.some(field)) {
+    out.push({
+      title: "Verkoopgegevens bijgewerkt",
+      description: saleSummary(after),
+      metadata: { event: "sale_updated", fields: SALE_KEYS.filter(field) },
+    });
   }
 
   const profileChanges = PROFILE_FIELDS.filter((f) => field(f.key));

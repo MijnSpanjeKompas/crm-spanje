@@ -139,3 +139,25 @@ test("verwijderen via kaart: na bevestiging is de lead echt weg, zonder bevestig
   });
   await waitFor(() => expect(["ewoud", "heerschap"].filter((id) => fake.__getDoc(`leads/${id}`))).toHaveLength(1));
 });
+
+test("Verkocht-knop: verkoop vastleggen en terugzien onder Commissies", async () => {
+  fake.__setDoc("leads/devos", { schemaVersion: 2, name: "Jan de Vos", email: "jan@devos.nl", pipelineStage: "purchase_process", nextActionType: "follow_up_lead", nextActionDate: "2099-01-01" });
+  render(<App />);
+  await cardTitle("Jan de Vos");
+  fireEvent.click(screen.getByRole("button", { name: /^Verkocht$/ }));
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.change(within(dialog).getByPlaceholderText(/Calle del Mar/), { target: { value: "Calle del Mar 12" } });
+  fireEvent.change(within(dialog).getByPlaceholderText(/245000/), { target: { value: "250000" } });
+  const commission = within(dialog).getAllByRole("spinbutton")[1];
+  fireEvent.change(commission, { target: { value: "7500" } });
+  await act(async () => {
+    fireEvent.click(within(dialog).getByRole("button", { name: /Verkoop opslaan/ }));
+  });
+  await waitFor(() => expect(fake.__getDoc("leads/devos").pipelineStage).toBe("completed"));
+  expect(fake.__getDoc("leads/devos")).toMatchObject({ salePrice: 250000, saleCommission: 7500, saleProperty: "Calle del Mar 12" });
+
+  fireEvent.click(screen.getByRole("button", { name: /Commissies/ }));
+  const overview = await screen.findByRole("dialog");
+  expect(within(overview).getByText("Jan de Vos")).toBeInTheDocument();
+  expect(within(overview).getAllByText("€ 7.500").length).toBeGreaterThan(0);
+});

@@ -25,7 +25,8 @@ export const PIPELINE_STAGES = [
   { value: "appointment_scheduled", label: "Gesprek gepland", group: "main", color: "#2f6f82", bg: "#e8f2f4" },
   { value: "partner_connected", label: "Doorgestuurd", group: "main", color: "#85663a", bg: "#f4ede2" },
   { value: "purchase_process", label: "Gereserveerd", group: "main", color: "#8c6010", bg: "#fbefd2" },
-  { value: "completed", label: "Gekocht", group: "main", closed: true, color: "#2f7a55", bg: "#eaf4ee" },
+  // "Verkocht" zet je alleen via de knop Verkocht (met aankoopprijs, woning en commissie).
+  { value: "completed", label: "Verkocht", group: "main", closed: true, viaSaleOnly: true, color: "#2f7a55", bg: "#eaf4ee" },
   { value: "follow_up_later", label: "Later opvolgen", group: "side", color: "#97581a", bg: "#fbefe3" },
   { value: "unreachable", label: "Niet bereikbaar", group: "side", color: "#a0522d", bg: "#f8ece4" },
   { value: "stopped", label: "Gestopt", group: "side", closed: true, color: "#9b4a43", bg: "#f6eae8" },
@@ -41,6 +42,17 @@ export const STAGE_ALIASES = {
 
 export function resolveStage(value) {
   return STAGE_ALIASES[value] || value;
+}
+
+export const SOLD_STAGE = "completed";
+
+export function isSold(lead) {
+  return lead?.pipelineStage === SOLD_STAGE;
+}
+
+/** Fases die je handmatig in een dropdown mag kiezen. "Verkocht" alleen tonen als de lead al verkocht is. */
+export function selectableStages(current) {
+  return PIPELINE_STAGES.filter((s) => !s.viaSaleOnly || s.value === current);
 }
 
 export const CLOSED_STAGES = PIPELINE_STAGES.filter((s) => s.closed).map((s) => s.value);

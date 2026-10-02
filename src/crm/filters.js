@@ -71,6 +71,7 @@ function matchesScope(lead, scope, stageFilterActive) {
   if (lead.archived) return false;
   if (stageFilterActive) return true;
   if (scope === "closed") return isClosedStage(lead.pipelineStage);
+  if (scope === "sold") return lead.pipelineStage === "completed";
   return !isClosedStage(lead.pipelineStage); // "open"
 }
 

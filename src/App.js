@@ -17,6 +17,8 @@ import { LeadFilters } from "./components/LeadFilters";
 import { LeadCard, LeadTable } from "./components/LeadList";
 import { LeadDetailModal } from "./components/lead/LeadDetailModal";
 import { PartnersModal } from "./components/PartnersModal";
+import { SaleDialog } from "./components/SaleDialog";
+import { CommissionsModal } from "./components/CommissionsModal";
 
 function scrollToList() {
   const el = document.getElementById("lead-list");
@@ -47,6 +49,8 @@ export function Crm({ user, onSignOut }) {
   const [view, setView] = useState("kaarten");
   const [modal, setModal] = useState(null);
   const [partnersOpen, setPartnersOpen] = useState(false);
+  const [commissionsOpen, setCommissionsOpen] = useState(false);
+  const [saleLeadId, setSaleLeadId] = useState(null);
   const [notice, setNotice] = useState(null);
   const [now, setNow] = useState(() => new Date());
 
@@ -145,6 +149,12 @@ export function Crm({ user, onSignOut }) {
       console.error(e);
       setNotice({ tone: "error", text: `Archiveren mislukt: ${e.message || "onbekende fout"}` });
     }
+  }
+
+  const saleLead = saleLeadId ? leads.find((l) => l.id === saleLeadId) : null;
+
+  function handleSold(lead) {
+    setSaleLeadId(lead.id);
   }
 
   async function handleDelete(lead) {
@@ -272,6 +282,9 @@ export function Crm({ user, onSignOut }) {
             <div style={{ fontSize: 14, color: C.textMuted, marginTop: 6 }}>Beheer en volg alle potentiële kopers.</div>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button type="button" onClick={() => setCommissionsOpen(true)} style={{ ...btnStyle("primary"), padding: "9px 15px", minHeight: 40, fontSize: 13 }}>
+              <Icon name="chart" size={15} /> Commissies
+            </button>
             <button type="button" onClick={() => setPartnersOpen(true)} style={{ ...btnStyle("primary"), padding: "9px 15px", minHeight: 40, fontSize: 13 }}>
               <Icon name="users" size={15} /> Partners
             </button>
@@ -335,11 +348,11 @@ export function Crm({ user, onSignOut }) {
             <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Pas de filters aan of klik op Reset om alles te tonen.</div>
           </div>
         ) : view === "tabel" ? (
-          <LeadTable leads={filtered} onOpen={(l) => openLead(l)} onArchive={handleArchive} onDelete={handleDelete} onTogglePin={handleTogglePin} />
+          <LeadTable leads={filtered} onOpen={(l) => openLead(l)} onArchive={handleArchive} onDelete={handleDelete} onSold={handleSold} onTogglePin={handleTogglePin} />
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(340px, 100%), 1fr))", gap: 16 }}>
             {filtered.map((lead) => (
-              <LeadCard key={lead.id} lead={lead} onOpen={(l) => openLead(l)} onArchive={handleArchive} onDelete={handleDelete} onStageChange={handleStageChange} onTogglePin={handleTogglePin} />
+              <LeadCard key={lead.id} lead={lead} onOpen={(l) => openLead(l)} onArchive={handleArchive} onDelete={handleDelete} onSold={handleSold} onStageChange={handleStageChange} onTogglePin={handleTogglePin} />
             ))}
           </div>
         )}
@@ -361,6 +374,30 @@ export function Crm({ user, onSignOut }) {
           onCreated={(id) => setModal({ key: `${id}-created`, leadId: id, isNew: false, initialTab: "activities", initialMessage: { tone: "ok", text: "Lead aangemaakt. Leg hier direct het eerste contact vast." } })}
           onOpenLead={(l) => openLead(l)}
           onManagePartners={() => setPartnersOpen(true)}
+          onSold={handleSold}
+        />
+      )}
+
+      {commissionsOpen && (
+        <CommissionsModal
+          leads={leads}
+          onClose={() => setCommissionsOpen(false)}
+          onOpenLead={(l) => {
+            setCommissionsOpen(false);
+            openLead(l);
+          }}
+        />
+      )}
+
+      {saleLead && (
+        <SaleDialog
+          key={saleLead.id}
+          lead={saleLead}
+          user={user}
+          onClose={() => setSaleLeadId(null)}
+          onSaved={(l, wasEdit) =>
+            setNotice({ tone: "ok", text: wasEdit ? `Verkoopgegevens van ${l.name || "de lead"} bijgewerkt.` : `${l.name || "Lead"} staat op Verkocht. De commissie staat onder Commissies.` })
+          }
         />
       )}
 

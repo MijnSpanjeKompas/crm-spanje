@@ -55,10 +55,11 @@ export const FORM_FIELDS = [
   "tags",
   "closureReason", "closureNotes",
   "pinned",
+  "saleDate", "salePrice", "saleProperty", "saleCommission", "saleNotes",
 ];
 
 const ARRAY_FIELDS = ["regions", "places", "propertyTypes", "requirements", "tags"];
-const NUMBER_FIELDS = ["budgetMin", "budgetMax", "bedroomsMin", "bathroomsMin", "availableEquity"];
+const NUMBER_FIELDS = ["budgetMin", "budgetMax", "bedroomsMin", "bathroomsMin", "availableEquity", "salePrice", "saleCommission"];
 
 // ─── KLEINE HULPEN ───────────────────────────────────────────────────────────
 function isValidKey(options, value) {
@@ -384,6 +385,12 @@ export function emptyLead(user) {
     closureNotes: "",
     pinned: false,
     archived: false,
+    // verkoop (ingevuld via de knop Verkocht)
+    saleDate: "",
+    salePrice: null,
+    saleProperty: "",
+    saleCommission: null,
+    saleNotes: "",
     // gedenormaliseerd
     lastContactAt: null,
     lastContactMethod: "",
@@ -606,6 +613,11 @@ export function normalizeLead(raw, ctx = {}) {
     // Oude fase "Niet gekwalificeerd" is opgegaan in "Gestopt" met die reden.
     closureReason: pickKey(CLOSURE_REASONS, raw.closureReason, pick("pipelineStage") === "disqualified" ? "not_qualified" : ""),
     closureNotes: str(raw.closureNotes),
+    saleDate: str(raw.saleDate),
+    salePrice: numOrNull(raw.salePrice),
+    saleProperty: str(raw.saleProperty),
+    saleCommission: numOrNull(raw.saleCommission),
+    saleNotes: str(raw.saleNotes),
     pinned: Boolean(raw.pinned),
     archived: Boolean(raw.archived),
     lastContactAt: raw.lastContactAt || derived.lastContactAt || null,

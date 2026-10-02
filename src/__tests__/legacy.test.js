@@ -305,7 +305,8 @@ describe("signalen, KPI's en filters", () => {
     expect(k.today).toBe(2);
     expect(k.overdue).toBe(1);
     expect(k.appointments).toBe(1);
-    expect(k.active_search).toBe(1);
+    expect(k.reserved).toBe(1);
+    expect(k.forwarded).toBe(0);
     expect(getTodayItems(leads, now).length).toBe(2);
   });
   test("filters: scope, mijn leads, zoeken op plaats/partner", () => {

@@ -67,6 +67,7 @@ export function LeadFilters({ filters, setFilters, users, partners, places, curr
 
         <select value={filters.scope} onChange={(e) => set("scope")(e.target.value)} style={selectStyle} aria-label="Welke leads">
           <option value="open">Open leads</option>
+          <option value="sold">Verkocht</option>
           <option value="closed">Gesloten leads</option>
           <option value="archived">Archief</option>
           <option value="all">Alles (incl. archief)</option>

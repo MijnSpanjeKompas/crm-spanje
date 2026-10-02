@@ -8,10 +8,13 @@ import {
   CONTACT_METHODS,
   labelOf,
   nextActionText,
+  selectableStages,
+  isSold,
 } from "../crm/constants";
+import { SoldButton } from "./SaleDialog";
 import { getNextActionInfo, getLeadSignals, SEVERITY_STYLE } from "../crm/signals";
 import { formatDate, formatRelative } from "../crm/dates";
-import { Icon, Badge, OptionBadge, btnStyle, selectStyle, tdStyle, formatBudget, C } from "./ui";
+import { Icon, Badge, OptionBadge, btnStyle, selectStyle, tdStyle, formatBudget, formatEuro, C } from "./ui";
 
 function whereText(lead) {
   const regions = (lead.regions || []).filter((r) => r !== "unknown").map((r) => labelOf(REGIONS, r));
@@ -97,7 +100,7 @@ function Fact({ label, children }) {
 }
 
 // ─── KAART ───────────────────────────────────────────────────────────────────
-export function LeadCard({ lead, onOpen, onArchive, onDelete, onStageChange, onTogglePin }) {
+export function LeadCard({ lead, onOpen, onArchive, onDelete, onSold, onStageChange, onTogglePin }) {
   const na = nextActionLine(lead);
   const signals = getLeadSignals(lead);
   const budget = formatBudget(lead);
@@ -166,6 +169,34 @@ export function LeadCard({ lead, onOpen, onArchive, onDelete, onStageChange, onT
         </div>
       )}
 
+      {isSold(lead) ? (
+        <div
+          style={{
+            background: C.successBg,
+            border: `1px solid ${C.successBorder}`,
+            borderRadius: 12,
+            padding: "10px 12px",
+            display: "flex",
+            gap: 10,
+            alignItems: "flex-start",
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{ width: 28, height: 28, borderRadius: 8, background: C.surface, color: C.success, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+          >
+            <Icon name="checkCircle" size={15} />
+          </span>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 11.5, color: C.success, fontWeight: 600 }}>Verkocht{lead.saleDate ? ` · ${formatDate(lead.saleDate)}` : ""}</div>
+            <div style={{ fontSize: 13, color: C.text, fontWeight: 600, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lead.saleProperty || "Woning onbekend"}</div>
+            <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 1 }}>
+              {formatEuro(lead.salePrice) || "–"} · Commissie{" "}
+              <span style={{ color: lead.saleCommission > 0 ? C.text : C.goldText, fontWeight: 600 }}>{lead.saleCommission > 0 ? formatEuro(lead.saleCommission) : "nog invullen"}</span>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div
         style={{
           background: C.surfaceSoft,
@@ -213,6 +244,9 @@ export function LeadCard({ lead, onOpen, onArchive, onDelete, onStageChange, onT
           )}
         </div>
       </div>
+      )}
+
+      {lead.pipelineStage === "purchase_process" && !lead.archived && onSold && <SoldButton block onClick={() => onSold(lead)} />}
 
       <div
         style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", paddingTop: 12, borderTop: `1px solid ${C.borderSoft}` }}
@@ -224,7 +258,7 @@ export function LeadCard({ lead, onOpen, onArchive, onDelete, onStageChange, onT
           style={{ ...selectStyle, height: 34, padding: "5px 10px", fontSize: 12.5, maxWidth: 200, minWidth: 0, background: C.surfaceSoft }}
           aria-label="Pipelinefase wijzigen"
         >
-          {PIPELINE_STAGES.map((s) => (
+          {selectableStages(lead.pipelineStage).map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
             </option>
@@ -264,7 +298,7 @@ const thStyle = {
   background: C.surfaceSoft,
 };
 
-export function LeadTable({ leads, onOpen, onArchive, onDelete, onTogglePin }) {
+export function LeadTable({ leads, onOpen, onArchive, onDelete, onSold, onTogglePin }) {
   const headers = ["", "Naam", "Fase", "Koopintentie", "Prio", "Regio / plaats", "Budget", "Verantwoordelijke", "Volgende actie", "Laatste contact", ""];
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "auto", boxShadow: C.shadowSm }}>
@@ -309,7 +343,14 @@ export function LeadTable({ leads, onOpen, onArchive, onDelete, onTogglePin }) {
                 <td style={{ ...cell, whiteSpace: "nowrap" }}>{formatBudget(lead) || "–"}</td>
                 <td style={{ ...cell, whiteSpace: "nowrap" }}>{lead.ownerName || "–"}</td>
                 <td style={{ ...cell, minWidth: 210, maxWidth: 280 }}>
-                  {na.none ? (
+                  {isSold(lead) ? (
+                    <>
+                      <span style={{ display: "block", color: C.success, fontWeight: 600 }}>Verkocht · {formatEuro(lead.salePrice) || "–"}</span>
+                      <span style={{ display: "block", fontSize: 12, color: C.textMuted, marginTop: 1 }}>
+                        Commissie {lead.saleCommission > 0 ? formatEuro(lead.saleCommission) : "nog invullen"}
+                      </span>
+                    </>
+                  ) : na.none ? (
                     <span style={{ color: C.textSubtle }}>Geen actie gepland</span>
                   ) : (
                     <>
@@ -325,6 +366,11 @@ export function LeadTable({ leads, onOpen, onArchive, onDelete, onTogglePin }) {
                 <td style={{ ...cell, minWidth: 140 }}>{lastContactText(lead)}</td>
                 <td style={cell}>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                    {lead.pipelineStage === "purchase_process" && !lead.archived && onSold && (
+                      <button type="button" onClick={() => onSold(lead)} style={btnStyle("gold", true)}>
+                        Verkocht
+                      </button>
+                    )}
                     <button type="button" onClick={() => onOpen(lead)} style={btnStyle("primary")}>
                       Open
                     </button>

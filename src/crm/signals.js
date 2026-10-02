@@ -127,13 +127,13 @@ export const QUICK_FILTERS = {
     label: "Gesprekken gepland",
     test: (l, now) => isOpenLead(l) && l.appointmentStatus === "scheduled" && l.appointmentDate && diffInDays(l.appointmentDate, now) >= 0,
   },
-  waiting_partner: {
-    label: "Wacht op partner",
-    test: (l) => isOpenLead(l) && (l.partnerSummary?.waitingCount || 0) > 0,
+  forwarded: {
+    label: "Doorgestuurd",
+    test: (l) => isOpenLead(l) && l.pipelineStage === "partner_connected",
   },
-  active_search: {
-    label: "Doorgestuurd & gereserveerd",
-    test: (l) => isOpenLead(l) && ["partner_connected", "purchase_process"].includes(l.pipelineStage),
+  reserved: {
+    label: "Gereserveerd",
+    test: (l) => isOpenLead(l) && l.pipelineStage === "purchase_process",
   },
   attention: {
     label: "Verlopen acties",

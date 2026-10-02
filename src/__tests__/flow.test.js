@@ -21,8 +21,11 @@ import {
   deleteLeadPermanently,
   setPinned,
   validateFile,
+  markLeadSold,
 } from "../crm/services";
 import { normalizeLead, emptyLead } from "../crm/normalize";
+import { selectableStages } from "../crm/constants";
+import { applyFilters, DEFAULT_FILTERS } from "../crm/filters";
 import { validateLead } from "../crm/validation";
 import { getLeadSignals, computeKpis } from "../crm/signals";
 import { todayISO, addDaysISO, toMillis } from "../crm/dates";
@@ -268,4 +271,33 @@ test("oude lead: opslaan breidt uit naar nieuw schema zonder oude velden te verw
   expect(again._isLegacy).toBe(false);
   expect(again.tags).toEqual(["VIP"]);
   expect(again.nextActionType).toBe("connect_partner");
+});
+
+test("verkoop: Verkocht-knop legt prijs, woning en commissie vast", async () => {
+  const today = todayISO();
+  const id = await createLead({ ...emptyLead(LUKE), name: "Jan de Vos", email: "jan@devos.nl", pipelineStage: "purchase_process" }, LUKE);
+  let lead = read(id);
+
+  // "Verkocht" staat niet in de gewone fase-dropdown, wel als de lead al verkocht is
+  expect(selectableStages(lead.pipelineStage).map((s) => s.value)).not.toContain("completed");
+
+  await markLeadSold(lead, { saleDate: today, salePrice: 245000, saleProperty: "Calle del Mar 12, Torrevieja", saleCommission: 7350, saleNotes: "" }, LUKE);
+  lead = read(id);
+  const raw = fake.__getDoc(`leads/${id}`);
+  expect(lead.pipelineStage).toBe("completed");
+  expect(raw).toMatchObject({ salePrice: 245000, saleCommission: 7350, saleProperty: "Calle del Mar 12, Torrevieja", saleDate: today, nextActionType: "none" });
+  expect(raw.closedAt).toBeInstanceOf(Date);
+  expect(titles(id)).toContain("Verkocht: Calle del Mar 12, Torrevieja");
+  expect(titles(id)).not.toContain("Lead gesloten");
+  expect(getLeadSignals(lead)).toEqual([]);
+  expect(selectableStages(lead.pipelineStage).map((s) => s.value)).toContain("completed");
+
+  // Filter "Verkocht" toont hem, "Open leads" niet
+  expect(applyFilters([lead], { ...DEFAULT_FILTERS, scope: "sold" }, {})).toHaveLength(1);
+  expect(applyFilters([lead], DEFAULT_FILTERS, {})).toHaveLength(0);
+
+  // Commissie later aanpassen wordt gelogd
+  await markLeadSold(lead, { saleDate: today, salePrice: 245000, saleProperty: "Calle del Mar 12, Torrevieja", saleCommission: 8000, saleNotes: "" }, LUKE);
+  expect(fake.__getDoc(`leads/${id}`).saleCommission).toBe(8000);
+  expect(titles(id)).toContain("Verkoopgegevens bijgewerkt");
 });

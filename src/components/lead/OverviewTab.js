@@ -1,5 +1,5 @@
 import {
-  PIPELINE_STAGES,
+  selectableStages,
   PURCHASE_INTENTS,
   PRIORITIES,
   CLOSURE_REASONS,
@@ -10,6 +10,7 @@ import {
   isClosedStage,
   labelOf,
   nextActionText,
+  hasNextAction,
 } from "../../crm/constants";
 import { getNextActionInfo } from "../../crm/signals";
 import { formatDate, formatDateTime } from "../../crm/dates";
@@ -26,7 +27,8 @@ function Row({ label, children }) {
 
 export function OverviewTab({ form, set, setMany, errors, users, lead, isNew, stats, onGoTab }) {
   const needsReason = STAGES_REQUIRING_CLOSURE_REASON.includes(form.pipelineStage);
-  const showClosure = needsReason || isClosedStage(form.pipelineStage) || form.closureReason;
+  // Bij "Verkocht" is geen afsluitreden nodig.
+  const showClosure = form.pipelineStage !== "completed" && (needsReason || isClosedStage(form.pipelineStage) || form.closureReason);
   const na = getNextActionInfo(form);
 
   return (
@@ -44,7 +46,7 @@ export function OverviewTab({ form, set, setMany, errors, users, lead, isNew, st
 
       <Panel title="Status en kwalificatie">
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <SelectField label="Pipelinefase" value={form.pipelineStage} onChange={(v) => set("pipelineStage", v)} options={PIPELINE_STAGES} allowEmpty={false} />
+          <SelectField label="Pipelinefase" value={form.pipelineStage} onChange={(v) => set("pipelineStage", v)} options={selectableStages(lead?.pipelineStage || form.pipelineStage)} allowEmpty={false} />
           <UserSelectField
             label="Verantwoordelijke"
             value={form.ownerId}
@@ -91,7 +93,7 @@ export function OverviewTab({ form, set, setMany, errors, users, lead, isNew, st
           <Row label="Volgende actie">
             <span style={{ color: na.color, fontWeight: 600 }}>
               {nextActionText(form)}
-              {form.nextActionDate ? ` · ${formatDate(form.nextActionDate)}` : ""}
+              {hasNextAction(form) && form.nextActionDate ? ` · ${formatDate(form.nextActionDate)}` : ""}
             </span>
           </Row>
           <Row label="Laatste contact">

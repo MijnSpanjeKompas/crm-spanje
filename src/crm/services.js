@@ -32,9 +32,10 @@ import {
   isCustomerContactType,
   isSuccessfulContact,
   SCHEMA_VERSION,
+  SOLD_STAGE,
 } from "./constants";
 import { buildLeadPayload, buildMigrationFields } from "./normalize";
-import { changedKeys, describeLeadChanges } from "./changes";
+import { changedKeys, describeLeadChanges, saleSummary } from "./changes";
 import { toDate, toMillis } from "./dates";
 
 const SUBCOLLECTIONS = ["activities", "files", "partnerLinks", "tasks"];
@@ -254,6 +255,28 @@ export async function updateLead(before, after, user, opts = {}) {
   );
   await batch.commit();
   return { changed: true, activities: activities.length };
+}
+
+/**
+ * Lead als verkocht vastleggen (of de verkoopgegevens aanpassen).
+ * Zet de fase op "Verkocht", haalt de volgende actie weg en logt de verkoop.
+ * @param {Object} lead
+ * @param {{saleDate:string, salePrice:number, saleProperty:string, saleCommission:number|null, saleNotes?:string}} sale
+ */
+export async function markLeadSold(lead, sale, user) {
+  const after = {
+    ...lead,
+    ...sale,
+    pipelineStage: SOLD_STAGE,
+    nextActionType: "none",
+    nextActionDate: "",
+    nextActionLabel: "",
+  };
+  const firstTime = lead.pipelineStage !== SOLD_STAGE;
+  const extraActivities = firstTime
+    ? [{ type: "system", title: `Verkocht${sale.saleProperty ? `: ${sale.saleProperty}` : ""}`, description: saleSummary(after), metadata: { event: "sold" } }]
+    : [];
+  return updateLead(lead, after, user, { extraActivities });
 }
 
 /** Pinnen is geen inhoudelijke wijziging: geen activiteit, geen validatie. */

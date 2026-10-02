@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { PIPELINE_STAGES, PURCHASE_INTENTS, PRIORITIES } from "../../crm/constants";
+import { PIPELINE_STAGES, PURCHASE_INTENTS, PRIORITIES, isSold } from "../../crm/constants";
+import { formatDate } from "../../crm/dates";
+import { SoldButton } from "../SaleDialog";
 import { emptyLead, findDuplicateLeads } from "../../crm/normalize";
 import { validateLead, FIELD_TABS } from "../../crm/validation";
 import { getLeadSignals, SEVERITY_STYLE } from "../../crm/signals";
 import { createLead, updateLead, setPinned, subscribeLeadSub } from "../../crm/services";
-import { Modal, Tabs, Icon, OptionBadge, Badge, Notice, btnStyle, C, CloseButton, MODAL_PAD_X, MODAL_PAD_Y } from "../ui";
+import { Modal, Tabs, Icon, OptionBadge, Badge, Notice, btnStyle, linkBtnStyle, formatEuro, C, CloseButton, MODAL_PAD_X, MODAL_PAD_Y } from "../ui";
 import { OverviewTab } from "./OverviewTab";
 import { ProfileTab } from "./ProfileTab";
 import { FollowUpTab } from "./FollowUpTab";
@@ -57,6 +59,7 @@ export function LeadDetailModal({
   onCreated,
   onOpenLead,
   onManagePartners,
+  onSold,
 }) {
   const [newBase] = useState(() => emptyLead(user));
   const base = isNew ? newBase : lead;
@@ -74,6 +77,20 @@ export function LeadDetailModal({
   const tasks = useLeadSub(leadId, "tasks");
 
   const form = useMemo(() => ({ ...base, ...edits }), [base, edits]);
+
+  // Na "Verkocht" (eigen dialoog) mogen oude formulierwijzigingen aan fase,
+  // volgende actie of verkoopvelden de nieuwe waarden niet overschrijven.
+  const baseStage = base?.pipelineStage;
+  useEffect(() => {
+    if (isNew || baseStage !== "completed") return;
+    setEdits((e) => {
+      const keys = ["pipelineStage", "nextActionType", "nextActionDate", "nextActionLabel", "saleDate", "salePrice", "saleProperty", "saleCommission", "saleNotes"];
+      if (!keys.some((k) => k in e)) return e;
+      const next = { ...e };
+      keys.forEach((k) => delete next[k]);
+      return next;
+    });
+  }, [baseStage, isNew, base?.salePrice, base?.saleCommission, base?.saleProperty, base?.saleDate, base?.saleNotes]);
   const dirty = Object.keys(edits).some((k) => !same(edits[k], base?.[k]));
 
   const set = (key, value) => {
@@ -158,6 +175,7 @@ export function LeadDetailModal({
   }
 
   const signals = isNew ? [] : getLeadSignals(base);
+  const sold = !isNew && isSold(base);
   const lockedMsg = "Sla de lead eerst op. Daarna kun je hier activiteiten, partners en bestanden toevoegen.";
   const tabs = [
     { key: "overview", label: "Overzicht", alert: ["name", "email", "phone", "closureReason", "closureNotes"].some((k) => errors[k]) },
@@ -217,8 +235,51 @@ export function LeadDetailModal({
               </div>
             )}
           </div>
-          <CloseButton onClick={requestClose} />
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
+            {!isNew && !sold && !base.archived && onSold && <SoldButton size="lg" onClick={() => onSold(base)} />}
+            <CloseButton onClick={requestClose} />
+          </div>
         </div>
+
+        {sold && (
+          <div
+            style={{
+              background: C.successBg,
+              border: `1px solid ${C.successBorder}`,
+              borderRadius: 14,
+              padding: "12px 16px",
+              display: "flex",
+              gap: 14,
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <span style={{ color: C.success, display: "flex" }}>
+              <Icon name="checkCircle" size={20} />
+            </span>
+            <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: C.success, fontWeight: 600 }}>Verkocht{base.saleDate ? ` op ${formatDate(base.saleDate)}` : ""}</div>
+              <div style={{ fontSize: 14, color: C.text, fontWeight: 600, marginTop: 1 }}>{base.saleProperty || "Woning onbekend"}</div>
+            </div>
+            <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: 11.5, color: C.textMuted }}>Aankoopprijs</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{formatEuro(base.salePrice) || "–"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5, color: C.textMuted }}>Commissie</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: base.saleCommission > 0 ? C.text : C.goldText }}>
+                  {base.saleCommission > 0 ? formatEuro(base.saleCommission) : "Nog invullen"}
+                </div>
+              </div>
+            </div>
+            {onSold && (
+              <button type="button" onClick={() => onSold(base)} className="msk-link" style={{ ...linkBtnStyle, fontSize: 12.5 }}>
+                Aanpassen
+              </button>
+            )}
+          </div>
+        )}
 
         {signals.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>

@@ -9,8 +9,8 @@ const KPI_CONFIG = [
   { key: "today", icon: "bell", hint: "Acties en afspraken vandaag", color: C.goldText, bg: C.goldSoft },
   { key: "overdue", icon: "alertCircle", hint: "Datum is verstreken", color: C.danger, bg: C.dangerBg },
   { key: "appointments", icon: "calendar", hint: "Gesprekken ingepland", color: C.info, bg: C.infoBg },
-  { key: "waiting_partner", icon: "users", hint: "Wacht op terugkoppeling", color: "#85663a", bg: "#f4ede2" },
-  { key: "active_search", icon: "search", hint: "Bij partner of gereserveerd", color: C.success, bg: C.successBg },
+  { key: "forwarded", icon: "users", hint: "Bij een partner", color: "#85663a", bg: "#f4ede2" },
+  { key: "reserved", icon: "home", hint: "Bod gedaan, nog niet verkocht", color: C.goldText, bg: C.goldSoft },
 ];
 
 function StatCard({ label, value, hint, icon, color, bg, active, onClick }) {
