@@ -16,6 +16,8 @@ import { DEFAULT_FILTERS, countActiveFilters } from "../crm/filters";
 import { QUICK_FILTERS } from "../crm/signals";
 import { Icon, selectStyle, btnStyle, Badge, C, cardStyle, linkBtnStyle } from "./ui";
 
+const REACHED_LABELS = { contact: "contact", meeting: "gesprek", qualified: "gekwalificeerd", forwarded: "doorgestuurd", reserved: "gereserveerd", purchased: "aankoop" };
+
 function Sel({ value, onChange, allLabel, options }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} style={selectStyle} aria-label={allLabel}>
@@ -269,6 +271,20 @@ export function LeadFilters({ filters, setFilters, users, partners, places, curr
             </span>
           )}
           {filters.owner === "me" && currentUser && <Badge color="#33506b" bg="#edf1f5">Alleen leads van {currentUser.displayName}</Badge>}
+          {(filters.arrivedFrom || filters.reached || filters.campaign || filters.content) && (
+            <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+              <Badge color="#8c6010" bg="#fcf7e8">
+                Uit KPI's
+                {filters.arrivedFrom ? ` · binnengekomen ${filters.arrivedFrom.split("-").reverse().join("-")} t/m ${filters.arrivedTo.split("-").reverse().join("-")}` : ""}
+                {filters.reached ? ` · bereikt: ${REACHED_LABELS[filters.reached] || filters.reached}` : ""}
+                {filters.campaign ? ` · campagne: ${filters.campaign === "__none" ? "onbekend" : filters.campaign}` : ""}
+                {filters.content ? ` · advertentie: ${filters.content === "__none" ? "onbekend" : filters.content}` : ""}
+              </Badge>
+              <button type="button" onClick={() => setFilters((f) => ({ ...f, arrivedFrom: "", arrivedTo: "", reached: "", campaign: "", content: "", source: f.source === "__none" ? "" : f.source, scope: "open" }))} className="msk-link" style={linkBtnStyle}>
+                wissen
+              </button>
+            </span>
+          )}
         </div>
 
         <div role="group" aria-label="Weergave" style={{ display: "flex", background: C.surfaceSunken, border: `1px solid ${C.borderSoft}`, borderRadius: 10, padding: 3, gap: 2 }}>

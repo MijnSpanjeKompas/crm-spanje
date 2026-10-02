@@ -39,7 +39,7 @@ import { buildLeadPayload, buildMigrationFields } from "./normalize";
 import { changedKeys, describeLeadChanges, saleSummary } from "./changes";
 import { toDate, toMillis } from "./dates";
 import { importActivity, sheetLeadId } from "./sheetImport";
-import { milestonePatch, contactMilestonePatch, deriveMilestones } from "./milestones";
+import { milestonePatch, contactMilestonePatch, attemptMilestonePatch, deriveMilestones } from "./milestones";
 
 const SUBCOLLECTIONS = ["activities", "files", "partnerLinks", "tasks"];
 const CONTACT_METHOD_BY_ACTIVITY = { phone_call: "phone", whatsapp: "whatsapp", email: "email", appointment: "appointment" };
@@ -91,6 +91,7 @@ export function activityLeadPatch(current, { type, outcome, occurredAt }) {
   };
   if (isCustomerContactType(type)) {
     patch.lastContactAttemptAt = maxDate(current.lastContactAttemptAt, when);
+    Object.assign(patch, attemptMilestonePatch(current, when));
     if (isSuccessfulContact(type, outcome)) {
       const newest = maxDate(current.lastContactAt, when);
       patch.lastContactAt = newest;

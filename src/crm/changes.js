@@ -3,6 +3,8 @@
 
 import {
   PIPELINE_STAGES,
+  QUALIFICATION_STATUSES,
+  UNQUALIFIED_REASONS,
   resolveStage,
   PURCHASE_INTENTS,
   PRIORITIES,
@@ -106,6 +108,12 @@ export function describeLeadChanges(before, after) {
     out.push({
       title: `Prioriteit gewijzigd van ${labelOf(PRIORITIES, before.priority)} naar ${labelOf(PRIORITIES, after.priority)}`,
       metadata: { field: "priority", from: before.priority || null, to: after.priority },
+    });
+  }
+  if (field("qualificationStatus") || (after.qualificationStatus === "unqualified" && field("unqualifiedReason"))) {
+    out.push({
+      title: `Kwalificatie: ${labelOf(QUALIFICATION_STATUSES, after.qualificationStatus)}${after.qualificationStatus === "unqualified" && after.unqualifiedReason ? ` (${labelOf(UNQUALIFIED_REASONS, after.unqualifiedReason)})` : ""}`,
+      metadata: { field: "qualificationStatus", from: before.qualificationStatus || null, to: after.qualificationStatus, reason: after.unqualifiedReason || null },
     });
   }
   if (field("purchaseIntent")) {

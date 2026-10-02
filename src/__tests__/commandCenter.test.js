@@ -4,7 +4,7 @@ import * as fake from "../testing/fakeFirebase";
 import { createLead, updateLead, addActivity, addTask, addPartnerLink, backfillMilestones, subscribeAllSub } from "../crm/services";
 import { normalizeLead, emptyLead } from "../crm/normalize";
 import { milestonePatch, deriveMilestones, reached } from "../crm/milestones";
-import { periodCounts, cohort, cohortFunnel, getPeriod, BREAKDOWNS, commissionSummary } from "../crm/analytics";
+import { cohort, cohortFunnel, getPeriod, kpiSummary, eventCounts, groupStats, distribution, leadQuality, followUpStats, formatDuration, commissionSummary, ratio, change } from "../crm/analytics";
 import { buildAgendaItems, itemsInRange, overdueItems, buildNotifications } from "../crm/agenda";
 import { isSuccessfulContact } from "../crm/constants";
 import { todayISO, addDaysISO } from "../crm/dates";
@@ -83,28 +83,46 @@ describe("KPI-definities", () => {
   const lead = (id, created, extra = {}) => normalizeLead({ id, schemaVersion: 2, name: id, createdAt: created, leadSource: "meta_ads", ...extra });
   const leads = [
     lead("juni", new Date(2026, 5, 3), { pipelineStage: "completed", purchaseCompletedAt: new Date(2026, 8, 5), firstForwardedAt: new Date(2026, 6, 1), saleDate: "2026-09-05", commissionStatus: "expected", commissionExpectedAmount: 5000 }),
-    lead("sep1", new Date(2026, 8, 2), { firstContactAt: new Date(2026, 8, 3), pipelineStage: "contact_phase", utmCampaign: "C1" }),
-    lead("sep2", new Date(2026, 8, 9), { pipelineStage: "new_lead", leadSource: "google_organic", regions: ["costa_calida"] }),
+    lead("sep1", new Date(2026, 8, 2), { firstContactAt: new Date(2026, 8, 3), firstContactAttemptAt: new Date(2026, 8, 2, 3), pipelineStage: "contact_phase", utmCampaign: "C1", purchaseTimeline: "3_to_6_months", budgetMax: 250000 }),
+    lead("sep2", new Date(2026, 8, 9), { pipelineStage: "new_lead", leadSource: "google_organic", regions: ["costa_calida"], purchaseTimeline: "over_12_months" }),
+    // Gesprek gevoerd zonder geregistreerd contact: mag de funnel niet laten "stijgen"
+    lead("sep3", new Date(2026, 8, 10), { appointmentStatus: "completed", appointmentDate: "2026-09-12" }),
+    // Via Sheet: aangemaakt (import) in oktober, maar binnengekomen in september
+    lead("sheet", new Date(2026, 9, 2), { sourceSubmittedAt: new Date(2026, 8, 20), pipelineStage: "partner_connected" }),
   ];
+  const p = getPeriod("month", sep);
 
-  test("gebeurtenissen per periode vs cohort-conversie", () => {
-    const p = getPeriod("month", sep);
-    const c = periodCounts(leads, p);
-    expect(c).toMatchObject({ newLeads: 2, contact: 1, purchased: 1 }); // aankoop van juni-lead telt als gebeurtenis in sep
-    const f = cohortFunnel(cohort(leads, p));
-    expect(f.total).toBe(2);
-    expect(f.steps.purchased.count).toBe(0); // …maar niet in de conversie van het sep-cohort
-    expect(f.steps.contact.pct).toBe(0.5);
+  test("cohort op binnenkomst; funnel is altijd aflopend", () => {
+    const c = cohort(leads, p);
+    expect(c.map((l) => l.id).sort()).toEqual(["sep1", "sep2", "sep3", "sheet"]);
+    const f = cohortFunnel(c);
+    const counts = f.stages.map((s) => s.count);
+    expect(counts).toEqual([...counts].sort((a, b) => b - a)); // nooit stijgend
+    expect(f.stages.find((s) => s.key === "contact").count).toBe(3); // sep1 + gesprek (sep3) + doorgestuurd (sheet)
+    expect(f.stages.find((s) => s.key === "meeting").implied).toBe(1); // sheet: doorgestuurd zonder geregistreerd gesprek
+    const k = kpiSummary(c);
+    expect(k.contact).toEqual({ count: 3, total: 4, pct: 0.75 });
+    expect(k.purchased.count).toBe(0); // aankoop van juni-lead telt niet in het sep-cohort…
+    expect(eventCounts(leads, p).purchased).toBe(1); // …wel als gebeurtenis in september
   });
 
-  test("uitsplitsing per bron en campagne, commissie", () => {
-    const rows = BREAKDOWNS.source(cohort(leads, getPeriod("month", sep)));
-    expect(rows.map((r) => [r.label, r.leads])).toEqual([
-      ["Google (organisch)", 1],
-      ["Meta Ads", 1],
-    ]);
-    expect(BREAKDOWNS.campaign(cohort(leads, getPeriod("month", sep)))[0]).toMatchObject({ label: "C1", leads: 1 });
-    expect(commissionSummary(leads, null)).toMatchObject({ expected: 5000, outstanding: 5000, completedDeals: 1 });
+  test("bronnen met Onbekend-rij, verdelingen, kwaliteit en opvolging", () => {
+    const c = cohort(leads, p);
+    const rows = groupStats(c, "campaign");
+    expect(rows[rows.length - 1]).toMatchObject({ label: "Onbekend", leads: 3 });
+    expect(rows[0]).toMatchObject({ label: "C1", leads: 1 });
+    expect(distribution(c, "timeline").find((r) => r.key === "3_6").value).toBe(1);
+    expect(distribution(c, "budget").find((r) => r.key === "unknown").value).toBe(3);
+    const q = leadQuality(c);
+    expect(q.shortTerm).toEqual({ count: 1, total: 2, pct: 0.5 });
+    expect(q.avgBudgetMax).toBe(250000);
+    const fu = followUpStats(c, leads, new Date(2026, 9, 1));
+    expect(fu.sample).toBeGreaterThanOrEqual(1);
+    expect(formatDuration(3 * 3600 * 1000 + 18 * 60000)).toBe("3u 18m");
+    expect(commissionSummary(leads, p)).toMatchObject({ expected: 5000, outstanding: 5000, completedDeals: 1, purchasesInPeriod: 1 });
+    expect(ratio(0, 0).pct).toBeNull(); // nooit NaN%
+    expect(change(12, 10)).toMatchObject({ text: "↑ 20%" });
+    expect(change(0.5, 0.4, { asRate: true })).toMatchObject({ text: "↑ 10 pp" });
     expect(reached(leads[0], "forwarded")).toBe(true);
   });
 });
@@ -190,7 +208,8 @@ describe("Command Center UI", () => {
 
     // KPI's
     fireEvent.click(within(nav).getByRole("button", { name: /KPI's/ }));
-    expect((await screen.findAllByText(/Leads binnengekomen in de geselecteerde periode/)).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("heading", { name: "Conversiefunnel" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Leadkwaliteit per bron" })).toBeInTheDocument();
 
     // Partners → dossier
     fireEvent.click(within(nav).getByRole("button", { name: /Partners/ }));
@@ -210,5 +229,34 @@ describe("Command Center UI", () => {
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getAllByText(/Vul eerst deze gegevens aan voordat de lead kan worden doorgestuurd/).length).toBeGreaterThan(0);
     expect(fake.__getDoc("leads/nieuw").pipelineStage).toBe("contact_phase");
+  });
+});
+
+describe("kwalificatie, contactpoging en click-through", () => {
+  test("poging ≠ contact; kwalificatie zet qualifiedAt en wordt gelogd", async () => {
+    const id = await createLead({ ...emptyLead(LUKE), name: "Q", email: "q@x.nl", consentStatus: "yes" }, LUKE);
+    await addActivity(read(id), { type: "phone_call", outcome: "no_answer", title: "Niet opgenomen" }, LUKE);
+    let lead = read(id);
+    expect(lead.firstContactAttemptAt).toBeInstanceOf(Date);
+    expect(lead.firstContactAt).toBeNull();
+    await updateLead(lead, { ...lead, qualificationStatus: "qualified" }, LUKE);
+    lead = read(id);
+    expect(lead.qualifiedAt).toBeInstanceOf(Date);
+    const acts = Array.from(fake.__dump().docs.entries()).filter(([p]) => p.startsWith(`leads/${id}/activities/`)).map(([, d]) => d.title);
+    expect(acts).toContain("Kwalificatie: Gekwalificeerd");
+    // Oude afsluitreden "niet gekwalificeerd" wordt als zodanig gelezen
+    expect(normalizeLead({ id: "o", schemaVersion: 2, name: "O", pipelineStage: "stopped", closureReason: "not_qualified" }).qualificationStatus).toBe("unqualified");
+  });
+
+  test("klik op KPI opent Leads gefilterd op cohort en stap", async () => {
+    mockAuth.current = { status: "ready", user: LUKE, authUser: { uid: "uLuke" }, signIn: jest.fn(), signOut: jest.fn(), resetPassword: jest.fn() };
+    fake.__setDoc("leads/fw", { schemaVersion: 2, name: "Doorgestuurde Dirk", email: "d@x.nl", pipelineStage: "partner_connected", createdAt: new Date(), nextActionType: "call_back", nextActionDate: "2099-01-01" });
+    fake.__setDoc("leads/nw", { schemaVersion: 2, name: "Nieuwe Noor", email: "n@x.nl", pipelineStage: "new_lead", createdAt: new Date(), nextActionType: "call_back", nextActionDate: "2099-01-01" });
+    window.location.hash = "#/kpis";
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Doorgestuurd: 1\. Toon deze leads/ }));
+    expect(await screen.findByText(/Uit KPI's/)).toBeInTheDocument();
+    expect(screen.getAllByText("Doorgestuurde Dirk").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("Nieuwe Noor").filter((el) => el.tagName === "DIV")).toHaveLength(0);
   });
 });

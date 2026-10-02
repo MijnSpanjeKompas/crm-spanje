@@ -4,7 +4,8 @@
 
 import { REGIONS, PRIORITIES, isClosedStage, labelOf, hasNextAction } from "./constants";
 import { QUICK_FILTERS, getNextActionInfo } from "./signals";
-import { daysSince, toMillis } from "./dates";
+import { daysSince, toMillis, todayISO } from "./dates";
+import { leadArrivedAt, reached } from "./milestones";
 import { getCreatedDate } from "./normalize";
 
 export const DEFAULT_FILTERS = {
@@ -22,6 +23,12 @@ export const DEFAULT_FILTERS = {
   partner: "",
   propertyType: "",
   build: "",
+  // Vanuit KPI's (click-through): cohort en funnelstap
+  arrivedFrom: "",
+  arrivedTo: "",
+  reached: "",
+  campaign: "",
+  content: "",
   nextAction: "",
   followUp: "",
   lastActivity: "",
@@ -114,7 +121,15 @@ export function applyFilters(leads, f, { currentUserId, now = new Date() } = {})
     if (f.place && !(l.places || []).some((p) => simplify(p) === simplify(f.place))) return false;
     if (f.goal && l.purchaseGoal !== f.goal) return false;
     if (f.timeline && l.purchaseTimeline !== f.timeline) return false;
-    if (f.source && l.leadSource !== f.source) return false;
+    if (f.source === "__none" ? Boolean(l.leadSource) : f.source && l.leadSource !== f.source) return false;
+    if (f.campaign === "__none" ? Boolean(String(l.utmCampaign || "").trim()) : f.campaign && String(l.utmCampaign || "").trim() !== f.campaign) return false;
+    if (f.content === "__none" ? Boolean(String(l.utmContent || "").trim()) : f.content && String(l.utmContent || "").trim() !== f.content) return false;
+    if (f.arrivedFrom || f.arrivedTo) {
+      const arrived = leadArrivedAt(l);
+      const iso = arrived ? todayISO(arrived) : "";
+      if (!iso || (f.arrivedFrom && iso < f.arrivedFrom) || (f.arrivedTo && iso > f.arrivedTo)) return false;
+    }
+    if (f.reached && !reached(l, f.reached)) return false;
     if (f.partner && !(l.partnerIds || []).includes(f.partner)) return false;
     if (f.propertyType && !(l.propertyTypes || []).includes(f.propertyType)) return false;
     if (f.build && l.buildPreference !== f.build) return false;

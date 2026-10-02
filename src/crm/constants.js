@@ -494,9 +494,11 @@ export const COMMISSION_OPEN_STATUSES = ["expected", "outstanding"];
 // ─── MIJLPALEN ───────────────────────────────────────────────────────────────
 /** Eerste keer dat een lead een stap bereikte. Worden nooit overschreven of verzonnen. */
 export const MILESTONES = [
+  { key: "firstContactAttemptAt", label: "Eerste contactpoging" },
   { key: "firstContactAt", label: "Eerste contact" },
   { key: "firstMeetingScheduledAt", label: "Eerste gesprek gepland" },
   { key: "firstMeetingCompletedAt", label: "Eerste gesprek gevoerd" },
+  { key: "qualifiedAt", label: "Gekwalificeerd" },
   { key: "firstForwardedAt", label: "Doorgestuurd" },
   { key: "firstReservedAt", label: "Gereserveerd" },
   { key: "purchaseCompletedAt", label: "Aankoop afgerond" },
@@ -509,3 +511,21 @@ export const FORWARDED_OR_LATER = ["partner_connected", "purchase_process", "com
 export function isWebsiteSource(source) {
   return String(source || "").startsWith("website_");
 }
+
+// ─── KWALIFICATIE ────────────────────────────────────────────────────────────
+export const QUALIFICATION_STATUSES = [
+  { value: "unknown", label: "Nog beoordelen", color: "#636d78", bg: "#f3f2ef" },
+  { value: "qualified", label: "Gekwalificeerd", color: "#2f7a55", bg: "#eaf4ee" },
+  { value: "unqualified", label: "Niet gekwalificeerd", color: "#9b4a43", bg: "#f6eae8" },
+];
+
+export const UNQUALIFIED_REASONS = [
+  { value: "budget_mismatch", label: "Budget niet passend" },
+  { value: "timeline_too_far", label: "Aankooptermijn te ver weg" },
+  { value: "orientation_only", label: "Alleen oriënterend" },
+  { value: "outside_service_area", label: "Regio buiten werkgebied" },
+  { value: "financing_uncertain", label: "Financiering onzeker" },
+  { value: "no_follow_up_interest", label: "Geen vervolginteresse" },
+  { value: "unreachable", label: "Niet bereikbaar" },
+  { value: "other", label: "Overig" },
+];

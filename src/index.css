@@ -357,3 +357,9 @@ select.msk-stage-select:focus {
     grid-template-columns: repeat(7, minmax(130px, 1fr)) !important;
   }
 }
+
+@media (max-width: 1000px) {
+  .msk-kpi-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

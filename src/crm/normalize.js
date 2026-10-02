@@ -32,6 +32,8 @@ import {
   VISIT_SPAIN_STATUSES,
   CONSENT_STATUSES,
   COMMISSION_STATUSES,
+  QUALIFICATION_STATUSES,
+  UNQUALIFIED_REASONS,
 } from "./constants";
 import { toDate, todayISO } from "./dates";
 
@@ -67,6 +69,7 @@ export const FORM_FIELDS = [
   "commissionStatus", "commissionExpectedAmount", "commissionReceivedAmount",
   "commissionExpectedDate", "commissionReceivedAt", "commissionNotes",
   "commissionPartnerId", "commissionPartnerName",
+  "qualificationStatus", "unqualifiedReason",
 ];
 
 const ARRAY_FIELDS = ["regions", "places", "propertyTypes", "requirements", "tags"];
@@ -422,6 +425,8 @@ export function emptyLead(user) {
     commissionNotes: "",
     commissionPartnerId: "",
     commissionPartnerName: "",
+    qualificationStatus: "unknown",
+    unqualifiedReason: "",
     // gedenormaliseerd
     lastContactAt: null,
     lastContactMethod: "",
@@ -659,7 +664,12 @@ export function normalizeLead(raw, ctx = {}) {
     commissionNotes: str(raw.commissionNotes),
     commissionPartnerId: str(raw.commissionPartnerId),
     commissionPartnerName: str(raw.commissionPartnerName),
+    // Kwalificatie. Oude leads: "Niet gekwalificeerd" kwam als afsluitreden voor.
+    qualificationStatus: pickKey(QUALIFICATION_STATUSES, raw.qualificationStatus, pickKey(CLOSURE_REASONS, raw.closureReason, "") === "not_qualified" || pick("pipelineStage") === "disqualified" ? "unqualified" : "unknown"),
+    unqualifiedReason: pickKey(UNQUALIFIED_REASONS, raw.unqualifiedReason, ""),
     // Mijlpalen (nooit afgeleid bij het lezen; zie milestones.js)
+    firstContactAttemptAt: raw.firstContactAttemptAt || null,
+    qualifiedAt: raw.qualifiedAt || null,
     firstContactAt: raw.firstContactAt || null,
     firstMeetingScheduledAt: raw.firstMeetingScheduledAt || null,
     firstMeetingCompletedAt: raw.firstMeetingCompletedAt || null,

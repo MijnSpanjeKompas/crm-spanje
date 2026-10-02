@@ -5,8 +5,9 @@
 // - nooit een datum verzinnen: onbekend = null;
 // - de tijdlijn (activities) blijft de volledige audittrail.
 
-import { MILESTONES, FORWARDED_OR_LATER } from "./constants";
+import { MILESTONES, FORWARDED_OR_LATER, isCustomerContactType } from "./constants";
 import { toDate } from "./dates";
+import { getCreatedDate } from "./normalize";
 
 export const MILESTONE_KEYS = MILESTONES.map((m) => m.key);
 
@@ -38,9 +39,14 @@ export function milestonePatch(before, after, now = new Date()) {
   // Gesprek gepland / gevoerd (één afspraak per lead in het datamodel).
   if (after.appointmentStatus === "scheduled" && before?.appointmentStatus !== "scheduled") set("firstMeetingScheduledAt", now);
   if (after.appointmentStatus === "completed" && before?.appointmentStatus !== "completed") {
-    set("firstMeetingScheduledAt", dateFromISO(after.appointmentDate) || now);
-    set("firstMeetingCompletedAt", dateFromISO(after.appointmentDate) || now);
+    const at = dateFromISO(after.appointmentDate) || now;
+    set("firstMeetingScheduledAt", at);
+    set("firstMeetingCompletedAt", at);
+    // Een gevoerd gesprek IS contact: zonder eerder contact is dit het eerste.
+    set("firstContactAttemptAt", at);
+    set("firstContactAt", at);
   }
+  if (after.qualificationStatus === "qualified" && before?.qualificationStatus !== "qualified") set("qualifiedAt", now);
 
   if (stageChanged) {
     if (FORWARDED_OR_LATER.includes(after.pipelineStage)) set("firstForwardedAt", now);
@@ -61,12 +67,20 @@ export function milestonePatch(before, after, now = new Date()) {
   return patch;
 }
 
-/** Eerste geslaagde contact (vanuit activiteiten). */
+/** Eerste geslaagde contact (vanuit activiteiten). Contact is ook altijd een poging. */
 export function contactMilestonePatch(current, when) {
+  const patch = {};
   const existing = toDate(current?.firstContactAt);
   // Een later vastgelegd, maar eerder plaatsgevonden contact maakt de mijlpaal vroeger.
+  if (!existing || existing > when) patch.firstContactAt = when;
+  return { ...patch, ...attemptMilestonePatch(current, when) };
+}
+
+/** Eerste contactpoging (bellen/appen/mailen), ook als er niemand opnam. */
+export function attemptMilestonePatch(current, when) {
+  const existing = toDate(current?.firstContactAttemptAt);
   if (existing && existing <= when) return {};
-  return { firstContactAt: when };
+  return { firstContactAttemptAt: when };
 }
 
 /**
@@ -87,7 +101,9 @@ export function deriveMilestones(lead, activities, isSuccessfulContact) {
     if (!found[key]) found[key] = at;
   };
   sorted.forEach((a) => {
+    if (isCustomerContactType(a.type)) first("firstContactAttemptAt", a.at);
     if (isSuccessfulContact && isSuccessfulContact(a.type, a.outcome)) first("firstContactAt", a.at);
+    if (a.metadata?.field === "qualificationStatus" && a.metadata.to === "qualified") first("qualifiedAt", a.at);
     const to = a.metadata?.field === "pipelineStage" ? a.metadata.to : null;
     if (to) {
       if (FORWARDED_OR_LATER.includes(to)) first("firstForwardedAt", a.at);
@@ -111,16 +127,24 @@ export function deriveMilestones(lead, activities, isSuccessfulContact) {
   return patch;
 }
 
-/**
- * Heeft de lead een stap bereikt? Voor KPI's. Mijlpaal eerst; anders alleen
- * zekere afleidingen uit de huidige staat (geen datum, alleen ja/nee).
- */
-export function reached(lead, step) {
+// ─── FUNNEL ──────────────────────────────────────────────────────────────────
+/** Volgorde van de funnel. Een latere stap impliceert alle eerdere. */
+export const FUNNEL_ORDER = ["contact", "meeting", "qualified", "forwarded", "reserved", "purchased"];
+
+/** Moment van binnenkomst: formuliertijd (Sheet) gaat voor importmoment. */
+export function leadArrivedAt(lead) {
+  return toDate(lead?.sourceSubmittedAt) || getCreatedDate(lead);
+}
+
+/** Direct bewijs voor een stap (zonder doorredeneren). */
+export function hasDirectEvidence(lead, step) {
   switch (step) {
     case "contact":
       return Boolean(lead.firstContactAt || lead.lastContactAt);
     case "meeting":
       return Boolean(lead.firstMeetingCompletedAt || lead.appointmentStatus === "completed");
+    case "qualified":
+      return Boolean(lead.qualificationStatus === "qualified" || lead.qualifiedAt);
     case "forwarded":
       return Boolean(lead.firstForwardedAt || FORWARDED_OR_LATER.includes(lead.pipelineStage) || (lead.partnerSummary?.count || 0) > 0);
     case "reserved":
@@ -132,13 +156,34 @@ export function reached(lead, step) {
   }
 }
 
-/** Datum waarop een stap bereikt werd, of null als dat niet bekend is. */
+/**
+ * Heeft de lead deze stap (of een latere) bereikt? Zo is de funnel altijd
+ * consistent: een doorgestuurde lead telt ook mee bij contact, gesprek en
+ * gekwalificeerd, ook als die stappen niet apart geregistreerd zijn.
+ * Alleen ja/nee: er wordt geen datum bedacht.
+ */
+export function reached(lead, step) {
+  const i = FUNNEL_ORDER.indexOf(step);
+  if (i < 0) return false;
+  return FUNNEL_ORDER.slice(i).some((s) => hasDirectEvidence(lead, s));
+}
+
+/** Stap bereikt, maar alleen via een latere stap (= afgeleid, niet geregistreerd). */
+export function reachedImplicitly(lead, step) {
+  return reached(lead, step) && !hasDirectEvidence(lead, step);
+}
+
+/** Datum waarop een stap bereikt werd, of null als dat niet bekend is (nooit verzonnen). */
 export function reachedAt(lead, step) {
   switch (step) {
+    case "attempt":
+      return toDate(lead.firstContactAttemptAt) || toDate(lead.firstContactAt);
     case "contact":
       return toDate(lead.firstContactAt);
     case "meeting":
       return toDate(lead.firstMeetingCompletedAt) || (lead.appointmentStatus === "completed" ? dateFromISO(lead.appointmentDate) : null);
+    case "qualified":
+      return toDate(lead.qualifiedAt);
     case "forwarded":
       return toDate(lead.firstForwardedAt);
     case "reserved":

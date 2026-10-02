@@ -280,7 +280,7 @@ export function Crm({ user, onSignOut }) {
             />
           )}
           {page === "agenda" && <AgendaPage leads={leads} tasks={tasks} links={links} users={activeUsers} now={now} initialView={route.param} onOpenLead={(l, tab) => l && openLead(l, tab)} />}
-          {page === "kpis" && <KpiPage leads={leads} links={links} partners={partners} users={users} now={now} navigate={route.navigate} onOpenPartner={openPartner} />}
+          {page === "kpis" && <KpiPage leads={leads} links={links} partners={partners} users={users} now={now} navigate={route.navigate} onOpenPartner={openPartner} onShowLeads={showLeads} />}
           {page === "partners" && (
             <PartnersPage partners={partners} links={links} leads={leads} user={user} now={now} onOpenLead={(l, tab) => l && openLead(l, tab)} openPartnerId={route.param || null} setOpenPartnerId={(id) => route.navigate("partners", id || "")} />
           )}
