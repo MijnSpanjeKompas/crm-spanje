@@ -6,6 +6,7 @@
 
 import {
   collection,
+  collectionGroup,
   doc,
   getDocs,
   onSnapshot,
@@ -38,6 +39,7 @@ import { buildLeadPayload, buildMigrationFields } from "./normalize";
 import { changedKeys, describeLeadChanges, saleSummary } from "./changes";
 import { toDate, toMillis } from "./dates";
 import { importActivity, sheetLeadId } from "./sheetImport";
+import { milestonePatch, contactMilestonePatch, deriveMilestones } from "./milestones";
 
 const SUBCOLLECTIONS = ["activities", "files", "partnerLinks", "tasks"];
 const CONTACT_METHOD_BY_ACTIVITY = { phone_call: "phone", whatsapp: "whatsapp", email: "email", appointment: "appointment" };
@@ -92,6 +94,7 @@ export function activityLeadPatch(current, { type, outcome, occurredAt }) {
     if (isSuccessfulContact(type, outcome)) {
       const newest = maxDate(current.lastContactAt, when);
       patch.lastContactAt = newest;
+      Object.assign(patch, contactMilestonePatch(current, when));
       if (toMillis(newest) === when.getTime()) {
         patch.lastContactMethod = CONTACT_METHOD_BY_ACTIVITY[type] || "";
       }
@@ -217,6 +220,7 @@ export async function createLead(form, user, opts = {}) {
       fileCount: 0,
       lastContactAt: null,
       lastContactAttemptAt: null,
+      ...milestonePatch({}, payload, new Date()),
       ...(opts.extra || {}),
       ...actPatch,
       createdAt: serverTimestamp(),
@@ -259,6 +263,8 @@ export async function updateLead(before, after, user, opts = {}) {
     patch.closedBy = u.id;
   }
   if (wasClosed && !nowClosed) patch.reopenedAt = serverTimestamp();
+  // Mijlpalen: eerste keer doorgestuurd/gereserveerd/afgerond/... (nooit overschreven).
+  Object.assign(patch, milestonePatch(before, afterPayload, new Date()));
 
   const activities = [
     ...describeLeadChanges(beforePayload, afterPayload).map((a) => ({ type: "system", ...a })),
@@ -282,9 +288,12 @@ export async function updateLead(before, after, user, opts = {}) {
  * @param {{saleDate:string, salePrice:number, saleProperty:string, saleCommission:number|null, saleNotes?:string}} sale
  */
 export async function markLeadSold(lead, sale, user) {
+  // Oude aanroepen geven saleCommission mee; het nieuwe veld is commissionExpectedAmount.
+  const commission = sale.commissionExpectedAmount !== undefined ? {} : sale.saleCommission !== undefined ? { commissionExpectedAmount: sale.saleCommission } : {};
   const after = {
     ...lead,
     ...sale,
+    ...commission,
     pipelineStage: SOLD_STAGE,
     nextActionType: "none",
     nextActionDate: "",
@@ -779,4 +788,64 @@ export async function moveNotesToTimeline(lead, user) {
   );
   batch.update(leadRef(lead.id), clean({ notities: "", ...actPatch, updatedAt: serverTimestamp(), updatedBy: userFields(user).id }));
   await batch.commit();
+}
+
+// ─── OVERZICHTEN OVER ALLE LEADS (Agenda, KPI's, Partners) ──────────────────
+/**
+ * Alle taken of partnerkoppelingen van alle leads in één abonnement
+ * (Firestore collection group). Vereist de collection-group-leesregel in
+ * firestore.rules. leadId wordt uit het pad gehaald.
+ */
+export function subscribeAllSub(name, onData, onError) {
+  return onSnapshot(
+    collectionGroup(db, name),
+    (snap) =>
+      onData(
+        snap.docs.map((d) => ({
+          id: d.id,
+          leadId: d.ref.parent?.parent?.id || String(d.ref.path || "").split("/")[1] || "",
+          ...d.data({ serverTimestamps: "estimate" }),
+        }))
+      ),
+    onError
+  );
+}
+
+// ─── COMMISSIE ───────────────────────────────────────────────────────────────
+/** Commissiegegevens van een afgeronde aankoop bijwerken (via updateLead, dus gelogd). */
+export async function updateCommission(lead, patch, user) {
+  return updateLead(lead, { ...lead, ...patch }, user);
+}
+
+// ─── MIJLPALEN VOOR BESTAANDE LEADS ──────────────────────────────────────────
+/**
+ * Leidt mijlpalen af uit de bestaande tijdlijn van elke lead en vult alleen
+ * lege velden. dryRun = alleen tellen, niets schrijven.
+ * @returns {Promise<{leads: number, updated: number, fields: Object<string, number>}>}
+ */
+export async function backfillMilestones(leads, user, { dryRun = false } = {}) {
+  const summary = { leads: 0, updated: 0, fields: {} };
+  for (const lead of leads) {
+    summary.leads += 1;
+    const snap = await getDocs(subCol(lead.id, "activities"));
+    const acts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const patch = deriveMilestones(lead, acts, isSuccessfulContact);
+    const keys = Object.keys(patch);
+    if (!keys.length) continue;
+    summary.updated += 1;
+    keys.forEach((k) => (summary.fields[k] = (summary.fields[k] || 0) + 1));
+    if (!dryRun) {
+      const batch = writeBatch(db);
+      queueActivities(
+        batch,
+        lead.id,
+        lead,
+        [{ type: "system", title: "Mijlpalen afgeleid uit bestaande tijdlijn", description: keys.join(", "), actorType: "system", actorId: "milestone_backfill", metadata: { event: "milestones_backfilled", fields: keys } }],
+        user
+      );
+      batch.update(leadRef(lead.id), clean({ ...patch, milestonesBackfilledAt: serverTimestamp() }));
+      await batch.commit();
+    }
+  }
+  return summary;
 }

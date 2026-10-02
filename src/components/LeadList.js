@@ -11,10 +11,9 @@ import {
   selectableStages,
   isSold,
 } from "../crm/constants";
-import { SoldButton } from "./SaleDialog";
 import { getNextActionInfo, getLeadSignals, SEVERITY_STYLE } from "../crm/signals";
 import { formatDate, formatRelative, formatActionDate } from "../crm/dates";
-import { Icon, Badge, OptionBadge, btnStyle, selectStyle, tdStyle, formatBudget, formatEuro, C } from "./ui";
+import { Icon, Badge, OptionBadge, MoreMenu, ActionLink, contactLinks, btnStyle, tdStyle, formatBudget, formatEuro, C } from "./ui";
 
 function whereText(lead) {
   const regions = (lead.regions || []).filter((r) => r !== "unknown").map((r) => labelOf(REGIONS, r));
@@ -99,6 +98,78 @@ function Fact({ label, children }) {
   );
 }
 
+/** Fasebadge die tegelijk de keuzelijst is (geen dubbele statusbediening meer). */
+export function StageSelect({ lead, onStageChange }) {
+  const opt = PIPELINE_STAGES.find((s) => s.value === lead.pipelineStage) || PIPELINE_STAGES[0];
+  return (
+    <span style={{ position: "relative", display: "inline-flex" }} onClick={(e) => e.stopPropagation()}>
+      <select
+        value={lead.pipelineStage}
+        onChange={(e) => onStageChange(lead, e.target.value)}
+        aria-label={`Pipelinefase van ${lead.name || "lead"} wijzigen`}
+        title="Fase wijzigen"
+        className="msk-stage-select"
+        style={{
+          appearance: "none",
+          WebkitAppearance: "none",
+          border: `1px solid ${opt.color}2b`,
+          background: opt.bg,
+          color: opt.color,
+          borderRadius: 999,
+          padding: "3px 24px 3px 10px",
+          fontSize: 11.5,
+          fontWeight: 600,
+          lineHeight: 1.45,
+          cursor: "pointer",
+          fontFamily: "inherit",
+          "--stage-bg": opt.bg,
+        }}
+      >
+        {selectableStages(lead.pipelineStage).map((s) => (
+          <option key={s.value} value={s.value}>
+            {s.label}
+          </option>
+        ))}
+      </select>
+      <span aria-hidden="true" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: opt.color, display: "flex", pointerEvents: "none" }}>
+        <Icon name="chevron" size={11} />
+      </span>
+    </span>
+  );
+}
+
+/** Zeldzame/destructieve acties onder ⋯. */
+function leadMenuItems(lead, { onTogglePin, onArchive, onDelete, onSold }) {
+  return [
+    { label: lead.pinned ? "Losmaken" : "Vastpinnen", icon: "star", onClick: () => onTogglePin(lead) },
+    onSold && !lead.archived && lead.pipelineStage === "purchase_process" && { label: "Aankoop afgerond vastleggen", icon: "checkCircle", onClick: () => onSold(lead) },
+    !lead.archived && onArchive && { label: "Archiveren", icon: "archive", onClick: () => onArchive(lead) },
+    {
+      label: "Lead-ID kopiëren",
+      icon: "copy",
+      onClick: () => {
+        try {
+          navigator.clipboard?.writeText(lead.id);
+        } catch (e) {
+          window.prompt("Lead-ID", lead.id);
+        }
+      },
+    },
+    onDelete && { label: "Lead verwijderen", icon: "trash", danger: true, onClick: () => onDelete(lead) },
+  ];
+}
+
+function QuickContact({ lead }) {
+  const l = contactLinks(lead);
+  return (
+    <>
+      {l.tel && <ActionLink compact href={l.tel} icon="phone" label={`${lead.name || "Lead"} bellen`} />}
+      {l.whatsapp && <ActionLink compact href={l.whatsapp} icon="chat" label={`${lead.name || "Lead"} WhatsAppen`} />}
+      {l.mail && <ActionLink compact href={l.mail} icon="mail" label={`${lead.name || "Lead"} mailen`} />}
+    </>
+  );
+}
+
 // ─── KAART ───────────────────────────────────────────────────────────────────
 export function LeadCard({ lead, onOpen, onArchive, onDelete, onSold, onStageChange, onTogglePin }) {
   const na = nextActionLine(lead);
@@ -142,7 +213,7 @@ export function LeadCard({ lead, onOpen, onArchive, onDelete, onSold, onStageCha
       </div>
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        <OptionBadge options={PIPELINE_STAGES} value={lead.pipelineStage} />
+        {onStageChange ? <StageSelect lead={lead} onStageChange={onStageChange} /> : <OptionBadge options={PIPELINE_STAGES} value={lead.pipelineStage} />}
         <OptionBadge options={PURCHASE_INTENTS} value={lead.purchaseIntent} />
         <OptionBadge options={PRIORITIES} value={lead.priority} prefix="Prio: " />
         {lead.ownerName && (
@@ -246,39 +317,18 @@ export function LeadCard({ lead, onOpen, onArchive, onDelete, onSold, onStageCha
       </div>
       )}
 
-      {lead.pipelineStage === "purchase_process" && !lead.archived && onSold && <SoldButton block onClick={() => onSold(lead)} />}
-
       <div
         style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", paddingTop: 12, borderTop: `1px solid ${C.borderSoft}` }}
         onClick={(e) => e.stopPropagation()}
       >
-        <select
-          value={lead.pipelineStage}
-          onChange={(e) => onStageChange(lead, e.target.value)}
-          style={{ ...selectStyle, height: 34, padding: "5px 10px", fontSize: 12.5, maxWidth: 200, minWidth: 0, background: C.surfaceSoft }}
-          aria-label="Pipelinefase wijzigen"
-        >
-          {selectableStages(lead.pipelineStage).map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-
+        <div style={{ display: "flex", gap: 6 }}>
+          <QuickContact lead={lead} />
+        </div>
         <div style={{ display: "flex", gap: 7 }}>
           <button type="button" onClick={() => onOpen(lead)} style={btnStyle("primary")}>
             Openen
           </button>
-          {!lead.archived && (
-            <button type="button" onClick={() => onArchive(lead)} style={{ ...btnStyle("neutral"), width: 34, padding: 0, color: C.textMuted }} title="Archiveren" aria-label="Archiveren">
-              <Icon name="archive" size={14} />
-            </button>
-          )}
-          {onDelete && (
-            <button type="button" onClick={() => onDelete(lead)} style={{ ...btnStyle("danger"), width: 34, padding: 0 }} title="Verwijderen" aria-label="Verwijderen">
-              <Icon name="trash" size={14} />
-            </button>
-          )}
+          <MoreMenu label={`Meer acties voor ${lead.name || "lead"}`} items={leadMenuItems(lead, { onTogglePin, onArchive, onDelete, onSold })} />
         </div>
       </div>
     </div>
@@ -298,7 +348,7 @@ const thStyle = {
   background: C.surfaceSoft,
 };
 
-export function LeadTable({ leads, onOpen, onArchive, onDelete, onSold, onTogglePin }) {
+export function LeadTable({ leads, onOpen, onArchive, onDelete, onSold, onTogglePin, onStageChange }) {
   const headers = ["", "Naam", "Fase", "Koopintentie", "Prio", "Regio / plaats", "Budget", "Verantwoordelijke", "Volgende actie", "Laatste contact", ""];
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "auto", boxShadow: C.shadowSm }}>
@@ -332,9 +382,7 @@ export function LeadTable({ leads, onOpen, onArchive, onDelete, onSold, onToggle
                     {lead.name || "Naam onbekend"} <SignalDot signals={signals} />
                   </button>
                 </td>
-                <td style={cell}>
-                  <OptionBadge options={PIPELINE_STAGES} value={lead.pipelineStage} />
-                </td>
+                <td style={cell}>{onStageChange ? <StageSelect lead={lead} onStageChange={onStageChange} /> : <OptionBadge options={PIPELINE_STAGES} value={lead.pipelineStage} />}</td>
                 <td style={cell}>{labelOf(PURCHASE_INTENTS, lead.purchaseIntent)}</td>
                 <td style={cell}>
                   <OptionBadge options={PRIORITIES} value={lead.priority} />
@@ -365,25 +413,12 @@ export function LeadTable({ leads, onOpen, onArchive, onDelete, onSold, onToggle
                 </td>
                 <td style={{ ...cell, minWidth: 140 }}>{lastContactText(lead)}</td>
                 <td style={cell}>
-                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                    {lead.pipelineStage === "purchase_process" && !lead.archived && onSold && (
-                      <button type="button" onClick={() => onSold(lead)} style={btnStyle("gold", true)}>
-                        Aankoop afgerond
-                      </button>
-                    )}
+                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+                    <QuickContact lead={lead} />
                     <button type="button" onClick={() => onOpen(lead)} style={btnStyle("primary")}>
                       Open
                     </button>
-                    {!lead.archived && (
-                      <button type="button" onClick={() => onArchive(lead)} style={{ ...btnStyle("neutral"), width: 34, padding: 0, color: C.textMuted }} title="Archiveren" aria-label="Archiveren">
-                        <Icon name="archive" size={14} />
-                      </button>
-                    )}
-                    {onDelete && (
-                      <button type="button" onClick={() => onDelete(lead)} style={{ ...btnStyle("danger"), width: 34, padding: 0 }} title="Verwijderen" aria-label="Verwijderen">
-                        <Icon name="trash" size={14} />
-                      </button>
-                    )}
+                    <MoreMenu label={`Meer acties voor ${lead.name || "lead"}`} items={leadMenuItems(lead, { onTogglePin, onArchive, onDelete, onSold })} />
                   </div>
                 </td>
               </tr>

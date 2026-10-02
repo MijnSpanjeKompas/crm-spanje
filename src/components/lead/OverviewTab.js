@@ -18,6 +18,8 @@ import {
   BUILD_PREFERENCES,
   VISIT_SPAIN_STATUSES,
   ACTIVITY_TYPES,
+  CONSENT_STATUSES,
+  isWebsiteSource,
   selectableStages,
   isClosedStage,
   labelOf,
@@ -25,7 +27,7 @@ import {
   hasNextAction,
 } from "../../crm/constants";
 import { getNextActionInfo } from "../../crm/signals";
-import { formatDate, formatDateTime, formatActionDate, toMillis } from "../../crm/dates";
+import { formatDate, formatDateTime, formatActionDate, toMillis, todayISO, toDate } from "../../crm/dates";
 import { moveNotesToTimeline } from "../../crm/services";
 import {
   Card,
@@ -38,6 +40,7 @@ import {
   SelectField,
   UserSelectField,
   TextAreaField,
+  Notice,
   Badge,
   Icon,
   btnStyle,
@@ -136,8 +139,22 @@ export function StatusSection({ form, set, setMany, errors, users, lead }) {
         allowEmpty={false}
       />
       <UserSelectField label="Verantwoordelijke" value={form.ownerId} users={users} onChange={(id, name) => setMany({ ownerId: id, ownerName: name })} />
+      {errors.forwarding && (
+        <div style={full}>
+          <Notice tone="warn">{errors.forwarding}</Notice>
+        </div>
+      )}
       <SelectField label="Prioriteit" value={form.priority} onChange={(v) => set("priority", v)} options={PRIORITIES} allowEmpty={false} />
       <SelectField label="Koopintentie" value={form.purchaseIntent} onChange={(v) => set("purchaseIntent", v)} options={PURCHASE_INTENTS} allowEmpty={false} />
+      {form.pipelineStage === "purchase_process" && (
+        <TextField
+          label="Datum reservering"
+          type="date"
+          value={form.reservedAt || (lead?.firstReservedAt ? todayISO(toDate(lead.firstReservedAt)) : "")}
+          onChange={(v) => set("reservedAt", v)}
+          hint="Wordt automatisch gezet; corrigeer als de reservering eerder was."
+        />
+      )}
       {showClosure && (
         <>
           <SelectField label={needsReason ? "Afsluitreden *" : "Afsluitreden"} value={form.closureReason} onChange={(v) => set("closureReason", v)} options={CLOSURE_REASONS} error={errors.closureReason} />
@@ -246,17 +263,6 @@ function StandSection({ lead, stats, onGoTab }) {
 }
 
 // ─── BRON & TOESTEMMING ──────────────────────────────────────────────────────
-const CONSENT_OPTIONS = [
-  { value: "yes", label: "Ja" },
-  { value: "no", label: "Nee" },
-];
-
-function consentLabel(v) {
-  if (v === true) return "Ja";
-  if (v === false) return "Nee";
-  return "Onbekend";
-}
-
 const UTM_FIELDS = [
   ["utmSource", "UTM source"],
   ["utmMedium", "UTM medium"],
@@ -265,21 +271,24 @@ const UTM_FIELDS = [
   ["landingPage", "Landingspagina"],
 ];
 
-export function SourceSection({ form, set, lead, editing }) {
+export function SourceSection({ form, set, lead, editing, errors = {} }) {
   if (editing) {
     return (
       <div style={twoCols}>
-        <SelectField label="Binnengekomen via" value={form.leadSource} onChange={(v) => set("leadSource", v)} options={LEAD_SOURCES} allowEmpty={false} />
+        <SelectField label="Binnengekomen via *" value={form.leadSource} onChange={(v) => set("leadSource", v)} options={LEAD_SOURCES} allowEmpty={false} error={errors.leadSource} />
         <SelectField
-          label="Toestemming voor contact"
-          value={form.consentContact === true ? "yes" : form.consentContact === false ? "no" : ""}
-          onChange={(v) => set("consentContact", v === "yes" ? true : v === "no" ? false : null)}
-          options={CONSENT_OPTIONS}
-          placeholder="Onbekend"
+          label="Toestemming voor contact *"
+          value={form.consentStatus}
+          onChange={(v) => set("consentStatus", v)}
+          options={CONSENT_STATUSES}
+          placeholder="Kies..."
+          error={errors.consentStatus}
         />
-        <div style={full}>
-          <TextField label="Formulier" value={form.formSource} onChange={(v) => set("formSource", v)} placeholder="Bijv. Gratis zoekprofiel" />
-        </div>
+        {(isWebsiteSource(form.leadSource) || form.formSource) && (
+          <div style={full}>
+            <TextField label="Formulier" value={form.formSource} onChange={(v) => set("formSource", v)} placeholder="Bijv. Gratis zoekprofiel" />
+          </div>
+        )}
         <div style={full}>
           <Disclosure summary="Meer brongegevens (UTM)">
             <div style={twoCols}>
@@ -302,13 +311,16 @@ export function SourceSection({ form, set, lead, editing }) {
         {submitted ? formatDateTime(submitted) : "Onbekend"}
       </InfoRow>
       {form.formSource && <InfoRow label="Formulier">{form.formSource}</InfoRow>}
-      <InfoRow label="Contact toegestaan" muted={form.consentContact === null || form.consentContact === undefined}>
-        {form.consentContact === true && (
+      <InfoRow label="Contact toegestaan" muted={!form.consentStatus || form.consentStatus === "unknown"}>
+        {form.consentStatus === "yes" ? (
           <span style={{ color: C.success, display: "inline-flex", gap: 5, alignItems: "center", fontWeight: 600 }}>
             <Icon name="checkCircle" size={14} /> Ja
           </span>
+        ) : form.consentStatus ? (
+          labelOf(CONSENT_STATUSES, form.consentStatus)
+        ) : (
+          "Niet ingevuld"
         )}
-        {form.consentContact !== true && consentLabel(form.consentContact)}
       </InfoRow>
       {(utm.length > 0 || lead?.sourceSubmissionId) && (
         <Disclosure summary="Meer brongegevens">
@@ -488,7 +500,7 @@ export function OverviewTab(props) {
             <LabelsSection {...props} />
           </Card>
           <Card icon="map" title="Bron & toestemming" right={<EditToggle editing={editSource} onToggle={() => setEditSource((v) => !v)} />}>
-            <SourceSection {...props} editing={editSource} lead={lead} />
+            <SourceSection {...props} editing={editSource || Boolean(props.errors.consentStatus || props.errors.leadSource)} lead={lead} />
           </Card>
         </div>
       </div>

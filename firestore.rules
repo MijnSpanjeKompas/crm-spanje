@@ -44,6 +44,15 @@ service cloud.firestore {
       }
     }
 
+    // Overzichten over alle leads heen (Agenda, KPI's, Partners-pagina):
+    // collection group queries op taken en partnerkoppelingen. Alleen lezen.
+    match /{path=**}/tasks/{taskId} {
+      allow read: if signedIn();
+    }
+    match /{path=**}/partnerLinks/{linkId} {
+      allow read: if signedIn();
+    }
+
     match /partners/{partnerId} {
       allow read, create, update, delete: if signedIn();
     }

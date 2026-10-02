@@ -20,6 +20,8 @@ export const DEFAULT_FILTERS = {
   timeline: "",
   source: "",
   partner: "",
+  propertyType: "",
+  build: "",
   nextAction: "",
   followUp: "",
   lastActivity: "",
@@ -114,6 +116,8 @@ export function applyFilters(leads, f, { currentUserId, now = new Date() } = {})
     if (f.timeline && l.purchaseTimeline !== f.timeline) return false;
     if (f.source && l.leadSource !== f.source) return false;
     if (f.partner && !(l.partnerIds || []).includes(f.partner)) return false;
+    if (f.propertyType && !(l.propertyTypes || []).includes(f.propertyType)) return false;
+    if (f.build && l.buildPreference !== f.build) return false;
     if (f.nextAction === "none" && hasNextAction(l)) return false;
     if (f.nextAction && f.nextAction !== "none" && l.nextActionType !== f.nextAction) return false;
     if (!matchesFollowUp(l, f.followUp, now)) return false;
@@ -138,7 +142,7 @@ export function sortLeads(leads, sort, now = new Date()) {
 }
 
 /** Filters die onder "Meer filters" staan. */
-export const MORE_FILTER_KEYS = ["priority", "intent", "region", "place", "goal", "timeline", "source", "partner", "nextAction", "lastActivity"];
+export const MORE_FILTER_KEYS = ["priority", "intent", "region", "place", "goal", "timeline", "propertyType", "build", "source", "partner", "nextAction", "lastActivity"];
 
 export function countActiveFilters(f) {
   return MORE_FILTER_KEYS.filter((k) => Boolean(f[k])).length;

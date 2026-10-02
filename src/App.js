@@ -1,30 +1,29 @@
-// ─── MIJN SPANJE KOMPAS CRM ──────────────────────────────────────────────────
-// Orchestrator: inloggen, live data, dashboard, lijst en leaddetail.
-// Businesslogica staat in src/crm/*, UI-bouwstenen in src/components/*.
+// ─── MIJN SPANJE KOMPAS · COMMAND CENTER ────────────────────────────────────
+// Orchestrator: inloggen, live data, navigatie, pagina's en het leaddossier.
+// Businesslogica staat in src/crm/*, UI in src/components/*.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCrmAuth } from "./crm/useCrmAuth";
-import { subscribeLeads, subscribeUsers, subscribePartners, setPinned, archiveLead, updateLead, deleteLeadPermanently } from "./crm/services";
+import { subscribeLeads, subscribeUsers, subscribePartners, subscribeAllSub, setPinned, archiveLead, updateLead, deleteLeadPermanently } from "./crm/services";
 import { normalizeLead } from "./crm/normalize";
 import { validateLead, FIELD_TABS } from "./crm/validation";
-import { computeKpis, getTodayItems, getAttentionList } from "./crm/signals";
+import { buildNotifications } from "./crm/agenda";
 import { DEFAULT_FILTERS, applyFilters } from "./crm/filters";
 import { labelOf, PIPELINE_STAGES, isClosedStage } from "./crm/constants";
-import { baseTextSelection, Icon, Notice, C, btnStyle, iconBtnStyle, cardStyle, BrandLogo, formatEuro } from "./components/ui";
+import { baseTextSelection, Notice, C, iconBtnStyle, Icon } from "./components/ui";
 import { LoginScreen, LoadingScreen } from "./components/LoginScreen";
-import { KpiRow, TodayPanel, AttentionPanel } from "./components/Dashboard";
-import { LeadFilters } from "./components/LeadFilters";
-import { LeadCard, LeadTable } from "./components/LeadList";
 import { LeadDetailModal } from "./components/lead/LeadDetailModal";
-import { PartnersModal } from "./components/PartnersModal";
 import { SaleDialog } from "./components/SaleDialog";
-import { CommissionsModal } from "./components/CommissionsModal";
 import { ImportModal } from "./components/ImportModal";
-
-function scrollToList() {
-  const el = document.getElementById("lead-list");
-  if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
-}
+import { Sidebar, Topbar, GlobalSearch, NotificationBell } from "./components/shell/AppShell";
+import { useHashRoute, usePref } from "./components/shell/useHashRoute";
+import { DashboardPage } from "./components/pages/DashboardPage";
+import { LeadsPage } from "./components/pages/LeadsPage";
+import { AgendaPage } from "./components/pages/AgendaPage";
+import { KpiPage } from "./components/pages/KpiPage";
+import { PartnersPage } from "./components/pages/PartnersPage";
+import { CommissionsPage } from "./components/pages/CommissionsPage";
+import { SettingsPage, HelpPage } from "./components/pages/SettingsPage";
 
 function subscriptionError(e) {
   if (e?.code === "permission-denied") {
@@ -46,11 +45,14 @@ export function Crm({ user, onSignOut }) {
   const [partners, setPartners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [links, setLinks] = useState([]);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
-  const [view, setView] = useState("kaarten");
+  const [view, setView] = usePref(user.id, "leadView", "kaarten");
+  const [collapsed, setCollapsed] = usePref(user.id, "sidebarCollapsed", typeof window !== "undefined" && window.innerWidth < 1180);
+  const [readIds, setReadIds] = usePref(user.id, "notificationsRead", []);
+  const route = useHashRoute();
   const [modal, setModal] = useState(null);
-  const [partnersOpen, setPartnersOpen] = useState(false);
-  const [commissionsOpen, setCommissionsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [saleLeadId, setSaleLeadId] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -73,6 +75,9 @@ export function Crm({ user, onSignOut }) {
       ),
       subscribeUsers(setUsers, (e) => console.error("users", e)),
       subscribePartners(setPartners, (e) => console.error("partners", e)),
+      // Taken en partnerkoppelingen van alle leads (Agenda, notificaties, KPI's, Partners).
+      subscribeAllSub("tasks", setTasks, (e) => console.error("tasks", e)),
+      subscribeAllSub("partnerLinks", setLinks, (e) => console.error("partnerLinks", e)),
     ];
     return () => unsubs.forEach((u) => u && u());
   }, [userId]);
@@ -85,11 +90,7 @@ export function Crm({ user, onSignOut }) {
 
   const activeUsers = useMemo(() => users.filter((u) => u.active !== false), [users]);
   const leads = useMemo(() => rawLeads.map((r) => normalizeLead(r, { users })), [rawLeads, users]);
-  const liveLeads = useMemo(() => leads.filter((l) => !l.archived), [leads]);
 
-  const kpis = useMemo(() => computeKpis(liveLeads, now), [liveLeads, now]);
-  const todayItems = useMemo(() => getTodayItems(liveLeads, now), [liveLeads, now]);
-  const attention = useMemo(() => getAttentionList(liveLeads, now), [liveLeads, now]);
   const places = useMemo(
     () => Array.from(new Set(leads.flatMap((l) => l.places || []))).sort((a, b) => a.localeCompare(b, "nl")),
     [leads]
@@ -108,11 +109,13 @@ export function Crm({ user, onSignOut }) {
     return c;
   }, [leads]);
 
-  const commission = useMemo(() => {
-    const year = now.getFullYear();
-    const sold = leads.filter((l) => l.pipelineStage === "completed" && String(l.saleDate || "").startsWith(String(year)));
-    return { year, count: sold.length, total: sold.reduce((sum, l) => sum + (Number(l.saleCommission) || 0), 0) };
-  }, [leads, now]);
+  const notifications = useMemo(() => buildNotifications({ leads, tasks, links, now }), [leads, tasks, links, now]);
+  const allIds = notifications.map((n) => n.id).join("|");
+  // Gelezen-lijst opschonen: alleen ids die nog bestaan bewaren.
+  useEffect(() => {
+    const ids = new Set(allIds.split("|"));
+    setReadIds((r) => (r.some((id) => !ids.has(id)) ? r.filter((id) => ids.has(id)) : r));
+  }, [allIds, setReadIds]);
 
   const filtered = useMemo(() => applyFilters(leads, filters, { currentUserId: user.id, now }), [leads, filters, user.id, now]);
 
@@ -136,15 +139,20 @@ export function Crm({ user, onSignOut }) {
     setModal({ key: `new-${Date.now()}`, isNew: true });
   }
 
-  function setQuick(q) {
-    setFilters((f) => ({ ...f, quick: q }));
-    if (q) scrollToList();
+  /** Vanaf Dashboard naar Leads met een filter (bijv. snelfilter of fase). */
+  function showLeads(patch) {
+    setFilters({ ...DEFAULT_FILTERS, ...patch });
+    route.navigate("leads");
+  }
+
+  function openPartner(p) {
+    if (p) route.navigate("partners", p.id);
   }
 
   async function handleStageChange(lead, stage) {
     if (stage === lead.pipelineStage) return;
     const after = { ...lead, pipelineStage: stage };
-    const v = validateLead(after, { partnerCount: lead.partnerSummary?.count || 0 });
+    const v = validateLead(after, { partnerCount: lead.partnerSummary?.count || 0, previousStage: lead.pipelineStage });
     if (!v.valid) {
       const firstKey = Object.keys(v.errors)[0];
       openLead(lead, FIELD_TABS[firstKey] || "overview", {
@@ -200,187 +208,87 @@ export function Crm({ user, onSignOut }) {
     }
   }
 
-  const initials = (user.displayName || user.email || "?")
-    .split(/[\s@.]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0].toUpperCase())
-    .join("");
-  const today = now.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const actions = {
+    onOpen: (l) => openLead(l),
+    onArchive: handleArchive,
+    onDelete: handleDelete,
+    onSold: handleSold,
+    onStageChange: handleStageChange,
+    onTogglePin: handleTogglePin,
+  };
+  const badges = { agenda: notifications.filter((n) => n.severity === "high").length };
+  const page = route.page;
 
   return (
-    <div
-      style={{
-        ...baseTextSelection,
-        minHeight: "100vh",
-        background: C.bg,
-        color: C.text,
-        fontFamily: C.fontUi,
-      }}
-    >
-      {/* HEADER */}
-      <header
-        style={{
-          background: C.surfaceWarm,
-          borderBottom: `1px solid ${C.border}`,
-          position: "sticky",
-          top: 0,
-          zIndex: 100,
-        }}
-      >
-        <div
-          className="msk-header-inner"
-          style={{ maxWidth: 1320, margin: "0 auto", height: 68, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-            <BrandLogo height={38} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: C.fontDisplay, fontWeight: 600, fontSize: 17, color: C.navy, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Mijn Spanje Kompas</div>
-              <div className="msk-hide-sm" style={{ fontSize: 11.5, color: C.textMuted, marginTop: 1 }}>
-                CRM · Lead- en klantvolgsysteem
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div
-              title={user.email}
-              className="msk-user-chip"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: 4,
-                paddingRight: 12,
-                border: `1px solid ${C.border}`,
-                borderRadius: 999,
-                background: C.surface,
+    <div style={{ ...baseTextSelection, minHeight: "100vh", background: C.bg, color: C.text, fontFamily: C.fontUi, display: "flex" }}>
+      <Sidebar page={page} navigate={route.navigate} collapsed={collapsed} setCollapsed={setCollapsed} badges={badges} />
+      <div className="msk-shell-main">
+        <Topbar
+          user={user}
+          onSignOut={onSignOut}
+          search={<GlobalSearch leads={leads} partners={partners} onOpenLead={(l) => openLead(l)} onOpenPartner={openPartner} />}
+          bell={
+            <NotificationBell
+              notifications={notifications}
+              readIds={readIds}
+              markRead={(id) => setReadIds((r) => (r.includes(id) ? r : [...r, id]))}
+              markAllRead={() => setReadIds(notifications.map((n) => n.id))}
+              onOpen={(n) => {
+                const l = n.leadId && leads.find((x) => x.id === n.leadId);
+                if (l) openLead(l, n.tab);
+                else if (n.partnerId) route.navigate("partners", n.partnerId);
               }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 99,
-                  background: C.gold,
-                  color: C.navyDark,
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  letterSpacing: ".02em",
-                }}
-              >
-                {initials}
-              </span>
-              <span className="msk-hide-sm" style={{ lineHeight: 1.2 }}>
-                <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: C.text }}>{user.displayName}</span>
-                <span style={{ display: "block", fontSize: 11, color: C.textMuted }}>
-                  {user.isAdmin ? "Beheerder" : "Medewerker"}
-                </span>
-              </span>
-            </div>
-            <button type="button" onClick={onSignOut} title="Uitloggen" aria-label="Uitloggen" style={btnStyle("neutral")}>
-              <Icon name="logout" size={15} />
-              <span className="msk-hide-sm">Uitloggen</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="msk-container">
-        {/* PAGINAKOP */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 6, textTransform: "capitalize" }}>{today}</div>
-            <h1
-              className="msk-page-title"
-              style={{ fontFamily: C.fontDisplay, fontSize: 32, fontWeight: 600, color: C.navy, margin: 0, lineHeight: 1.1, letterSpacing: "-0.015em" }}
-            >
-              Leads
-            </h1>
-            <div style={{ fontSize: 14, color: C.textMuted, marginTop: 6 }}>Beheer en volg alle potentiële kopers.</div>
-          </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button type="button" onClick={() => setImportOpen(true)} style={{ ...btnStyle("primary"), padding: "9px 15px", minHeight: 40, fontSize: 13 }}>
-              <Icon name="upload" size={15} /> Importeren
-            </button>
-            <button type="button" onClick={() => setCommissionsOpen(true)} style={{ ...btnStyle("primary"), padding: "9px 15px", minHeight: 40, fontSize: 13 }}>
-              <Icon name="chart" size={15} /> Commissies
-            </button>
-            <button type="button" onClick={() => setPartnersOpen(true)} style={{ ...btnStyle("primary"), padding: "9px 15px", minHeight: 40, fontSize: 13 }}>
-              <Icon name="users" size={15} /> Partners
-            </button>
-            <button type="button" onClick={openNew} style={{ ...btnStyle("primary", true), padding: "9px 18px", minHeight: 40, fontSize: 13 }}>
-              <Icon name="plus" size={15} /> Nieuwe lead
-            </button>
-          </div>
-        </div>
-
-        {error && (
-          <div style={{ marginBottom: 16 }}>
-            <Notice tone="error">{error}</Notice>
-          </div>
-        )}
-        {notice && (
-          <div style={{ marginBottom: 16, display: "flex", gap: 8, alignItems: "flex-start" }}>
-            <div style={{ flex: 1 }}>
-              <Notice tone={notice.tone}>{notice.text}</Notice>
-            </div>
-            <button type="button" onClick={() => setNotice(null)} aria-label="Melding sluiten" className="msk-icon-btn" style={{ ...iconBtnStyle, width: 32, height: 32, marginTop: 4 }}>
-              <Icon name="x" size={15} />
-            </button>
-          </div>
-        )}
-
-        <KpiRow
-          kpis={kpis}
-          activeQuick={filters.quick}
-          onQuick={setQuick}
-          commission={{ year: commission.year, count: commission.count, value: formatEuro(commission.total), onOpen: () => setCommissionsOpen(true) }}
+            />
+          }
         />
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(380px, 100%), 1fr))", gap: 16, marginBottom: 28 }}>
-          <TodayPanel items={todayItems} onOpen={(lead, tab) => openLead(lead, tab)} />
-          <AttentionPanel list={attention} onOpen={(lead) => openLead(lead, "followup")} onShowAll={() => setQuick("attention")} />
-        </div>
-
-        <LeadFilters
-          filters={filters}
-          setFilters={setFilters}
-          users={activeUsers}
-          partners={partners}
-          places={places}
-          currentUser={user}
-          resultCount={filtered.length}
-          loading={loading}
-          view={view}
-          setView={setView}
-          tabCounts={tabCounts}
-        />
-
-        {loading ? (
-          <div style={{ ...cardStyle, fontSize: 13, color: C.textMuted, textAlign: "center", padding: "36px 20px" }}>Leads laden...</div>
-        ) : filtered.length === 0 ? (
-          <div style={{ ...cardStyle, textAlign: "center", padding: "44px 20px" }}>
-            <div style={{ color: C.textSubtle, display: "flex", justifyContent: "center", marginBottom: 10 }}>
-              <Icon name="search" size={22} />
+        <main className="msk-container" style={{ width: "100%", maxWidth: 1400 }}>
+          {error && (
+            <div style={{ marginBottom: 16 }}>
+              <Notice tone="error">{error}</Notice>
             </div>
-            <div style={{ fontSize: 14.5, fontWeight: 600, color: C.text }}>Geen leads gevonden met deze filters</div>
-            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Pas de filters aan of klik op Reset om alles te tonen.</div>
-          </div>
-        ) : view === "tabel" ? (
-          <LeadTable leads={filtered} onOpen={(l) => openLead(l)} onArchive={handleArchive} onDelete={handleDelete} onSold={handleSold} onTogglePin={handleTogglePin} />
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(340px, 100%), 1fr))", gap: 16 }}>
-            {filtered.map((lead) => (
-              <LeadCard key={lead.id} lead={lead} onOpen={(l) => openLead(l)} onArchive={handleArchive} onDelete={handleDelete} onSold={handleSold} onStageChange={handleStageChange} onTogglePin={handleTogglePin} />
-            ))}
-          </div>
-        )}
-      </main>
+          )}
+          {notice && (
+            <div style={{ marginBottom: 16, display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <div style={{ flex: 1 }}>
+                <Notice tone={notice.tone}>{notice.text}</Notice>
+              </div>
+              <button type="button" onClick={() => setNotice(null)} aria-label="Melding sluiten" className="msk-icon-btn" style={{ ...iconBtnStyle, width: 32, height: 32, marginTop: 4 }}>
+                <Icon name="x" size={15} />
+              </button>
+            </div>
+          )}
+
+          {page === "dashboard" && (
+            <DashboardPage user={user} leads={leads} tasks={tasks} links={links} now={now} onOpenLead={(l, tab) => l && openLead(l, tab)} onNewLead={openNew} onImport={() => setImportOpen(true)} navigate={route.navigate} setLeadFilter={showLeads} />
+          )}
+          {page === "leads" && (
+            <LeadsPage
+              filtered={filtered}
+              filters={filters}
+              setFilters={setFilters}
+              users={activeUsers}
+              partners={partners}
+              places={places}
+              user={user}
+              loading={loading}
+              view={view}
+              setView={setView}
+              tabCounts={tabCounts}
+              actions={actions}
+              onImport={() => setImportOpen(true)}
+              onNewLead={openNew}
+            />
+          )}
+          {page === "agenda" && <AgendaPage leads={leads} tasks={tasks} links={links} users={activeUsers} now={now} initialView={route.param} onOpenLead={(l, tab) => l && openLead(l, tab)} />}
+          {page === "kpis" && <KpiPage leads={leads} links={links} partners={partners} users={users} now={now} navigate={route.navigate} onOpenPartner={openPartner} />}
+          {page === "partners" && (
+            <PartnersPage partners={partners} links={links} leads={leads} user={user} now={now} onOpenLead={(l, tab) => l && openLead(l, tab)} openPartnerId={route.param || null} setOpenPartnerId={(id) => route.navigate("partners", id || "")} />
+          )}
+          {page === "commissies" && <CommissionsPage leads={leads} partners={partners} users={activeUsers} user={user} now={now} onOpenLead={(l) => openLead(l)} onOpenPartner={openPartner} />}
+          {page === "instellingen" && <SettingsPage user={user} leads={leads} view={view} setView={setView} onImport={() => setImportOpen(true)} onResetNotifications={() => setReadIds([])} />}
+          {page === "help" && <HelpPage />}
+        </main>
+      </div>
 
       {modal && (
         <LeadDetailModal
@@ -397,19 +305,7 @@ export function Crm({ user, onSignOut }) {
           onClose={() => setModal(null)}
           onCreated={(id) => setModal({ key: `${id}-created`, leadId: id, isNew: false, initialTab: "overview", initialMessage: { tone: "ok", text: "Lead aangemaakt. Wijzigingen worden vanaf nu automatisch opgeslagen." } })}
           onOpenLead={(l) => openLead(l)}
-          onManagePartners={() => setPartnersOpen(true)}
           onSold={handleSold}
-        />
-      )}
-
-      {commissionsOpen && (
-        <CommissionsModal
-          leads={leads}
-          onClose={() => setCommissionsOpen(false)}
-          onOpenLead={(l) => {
-            setCommissionsOpen(false);
-            openLead(l);
-          }}
         />
       )}
 
@@ -431,6 +327,7 @@ export function Crm({ user, onSignOut }) {
           key={saleLead.id}
           lead={saleLead}
           user={user}
+          partners={partners}
           onClose={() => setSaleLeadId(null)}
           onSaved={(l, wasEdit) =>
             setNotice({ tone: "ok", text: wasEdit ? `Aankoopgegevens van ${l.name || "de lead"} bijgewerkt.` : `${l.name || "Lead"} staat op Aankoop afgerond. De commissie staat onder Commissies.` })
@@ -438,7 +335,6 @@ export function Crm({ user, onSignOut }) {
         />
       )}
 
-      {partnersOpen && <PartnersModal partners={partners} leads={leads} user={user} onClose={() => setPartnersOpen(false)} />}
     </div>
   );
 }

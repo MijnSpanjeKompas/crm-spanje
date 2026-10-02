@@ -30,6 +30,8 @@ import {
   CONTACT_METHODS,
   PARTNER_LINK_STATUSES,
   VISIT_SPAIN_STATUSES,
+  CONSENT_STATUSES,
+  COMMISSION_STATUSES,
 } from "./constants";
 import { toDate, todayISO } from "./dates";
 
@@ -60,10 +62,15 @@ export const FORM_FIELDS = [
   // toegevoegd voor de nieuwe leadweergave / Google Sheets-import
   "visitSpainStatus", "consentContact", "formSource",
   "contactPreferenceText", "contactMomentText",
+  // fase-afhankelijk + commissie
+  "consentStatus", "reservedAt",
+  "commissionStatus", "commissionExpectedAmount", "commissionReceivedAmount",
+  "commissionExpectedDate", "commissionReceivedAt", "commissionNotes",
+  "commissionPartnerId", "commissionPartnerName",
 ];
 
 const ARRAY_FIELDS = ["regions", "places", "propertyTypes", "requirements", "tags"];
-const NUMBER_FIELDS = ["budgetMin", "budgetMax", "bedroomsMin", "bathroomsMin", "availableEquity", "salePrice", "saleCommission"];
+const NUMBER_FIELDS = ["budgetMin", "budgetMax", "bedroomsMin", "bathroomsMin", "availableEquity", "salePrice", "saleCommission", "commissionExpectedAmount", "commissionReceivedAmount"];
 
 // ─── KLEINE HULPEN ───────────────────────────────────────────────────────────
 function isValidKey(options, value) {
@@ -404,6 +411,17 @@ export function emptyLead(user) {
     contactMomentText: "",
     sourceSubmissionId: "",
     sourceSubmittedAt: null,
+    // Expliciet kiezen bij aanmaken (Ja/Nee/Onbekend).
+    consentStatus: "",
+    reservedAt: "",
+    commissionStatus: "",
+    commissionExpectedAmount: null,
+    commissionReceivedAmount: null,
+    commissionExpectedDate: "",
+    commissionReceivedAt: "",
+    commissionNotes: "",
+    commissionPartnerId: "",
+    commissionPartnerName: "",
     // gedenormaliseerd
     lastContactAt: null,
     lastContactMethod: "",
@@ -625,6 +643,30 @@ export function normalizeLead(raw, ctx = {}) {
     contactMomentText: str(raw.contactMomentText),
     sourceSubmissionId: str(raw.sourceSubmissionId),
     sourceSubmittedAt: raw.sourceSubmittedAt || null,
+    // Toestemming: nieuw veld, met terugval op het oude ja/nee-veld.
+    consentStatus: pickKey(CONSENT_STATUSES, raw.consentStatus, raw.consentContact === true ? "yes" : raw.consentContact === false ? "no" : ""),
+    reservedAt: str(raw.reservedAt),
+    // Commissie: nieuw model op de lead, met terugval op de eerdere velden.
+    commissionStatus: pickKey(
+      COMMISSION_STATUSES,
+      raw.commissionStatus,
+      resolveStage(pick("pipelineStage")) === "completed" ? (Number(raw.saleCommission) > 0 ? "expected" : "unknown") : ""
+    ),
+    commissionExpectedAmount: numOrNull(raw.commissionExpectedAmount ?? raw.saleCommission),
+    commissionReceivedAmount: numOrNull(raw.commissionReceivedAmount),
+    commissionExpectedDate: str(raw.commissionExpectedDate),
+    commissionReceivedAt: str(raw.commissionReceivedAt),
+    commissionNotes: str(raw.commissionNotes),
+    commissionPartnerId: str(raw.commissionPartnerId),
+    commissionPartnerName: str(raw.commissionPartnerName),
+    // Mijlpalen (nooit afgeleid bij het lezen; zie milestones.js)
+    firstContactAt: raw.firstContactAt || null,
+    firstMeetingScheduledAt: raw.firstMeetingScheduledAt || null,
+    firstMeetingCompletedAt: raw.firstMeetingCompletedAt || null,
+    firstForwardedAt: raw.firstForwardedAt || null,
+    firstReservedAt: raw.firstReservedAt || null,
+    purchaseCompletedAt: raw.purchaseCompletedAt || null,
+    stoppedAt: raw.stoppedAt || null,
     rentalInterest: pickKey(RENTAL_INTEREST, pick("rentalInterest"), ""),
     requirements: arrayOfKeys(REQUIREMENTS, raw.requirements),
     extraRequirements: str(pick("extraRequirements")),
@@ -688,7 +730,7 @@ export function buildLeadPayload(lead) {
     if (ARRAY_FIELDS.includes(key)) v = uniq(Array.isArray(v) ? v.map((x) => (typeof x === "string" ? x.trim() : x)) : []);
     else if (NUMBER_FIELDS.includes(key)) v = numOrNull(v);
     else if (key === "pinned" || key === "nextActionMonthOnly") v = Boolean(v);
-    else if (key === "consentContact") v = v === true || v === false ? v : null;
+    else if (key === "consentContact") v = lead.consentStatus === "yes" ? true : lead.consentStatus === "no" ? false : v === true || v === false ? v : null;
     else v = typeof v === "string" ? v.trim() : v === undefined || v === null ? "" : v;
     out[key] = v;
   });
@@ -700,6 +742,8 @@ export function buildLeadPayload(lead) {
   }
   if (out.nextActionMonthOnly && out.nextActionDate) out.nextActionDate = `${String(out.nextActionDate).slice(0, 7)}-01`;
   if (out.nextActionType !== "other") out.nextActionLabel = "";
+  // Oud veld saleCommission blijft gelijk aan het verwachte commissiebedrag.
+  out.saleCommission = out.commissionStatus ? out.commissionExpectedAmount : out.commissionExpectedAmount ?? out.saleCommission ?? null;
   out.emailNormalized = normalizeEmail(out.email);
   out.phoneNormalized = normalizePhone(out.phone);
   out.schemaVersion = SCHEMA_VERSION;

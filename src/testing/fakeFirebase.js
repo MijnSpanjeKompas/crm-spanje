@@ -88,6 +88,21 @@ export function collection(parent, ...segments) {
   return { type: "collection", path, id: segments[segments.length - 1] };
 }
 
+export function collectionGroup(_db, id) {
+  return { type: "group", id, path: `**/${id}` };
+}
+
+function groupSnap(id) {
+  const d = Array.from(docs.keys())
+    .filter((p) => {
+      const parts = p.split("/");
+      return parts.length >= 2 && parts.length % 2 === 0 && parts[parts.length - 2] === id;
+    })
+    .sort()
+    .map(docSnap);
+  return { docs: d, size: d.length, empty: d.length === 0 };
+}
+
 export function doc(parent, ...segments) {
   if (parent && parent.type === "collection") {
     const id = segments.length ? segments.join("/") : newId();
@@ -129,7 +144,7 @@ export async function getDoc(docRef) {
 }
 
 export function onSnapshot(ref, next) {
-  const l = () => next(ref.type === "collection" ? colSnap(ref.path) : docSnap(ref.path));
+  const l = () => next(ref.type === "group" ? groupSnap(ref.id) : ref.type === "collection" ? colSnap(ref.path) : docSnap(ref.path));
   listeners.add(l);
   l();
   return () => listeners.delete(l);

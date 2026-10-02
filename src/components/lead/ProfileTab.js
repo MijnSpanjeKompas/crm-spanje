@@ -28,16 +28,21 @@ const LEGACY_LABELS = {
 
 const grid = (min) => ({ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`, gap: 12 });
 
-/** Eigen inbreng is vooral relevant bij (deels) hypotheek. */
-function showEquity(form) {
-  return ["mortgage", "combination"].includes(form.financingType) || (form.availableEquity !== null && form.availableEquity !== undefined);
+/** Verhuur is vooral relevant bij investering, vakantie- of tweede woning (of als er al iets is ingevuld). */
+function showRental(form) {
+  return ["investment", "holiday_home", "second_home", "rental"].includes(form.purchaseGoal) || Boolean(form.rentalInterest);
+}
+
+/** "Aanvullende situatie" (eigen inbreng, woonsituatie) alleen tonen als er iets staat of op verzoek. */
+function hasSituation(form) {
+  return Boolean(form.currentHousingSituation) || (form.availableEquity !== null && form.availableEquity !== undefined);
 }
 
 export function ProfileTab({ form, set, errors, compact = false }) {
   const missing = getMissingProfileFields(form);
   const legacy = form._legacy?.unmapped || {};
   const legacyEntries = Object.entries(legacy).filter(([k]) => LEGACY_LABELS[k]);
-  const [showSituation, setShowSituation] = useState(Boolean(form.currentHousingSituation));
+  const [showSituation, setShowSituation] = useState(hasSituation(form));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -64,7 +69,7 @@ export function ProfileTab({ form, set, errors, compact = false }) {
           <div style={grid(170)}>
             <SelectField label="Aankoopdoel" value={form.purchaseGoal} onChange={(v) => set("purchaseGoal", v)} options={PURCHASE_GOALS} />
             <SelectField label="Aankooptermijn" value={form.purchaseTimeline} onChange={(v) => set("purchaseTimeline", v)} options={PURCHASE_TIMELINES} />
-            <SelectField label="Interesse in verhuur" value={form.rentalInterest} onChange={(v) => set("rentalInterest", v)} options={RENTAL_INTEREST} />
+            {showRental(form) && <SelectField label="Interesse in verhuur" value={form.rentalInterest} onChange={(v) => set("rentalInterest", v)} options={RENTAL_INTEREST} />}
           </div>
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.borderSoft}` }}>
             <div style={grid(170)}>
@@ -94,11 +99,14 @@ export function ProfileTab({ form, set, errors, compact = false }) {
             <NumberField label="Budget minimaal (€)" value={form.budgetMin} onChange={(v) => set("budgetMin", v)} step={5000} placeholder="Bijv. 200000" />
             <NumberField label="Budget maximaal (€)" value={form.budgetMax} onChange={(v) => set("budgetMax", v)} step={5000} error={errors.budgetMax} placeholder="Bijv. 300000" />
             <SelectField label="Financiering" value={form.financingType} onChange={(v) => set("financingType", v)} options={FINANCING_TYPES} />
-            {showEquity(form) && <NumberField label="Eigen inbreng (€)" value={form.availableEquity} onChange={(v) => set("availableEquity", v)} step={5000} placeholder="Optioneel" />}
+
           </div>
           <div style={{ marginTop: 12 }}>
             {showSituation ? (
-              <SelectField label="Aanvullende situatie" value={form.currentHousingSituation} onChange={(v) => set("currentHousingSituation", v)} options={HOUSING_SITUATIONS} hint="Bijv. of de Nederlandse woning eerst verkocht moet worden." />
+              <div style={{ ...grid(150), paddingTop: 12, borderTop: `1px solid ${C.borderSoft}` }}>
+                <NumberField label="Eigen inbreng (€)" value={form.availableEquity} onChange={(v) => set("availableEquity", v)} step={5000} placeholder="Optioneel" />
+                <SelectField label="Huidige woonsituatie" value={form.currentHousingSituation} onChange={(v) => set("currentHousingSituation", v)} options={HOUSING_SITUATIONS} hint="Bijv. of de Nederlandse woning eerst verkocht moet worden." />
+              </div>
             ) : (
               <button type="button" onClick={() => setShowSituation(true)} style={{ ...btnStyle("neutral"), minHeight: 30, padding: "4px 10px", fontSize: 12 }}>
                 <Icon name="plus" size={12} /> Aanvullende situatie

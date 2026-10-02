@@ -254,7 +254,7 @@ export function LeadDetailModal({ lead, isNew, initialEdits, initialTab, initial
       return true;
     }
     const after = { ...current, ...snapshot };
-    const v = validateLead(after, { partnerCount: partnerCountRef.current });
+    const v = validateLead(after, { partnerCount: partnerCountRef.current, previousStage: current.pipelineStage });
     if (!v.valid) {
       setErrors(v.errors);
       const firstKey = Object.keys(v.errors)[0];
@@ -360,7 +360,7 @@ export function LeadDetailModal({ lead, isNew, initialEdits, initialTab, initial
 
   async function create(forceDuplicate = false) {
     setMessage(null);
-    const v = validateLead(form, { partnerCount: 0 });
+    const v = validateLead(form, { partnerCount: 0, isCreate: true });
     if (!v.valid) {
       setErrors(v.errors);
       setMessage({ tone: "error", text: `Nog niet aangemaakt: ${Object.values(v.errors)[0]}` });
@@ -409,7 +409,7 @@ export function LeadDetailModal({ lead, isNew, initialEdits, initialTab, initial
   const dupIds = (base.possibleDuplicateOf || []).filter((id) => id !== base.id);
   const dupLeads = dupIds.map((id) => allLeads.find((l) => l.id === id)).filter(Boolean);
   const tabs = [
-    { key: "overview", label: "Overzicht", alert: ["name", "email", "phone", "closureReason", "closureNotes"].some((k) => errors[k]) },
+    { key: "overview", label: "Overzicht", alert: ["name", "email", "phone", "closureReason", "closureNotes", "forwarding", "consentStatus", "leadSource"].some((k) => errors[k]) },
     { key: "profile", label: "Zoekprofiel", alert: Boolean(errors.budgetMax) },
     { key: "followup", label: "Opvolging", count: base.openTaskCount || 0, alert: ["nextActionDate", "nextActionLabel", "appointmentDate"].some((k) => errors[k]) },
     { key: "timeline", label: "Tijdlijn", count: activities.items.filter((a) => a.type !== "system").length },

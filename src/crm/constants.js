@@ -228,7 +228,8 @@ export const CLOSURE_REASONS = [
   { value: "no_longer_interested", label: "Geen interesse meer" },
   { value: "financing_not_possible", label: "Financiering niet mogelijk" },
   { value: "not_qualified", label: "Niet gekwalificeerd" },
-  { value: "other", label: "Anders" },
+  { value: "region_not_suitable", label: "Regio niet passend" },
+  { value: "other", label: "Andere reden" },
 ];
 
 // ─── BRON ────────────────────────────────────────────────────────────────────
@@ -290,6 +291,7 @@ export const PROPERTY_TYPES = [
   { value: "villa", label: "Villa" },
   { value: "finca", label: "Finca" },
   { value: "other", label: "Anders" },
+  { value: "no_preference", label: "Geen voorkeur / open voor advies" },
 ];
 
 export const BUILD_PREFERENCES = [
@@ -468,3 +470,42 @@ export const ACTOR_TYPES = [
   { value: "agent", label: "AI-agent" },
   { value: "system", label: "Systeem" },
 ];
+
+// ─── TOESTEMMING ─────────────────────────────────────────────────────────────
+/** Expliciete keuze; "unknown" mag, leeg niet. consentContact (true/false/null) blijft voor compatibiliteit. */
+export const CONSENT_STATUSES = [
+  { value: "yes", label: "Ja" },
+  { value: "no", label: "Nee" },
+  { value: "unknown", label: "Onbekend" },
+];
+
+// ─── COMMISSIE ───────────────────────────────────────────────────────────────
+export const COMMISSION_STATUSES = [
+  { value: "unknown", label: "Nog onbekend", color: "#636d78", bg: "#f3f2ef" },
+  { value: "expected", label: "Verwacht", color: "#3a6788", bg: "#eaf1f6" },
+  { value: "outstanding", label: "Openstaand", color: "#8c6010", bg: "#fbefd2" },
+  { value: "received", label: "Ontvangen", color: "#2f7a55", bg: "#eaf4ee" },
+  { value: "none", label: "Geen commissie", color: "#636d78", bg: "#f3f2ef" },
+  { value: "cancelled", label: "Geannuleerd", color: "#9b4a43", bg: "#f6eae8" },
+];
+/** Statussen waarbij nog geld verwacht wordt. */
+export const COMMISSION_OPEN_STATUSES = ["expected", "outstanding"];
+
+// ─── MIJLPALEN ───────────────────────────────────────────────────────────────
+/** Eerste keer dat een lead een stap bereikte. Worden nooit overschreven of verzonnen. */
+export const MILESTONES = [
+  { key: "firstContactAt", label: "Eerste contact" },
+  { key: "firstMeetingScheduledAt", label: "Eerste gesprek gepland" },
+  { key: "firstMeetingCompletedAt", label: "Eerste gesprek gevoerd" },
+  { key: "firstForwardedAt", label: "Doorgestuurd" },
+  { key: "firstReservedAt", label: "Gereserveerd" },
+  { key: "purchaseCompletedAt", label: "Aankoop afgerond" },
+  { key: "stoppedAt", label: "Gestopt" },
+];
+
+/** Fases die "doorgestuurd" of verder betekenen. */
+export const FORWARDED_OR_LATER = ["partner_connected", "purchase_process", "completed"];
+
+export function isWebsiteSource(source) {
+  return String(source || "").startsWith("website_");
+}

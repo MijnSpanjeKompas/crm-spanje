@@ -1,21 +1,25 @@
 import { useState } from "react";
-import { isSold } from "../crm/constants";
+import { isSold, COMMISSION_STATUSES } from "../crm/constants";
 import { markLeadSold } from "../crm/services";
 import { todayISO } from "../crm/dates";
-import { Modal, ModalTitle, CloseButton, TextField, NumberField, TextAreaField, Notice, Icon, btnStyle, formatEuro, C } from "./ui";
+import { Modal, ModalTitle, CloseButton, TextField, NumberField, TextAreaField, SelectField, Notice, Icon, btnStyle, formatEuro, C } from "./ui";
 
 /**
  * Verkoop vastleggen: aankoopprijs, woning en onze commissie.
  * Wordt ook gebruikt om de verkoopgegevens later aan te passen.
  */
-export function SaleDialog({ lead, user, onClose, onSaved }) {
+export function SaleDialog({ lead, user, partners = [], onClose, onSaved }) {
+  // Alleen partners die aan deze lead gekoppeld zijn (of al eerder gekozen).
+  const partnerOptions = partners.filter((p) => (lead.partnerIds || []).includes(p.id) || p.id === lead.commissionPartnerId).map((p) => ({ value: p.id, label: p.name }));
   const editing = isSold(lead);
   const [form, setForm] = useState(() => ({
     saleDate: lead.saleDate || todayISO(),
     salePrice: lead.salePrice ?? null,
     saleProperty: lead.saleProperty || "",
-    saleCommission: lead.saleCommission ?? null,
+    saleCommission: lead.commissionExpectedAmount ?? lead.saleCommission ?? null,
     saleNotes: lead.saleNotes || "",
+    commissionStatus: lead.commissionStatus && ["unknown", "expected", "none"].includes(lead.commissionStatus) ? lead.commissionStatus : lead.commissionStatus || "",
+    commissionPartnerId: lead.commissionPartnerId || (partnerOptions.length === 1 ? partnerOptions[0].value : ""),
   }));
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
@@ -33,13 +37,28 @@ export function SaleDialog({ lead, user, onClose, onSaved }) {
     if (!form.saleProperty.trim()) errs.saleProperty = "Vul in welke woning het is (adres of omschrijving).";
     if (!form.saleDate) errs.saleDate = "Kies de datum waarop de aankoop rond was.";
     if (form.saleCommission !== null && form.saleCommission < 0) errs.saleCommission = "Commissie kan niet negatief zijn.";
+    if (!form.commissionPartnerId)
+      errs.commissionPartnerId = partnerOptions.length ? "Kies de partner via wie de aankoop liep." : "Koppel eerst een partner aan deze lead (tab Partners).";
+    if (!form.commissionStatus) errs.commissionStatus = "Kies de commissiestatus.";
+    if (form.commissionStatus === "expected" && !(form.saleCommission > 0)) errs.saleCommission = "Vul het verwachte commissiebedrag in.";
     setErrors(errs);
     if (Object.keys(errs).length) return;
 
     setBusy(true);
     setError("");
     try {
-      await markLeadSold(lead, { ...form, saleProperty: form.saleProperty.trim(), saleNotes: form.saleNotes.trim() }, user);
+      const { saleCommission, ...rest } = form;
+      await markLeadSold(
+        lead,
+        {
+          ...rest,
+          saleProperty: form.saleProperty.trim(),
+          saleNotes: form.saleNotes.trim(),
+          commissionExpectedAmount: form.commissionStatus === "none" ? null : saleCommission,
+          commissionPartnerName: partnerOptions.find((o) => o.value === form.commissionPartnerId)?.label || "",
+        },
+        user,
+      );
       onSaved?.(lead, editing);
       onClose();
     } catch (e) {
@@ -68,17 +87,41 @@ export function SaleDialog({ lead, user, onClose, onSaved }) {
           />
         </div>
         <NumberField label="Aankoopprijs (€) *" value={form.salePrice} onChange={set("salePrice")} error={errors.salePrice} step={1000} placeholder="Bijv. 245000" />
-        <NumberField
-          label="Onze commissie (€)"
-          value={form.saleCommission}
-          onChange={set("saleCommission")}
-          error={errors.saleCommission}
-          step={100}
-          hint={pct !== null ? `≈ ${pct.toLocaleString("nl-NL", { maximumFractionDigits: 2 })}% van de aankoopprijs` : "Mag je ook later invullen."}
-        />
+        {form.commissionStatus !== "none" && (
+          <NumberField
+            label={form.commissionStatus === "expected" ? "Verwachte commissie (€) *" : "Verwachte commissie (€)"}
+            value={form.saleCommission}
+            onChange={set("saleCommission")}
+            error={errors.saleCommission}
+            step={100}
+            hint={pct !== null ? `≈ ${pct.toLocaleString("nl-NL", { maximumFractionDigits: 2 })}% van de aankoopprijs` : "Mag je ook later invullen."}
+          />
+        )}
         <TextField label="Datum aankoop *" type="date" value={form.saleDate} onChange={set("saleDate")} error={errors.saleDate} />
+        <SelectField
+          label="Partner *"
+          value={form.commissionPartnerId}
+          onChange={set("commissionPartnerId")}
+          options={partnerOptions}
+          error={errors.commissionPartnerId}
+          placeholder="Kies partner"
+        />
+        <SelectField
+          label="Commissiestatus *"
+          value={form.commissionStatus}
+          onChange={set("commissionStatus")}
+          options={COMMISSION_STATUSES.filter((s) => ["unknown", "expected", "none"].includes(s.value) || s.value === form.commissionStatus)}
+          error={errors.commissionStatus}
+          placeholder="Kies status"
+        />
         <div style={{ gridColumn: "1 / -1" }}>
-          <TextAreaField label="Notitie (optioneel)" value={form.saleNotes} onChange={set("saleNotes")} rows={2} placeholder="Bijv. commissie via Costa Homes, uitbetaling na notaris" />
+          <TextAreaField
+            label="Notitie (optioneel)"
+            value={form.saleNotes}
+            onChange={set("saleNotes")}
+            rows={2}
+            placeholder="Bijv. commissie via Costa Homes, uitbetaling na notaris"
+          />
         </div>
       </div>
 

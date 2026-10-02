@@ -313,3 +313,47 @@ button:disabled {
 details > summary::-webkit-details-marker {
   color: var(--msk-gold-text);
 }
+
+/* ─── Command Center-shell ─────────────────────────────────────────────── */
+.msk-nav:hover {
+  background: var(--msk-surface-sunken) !important;
+}
+
+.msk-shell-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 720px) {
+  .msk-sidebar {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1000px) {
+  .msk-dash-bottom {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Fasebadge als keuzelijst op leadkaarten/tabel */
+select.msk-stage-select {
+  background-image: none !important;
+  padding-right: 24px !important;
+}
+select.msk-stage-select:focus {
+  background-color: var(--stage-bg) !important;
+  border-color: var(--msk-navy) !important;
+}
+
+@media (max-width: 1100px) {
+  .msk-agenda-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .msk-week {
+    overflow-x: auto;
+    grid-template-columns: repeat(7, minmax(130px, 1fr)) !important;
+  }
+}

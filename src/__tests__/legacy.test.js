@@ -255,10 +255,28 @@ describe("validatie", () => {
   test("kennismaking gepland vereist datum", () => {
     expect(validateLead({ ...base, pipelineStage: "appointment_scheduled" }).errors.appointmentDate).toBeTruthy();
   });
-  test("gekoppeld aan partner zonder koppeling = waarschuwing", () => {
-    const v = validateLead({ ...base, pipelineStage: "partner_connected" }, { partnerCount: 0 });
-    expect(v.valid).toBe(true);
-    expect(v.warnings.length).toBe(1);
+  test("doorsturen: alleen bij de OVERGANG volledige gegevens nodig (progressief)", () => {
+    // Overgang naar Doorgestuurd met ontbrekende gegevens → blokkeren met duidelijke lijst
+    const v = validateLead({ ...base, pipelineStage: "partner_connected" }, { partnerCount: 0, previousStage: "contact_phase" });
+    expect(v.valid).toBe(false);
+    expect(v.errors.forwarding).toMatch(/aankoopdoel.*gekoppelde partner.*toestemming/);
+    // Lead die al op Doorgestuurd stond wordt niet ineens geblokkeerd
+    expect(validateLead({ ...base, pipelineStage: "partner_connected" }, { partnerCount: 0, previousStage: "partner_connected" }).valid).toBe(true);
+    // Compleet → mag
+    const full = { ...base, pipelineStage: "partner_connected", purchaseGoal: "emigration", purchaseTimeline: "3_to_6_months", budgetMax: 300000, regions: ["costa_calida"], propertyTypes: ["no_preference"], buildPreference: "no_preference", financingType: "own_funds", leadSummary: "Zoekt villa", consentStatus: "yes" };
+    expect(validateLead(full, { partnerCount: 1, previousStage: "contact_phase" }).valid).toBe(true);
+  });
+  test("later opvolgen vraagt opvolgdatum; aanmaken vraagt bron en toestemming", () => {
+    expect(validateLead({ ...base, pipelineStage: "follow_up_later", nextActionType: "none" }, { previousStage: "contact_phase" }).errors.nextActionDate).toBeTruthy();
+    const c = validateLead({ ...base, consentStatus: "", leadSource: "" }, { isCreate: true });
+    expect(c.errors.consentStatus).toBeTruthy();
+    expect(c.errors.leadSource).toBeTruthy();
+    expect(validateLead({ ...base, consentStatus: "unknown", leadSource: "manual" }, { isCreate: true }).valid).toBe(true);
+  });
+  test("gereserveerd vereist partner", () => {
+    const full = { ...base, pipelineStage: "purchase_process", purchaseGoal: "emigration", purchaseTimeline: "3_to_6_months", budgetMax: 300000, regions: ["costa_calida"], propertyTypes: ["villa"], buildPreference: "resale", financingType: "own_funds", leadSummary: "x", consentStatus: "yes" };
+    expect(validateLead(full, { partnerCount: 0, previousStage: "partner_connected" }).errors.forwarding).toMatch(/partner/);
+    expect(validateLead(full, { partnerCount: 1, previousStage: "partner_connected" }).valid).toBe(true);
   });
   test("gestopt vereist afsluitreden", () => {
     expect(validateLead({ ...base, pipelineStage: "stopped", nextActionType: "none" }).errors.closureReason).toBeTruthy();

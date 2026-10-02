@@ -29,6 +29,8 @@ async function cardTitle(name) {
 
 beforeEach(() => {
   seed();
+  window.localStorage.clear();
+  window.location.hash = "#/leads";
   mockAuth.current = { status: "ready", user: LUKE, authUser: { uid: "uLuke" }, signIn: jest.fn(), signOut: jest.fn(), resetPassword: jest.fn() };
   window.confirm = jest.fn(() => true);
 });
@@ -39,18 +41,23 @@ test("toont inlogscherm als je niet bent ingelogd", () => {
   expect(screen.getByRole("button", { name: /inloggen/i })).toBeInTheDocument();
 });
 
-test("dashboard en lijst renderen oude leads", async () => {
+test("leads-pagina en dashboard renderen oude leads, zonder dubbele KPI's", async () => {
   render(<App />);
   expect(await cardTitle("Ewoud Kremer")).toBeTruthy();
   expect(await cardTitle("Ed en Norma Heerschap")).toBeTruthy();
   // William is 'Gestopt' (gesloten): geen kaart in de open lijst.
   expect(screen.queryAllByText("William de Wit").filter((el) => el.tagName === "DIV")).toHaveLength(0);
-  // Alleen meldingen over de volgende actie; "Afsluitreden ontbreekt" e.d. niet meer.
-  expect(screen.queryByText(/Afsluitreden ontbreekt/)).not.toBeInTheDocument();
-  expect(screen.getAllByText(/Vandaag opvolgen/i).length).toBeGreaterThan(0);
-  expect(screen.getAllByText(/Verlopen acties/i).length).toBeGreaterThan(0);
   expect(screen.getAllByText("Doorgestuurd").length).toBeGreaterThan(0);
-  expect(screen.queryByText(/Geen strenge datum/i)).not.toBeInTheDocument();
+  // Leads-pagina: geen dashboard-KPI's, geen Partners-/Commissiesknoppen in de kop
+  expect(screen.queryByText(/Vandaag opvolgen/i)).not.toBeInTheDocument();
+  expect(within(screen.getByRole("main")).queryByRole("button", { name: /^Commissies$/ })).not.toBeInTheDocument();
+
+  // Navigatie naar Dashboard
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Hoofdnavigatie" })).getByRole("button", { name: /Dashboard/ }));
+  expect(await screen.findByText(/Goede(morgen|middag|navond)/)).toBeInTheDocument();
+  expect(screen.getAllByText(/Vandaag opvolgen/i).length).toBeGreaterThan(0);
+  expect(screen.getByText(/Recent binnengekomen/)).toBeInTheDocument();
+  expect(screen.queryByText(/Afsluitreden ontbreekt/)).not.toBeInTheDocument();
 });
 
 test("leaddossier: nieuwe tabs, tijdlijn en autosave (migratie)", async () => {
@@ -111,6 +118,13 @@ test("nieuwe lead met duplicaatwaarschuwing", async () => {
   const inputs = within(dialog).getAllByRole("textbox");
   fireEvent.change(inputs[0], { target: { value: "E. Kremer" } });
   fireEvent.change(dialog.querySelector("input[type=email]"), { target: { value: "EWOUD@example.nl" } });
+  // Zonder expliciete toestemmingskeuze kan de lead niet worden aangemaakt
+  await act(async () => {
+    fireEvent.click(within(dialog).getByRole("button", { name: /Lead aanmaken/ }));
+  });
+  expect(within(dialog).getAllByText(/toestemming voor contact/i).length).toBeGreaterThan(0);
+  const consent = within(dialog).getAllByRole("combobox").find((sel) => within(sel).queryByText("Onbekend") && within(sel).queryByText("Kies..."));
+  fireEvent.change(consent, { target: { value: "unknown" } });
   await act(async () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Lead aanmaken/ }));
   });
@@ -128,9 +142,9 @@ test("nieuwe lead met duplicaatwaarschuwing", async () => {
 test("archiveren via kaart vraagt bevestiging en verwijdert niets", async () => {
   render(<App />);
   await cardTitle("Ed en Norma Heerschap");
-  const btns = screen.getAllByTitle("Archiveren");
+  fireEvent.click(screen.getAllByRole("button", { name: /Meer acties voor/ })[0]);
   await act(async () => {
-    fireEvent.click(btns[0]);
+    fireEvent.click(screen.getByRole("menuitem", { name: /Archiveren/ }));
   });
   expect(window.confirm).toHaveBeenCalled();
   const archived = ["ewoud", "heerschap"].map((id) => fake.__getDoc(`leads/${id}`)).filter((d) => d.archived);
@@ -141,38 +155,46 @@ test("verwijderen via kaart: na bevestiging is de lead echt weg, zonder bevestig
   render(<App />);
   await cardTitle("Ed en Norma Heerschap");
   window.confirm = jest.fn(() => false);
+  fireEvent.click(screen.getAllByRole("button", { name: /Meer acties voor/ })[0]);
   await act(async () => {
-    fireEvent.click(screen.getAllByTitle("Verwijderen")[0]);
+    fireEvent.click(screen.getByRole("menuitem", { name: /Lead verwijderen/ }));
   });
   expect(["ewoud", "heerschap"].every((id) => fake.__getDoc(`leads/${id}`))).toBe(true);
 
   window.confirm = jest.fn(() => true);
+  fireEvent.click(screen.getAllByRole("button", { name: /Meer acties voor/ })[0]);
   await act(async () => {
-    fireEvent.click(screen.getAllByTitle("Verwijderen")[0]);
+    fireEvent.click(screen.getByRole("menuitem", { name: /Lead verwijderen/ }));
   });
   await waitFor(() => expect(["ewoud", "heerschap"].filter((id) => fake.__getDoc(`leads/${id}`))).toHaveLength(1));
 });
 
 test("Aankoop afgerond: vastleggen en terugzien onder Commissies", async () => {
-  fake.__setDoc("leads/devos", { schemaVersion: 2, name: "Jan de Vos", email: "jan@devos.nl", pipelineStage: "purchase_process", nextActionType: "follow_up_lead", nextActionDate: "2099-01-01" });
+  fake.__setDoc("partners/p1", { name: "Costa Homes", type: "realtor", active: true });
+  fake.__setDoc("leads/devos", { schemaVersion: 2, name: "Jan de Vos", email: "jan@devos.nl", pipelineStage: "purchase_process", nextActionType: "follow_up_lead", nextActionDate: "2099-01-01", partnerIds: ["p1"], partnerNames: ["Costa Homes"] });
   render(<App />);
   await cardTitle("Jan de Vos");
-  fireEvent.click(screen.getByRole("button", { name: /^Aankoop afgerond$/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Meer acties voor Jan de Vos/ }));
+  fireEvent.click(screen.getByRole("menuitem", { name: /Aankoop afgerond vastleggen/ }));
   const dialog = await screen.findByRole("dialog");
   fireEvent.change(within(dialog).getByPlaceholderText(/Calle del Mar/), { target: { value: "Calle del Mar 12" } });
   fireEvent.change(within(dialog).getByPlaceholderText(/245000/), { target: { value: "250000" } });
+  const status = within(dialog).getAllByRole("combobox").find((sel) => within(sel).queryByText("Verwacht"));
+  fireEvent.change(status, { target: { value: "expected" } });
   const commission = within(dialog).getAllByRole("spinbutton")[1];
   fireEvent.change(commission, { target: { value: "7500" } });
   await act(async () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Aankoop opslaan/ }));
   });
   await waitFor(() => expect(fake.__getDoc("leads/devos").pipelineStage).toBe("completed"));
-  expect(fake.__getDoc("leads/devos")).toMatchObject({ salePrice: 250000, saleCommission: 7500, saleProperty: "Calle del Mar 12" });
+  expect(fake.__getDoc("leads/devos")).toMatchObject({ salePrice: 250000, saleCommission: 7500, commissionExpectedAmount: 7500, commissionStatus: "expected", commissionPartnerId: "p1", saleProperty: "Calle del Mar 12" });
+  expect(fake.__getDoc("leads/devos").purchaseCompletedAt).toBeInstanceOf(Date);
 
-  fireEvent.click(screen.getByRole("button", { name: /Commissies/ }));
-  const overview = await screen.findByRole("dialog");
-  expect(within(overview).getByText("Jan de Vos")).toBeInTheDocument();
-  expect(within(overview).getAllByText("€ 7.500").length).toBeGreaterThan(0);
+  // Commissies-pagina via de hoofdnavigatie
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Hoofdnavigatie" })).getByRole("button", { name: /Commissies/ }));
+  const main = screen.getByRole("main");
+  expect(await within(main).findByRole("button", { name: "Jan de Vos" })).toBeInTheDocument();
+  expect(within(main).getAllByText("€ 7.500").length).toBeGreaterThan(0);
 });
 
 test("tabbladen per pipelinefase filteren de lijst", async () => {
