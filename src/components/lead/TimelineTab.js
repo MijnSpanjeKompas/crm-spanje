@@ -35,7 +35,6 @@ function freshDraft(user) {
     nextActionAssignedTo: user?.id || "",
     nextActionAssignedToName: user?.displayName || "",
     nextActionNotes: "",
-    moveToContact: true,
   };
 }
 
@@ -188,7 +187,7 @@ export function TimelineTab({ lead, user, users, activities, clearEdits, setMess
   const upd = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const isContact = isCustomerContactType(draft.type);
   const success = isSuccessfulContact(draft.type, draft.outcome);
-  const offerStageMove = lead.pipelineStage === "new_lead" && isContact && success;
+
 
   const sorted = useMemo(
     () =>
@@ -237,7 +236,6 @@ export function TimelineTab({ lead, user, users, activities, clearEdits, setMess
           nextActionNotes: draft.nextActionNotes.trim(),
         };
       }
-      if (offerStageMove && draft.moveToContact) opts.pipelineStage = "contact_phase";
       await addActivity(lead, activity, user, opts);
       if (opts.nextAction) clearEdits(NEXT_ACTION_KEYS);
       if (opts.pipelineStage) clearEdits(["pipelineStage"]);
@@ -328,13 +326,6 @@ export function TimelineTab({ lead, user, users, activities, clearEdits, setMess
 
             {isContact && draft.outcome && !success && (
               <div style={{ fontSize: 11.5, color: C.textSubtle }}>Deze uitkomst telt als contactpoging, niet als 'laatste contact'.</div>
-            )}
-
-            {offerStageMove && (
-              <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: C.text }}>
-                <input type="checkbox" checked={draft.moveToContact} onChange={(e) => upd({ moveToContact: e.target.checked })} />
-                Pipelinefase direct naar "Contactfase" zetten
-              </label>
             )}
 
             <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: C.text, fontWeight: 600 }}>

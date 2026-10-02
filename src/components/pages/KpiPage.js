@@ -4,16 +4,14 @@ import {
   TREND_SERIES,
   ATTRIBUTION,
   getPeriod,
+  allTimePeriod,
   previousPeriod,
   cohort,
   cohortFunnel,
   kpiSummary,
   trend,
-  leadQuality,
-  unqualifiedReasons,
   followUpStats,
   formatDuration,
-  showUp,
   groupStats,
   distribution,
   partnerStats,
@@ -25,7 +23,7 @@ import {
   pct,
 } from "../../crm/analytics";
 import { reached } from "../../crm/milestones";
-import { PARTNER_TYPES, UNQUALIFIED_REASONS, labelOf } from "../../crm/constants";
+import { PARTNER_TYPES, labelOf } from "../../crm/constants";
 import { formatDate, todayISO } from "../../crm/dates";
 import { Icon, selectStyle, inputStyle, formatEuro, C } from "../ui";
 import { HBarChart, LineChart, InfoTip, NoData, CHART_COLORS } from "../charts";
@@ -54,48 +52,6 @@ function Delta({ c }) {
   if (!c) return null;
   const color = c.dir > 0 ? C.success : c.dir < 0 ? C.danger : C.textSubtle;
   return <span style={{ fontSize: 11.5, fontWeight: 600, color }}>{c.text}</span>;
-}
-
-function KpiCard({ icon, label, value, sub, info, delta, onClick }) {
-  // Geen <button>: de kaart bevat zelf een info-knop (geen geneste knoppen).
-  return (
-    <div
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      aria-label={onClick ? `${label}: ${value}. Toon deze leads` : undefined}
-      onClick={onClick}
-      onKeyDown={onClick ? (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onClick()) : undefined}
-      className={onClick ? "msk-kpi" : undefined}
-      style={{
-        background: C.surface,
-        border: `1px solid ${C.border}`,
-        borderRadius: 14,
-        boxShadow: C.shadowSm,
-        padding: "14px 16px",
-        textAlign: "left",
-        fontFamily: "inherit",
-        cursor: onClick ? "pointer" : "default",
-        minWidth: 0,
-        display: "flex",
-        flexDirection: "column",
-        gap: 2,
-        minHeight: 112,
-      }}
-    >
-      <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 12.5, color: C.textMuted, display: "flex", gap: 5, alignItems: "center" }}>
-          {label}
-          {info && <InfoTip text={info} label={label} />}
-        </span>
-        <span aria-hidden="true" style={{ color: C.textSubtle, display: "flex" }}>
-          <Icon name={icon} size={15} />
-        </span>
-      </span>
-      <span style={{ fontFamily: C.fontDisplay, fontSize: 30, fontWeight: 600, color: C.navy, lineHeight: 1.15 }}>{value}</span>
-      <span style={{ fontSize: 12, color: C.textMuted }}>{sub}</span>
-      {delta && <Delta c={delta} />}
-    </div>
-  );
 }
 
 function Tile({ label, value, sub, info, tone }) {
@@ -174,60 +130,64 @@ function RatioCell({ r }) {
 }
 
 // ─── FUNNEL ──────────────────────────────────────────────────────────────────
-const FUNNEL_SHADES = ["#0b304c", "#1f4c6e", "#3a6788", "#5f86a5", "#c9a24a", "#d9a83e"];
-
-function Funnel({ funnel, onStage }) {
-  const rows = [{ key: "new", label: "Nieuwe leads", count: funnel.total, pctOfCohort: funnel.total ? 1 : null }, ...funnel.stages];
+/**
+ * Van lead tot aankoop in vier stappen. Per stap één getal en één percentage:
+ * het deel van de VORIGE stap ("15 van de 27"). Geen dubbele tellingen.
+ */
+function Funnel({ funnel, prevFunnel, onStep }) {
+  const blocks = [{ key: "new", label: "Nieuwe leads", count: funnel.total, prevCount: null }, ...funnel.stages];
   return (
-    <div style={{ display: "grid", gap: 4 }}>
-      {rows.map((r, i) => {
-        const w = funnel.total ? Math.max(14, (r.count / funnel.total) * 100) : 14;
-        return (
-          <button
-            key={r.key}
-            type="button"
-            onClick={() => onStage(r.key)}
-            title={`${r.label}: ${r.count}${r.pctOfCohort !== null ? ` (${pct(r.pctOfCohort)} van nieuwe leads)` : ""}`}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 128px",
-              alignItems: "center",
-              gap: 12,
-              border: "none",
-              background: "none",
-              padding: 0,
-              cursor: "pointer",
-              fontFamily: "inherit",
-              textAlign: "left",
-            }}
-          >
-            <span style={{ display: "flex", justifyContent: "center" }}>
-              <span
-                style={{
-                  width: `${w}%`,
-                  background: i === 0 ? CHART_COLORS.primary : FUNNEL_SHADES[Math.min(i - 1, FUNNEL_SHADES.length - 1)],
-                  color: i >= 5 ? C.navyDark : "#fff",
-                  borderRadius: 8,
-                  padding: "7px 10px",
-                  textAlign: "center",
-                  fontSize: 15,
-                  fontWeight: 700,
-                  transition: "width .25s ease",
-                  minWidth: 44,
-                }}
-              >
-                {r.count}
-              </span>
-            </span>
-            <span style={{ minWidth: 0 }}>
-              <span style={{ display: "block", fontSize: 12.5, color: C.text, fontWeight: 600, whiteSpace: "nowrap" }}>{r.label}</span>
-              <span style={{ display: "block", fontSize: 11.5, color: C.textMuted }}>{pct(r.pctOfCohort)}</span>
-            </span>
-          </button>
-        );
-      })}
+    <div>
+      <div className="msk-funnel" style={{ display: "grid", gridTemplateColumns: `repeat(${blocks.length}, minmax(0, 1fr))`, gap: 10 }}>
+        {blocks.map((b, i) => {
+          const share = funnel.total ? b.count / funnel.total : 0;
+          const prevStep = prevFunnel ? (i === 0 ? prevFunnel.total : prevFunnel.stages[i - 1].count) : null;
+          const d = prevStep !== null ? change(b.count, prevStep) : null;
+          return (
+            <div
+              key={b.key}
+              role="button"
+              tabIndex={0}
+              aria-label={`${b.label}: ${b.count}. Toon deze leads`}
+              onClick={() => onStep(b.key)}
+              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onStep(b.key))}
+              className="msk-kpi"
+              style={{ position: "relative", background: i === 0 ? C.navy : C.surface, color: i === 0 ? "#fff" : C.text, border: `1px solid ${i === 0 ? C.navy : C.border}`, borderRadius: 14, padding: "14px 14px 12px", cursor: "pointer", minWidth: 0 }}
+            >
+              {i > 0 && (
+                <span aria-hidden="true" className="msk-funnel-arrow" style={{ position: "absolute", left: -11, top: 22, width: 12, color: C.textSubtle, display: "flex" }}>
+                  <Icon name="chevronRight" size={14} />
+                </span>
+              )}
+              <div style={{ fontSize: 12.5, color: i === 0 ? "rgba(255,255,255,.75)" : C.textMuted, fontWeight: 500 }}>{b.label}</div>
+              <div style={{ fontFamily: C.fontDisplay, fontSize: 32, fontWeight: 600, lineHeight: 1.1, margin: "2px 0 6px", color: i === 0 ? "#fff" : C.navy }}>{b.count}</div>
+              <div style={{ fontSize: 12.5, minHeight: 34, color: i === 0 ? "rgba(255,255,255,.75)" : C.textBody, lineHeight: 1.35 }}>
+                {i === 0 ? (
+                  "binnengekomen"
+                ) : b.prevCount ? (
+                  <>
+                    <strong style={{ fontWeight: 700, color: C.navy }}>{pct(b.count / b.prevCount)}</strong> van de {b.prevCount} {i === 1 ? "nieuwe leads" : blocks[i - 1].short}
+                  </>
+                ) : (
+                  <span style={{ color: C.textSubtle }}>vorige stap is 0</span>
+                )}
+              </div>
+              <div style={{ height: 6, background: i === 0 ? "rgba(255,255,255,.2)" : C.surfaceSunken, borderRadius: 99, overflow: "hidden", marginTop: 8 }} title={`${pct(share)} van alle nieuwe leads`}>
+                <div style={{ width: `${share * 100}%`, height: "100%", background: i === 0 ? C.gold : i === blocks.length - 1 ? C.gold : CHART_COLORS.primary, borderRadius: 99 }} />
+              </div>
+              {d && <div style={{ marginTop: 6 }}><Delta c={d} /></div>}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
+}
+
+function funnelSentence(f) {
+  if (!f.total) return "";
+  const [contact, forwarded, reserved, purchased] = f.stages.map((s) => s.count);
+  return `${f.total === 1 ? "Van de 1 lead hebben we er" : `Van de ${f.total} leads hebben we er`} ${contact} gesproken. ${forwarded} daarvan ${forwarded === 1 ? "is" : "zijn"} doorgestuurd naar een partner, ${reserved} ${reserved === 1 ? "heeft" : "hebben"} gereserveerd en ${purchased} ${purchased === 1 ? "heeft" : "hebben"} gekocht.`;
 }
 
 // ─── PAGINA ──────────────────────────────────────────────────────────────────
@@ -236,89 +196,55 @@ function Funnel({ funnel, onStage }) {
  * onShowLeads(patch) opent de Leads-pagina met een filter (click-through).
  */
 export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPartner, onShowLeads }) {
-  const [periodKey, setPeriodKey] = useState("month");
+  const [periodKey, setPeriodKey] = useState("all");
   const [custom, setCustom] = useState({ from: `${todayISO(now).slice(0, 7)}-01`, to: todayISO(now) });
   const [compare, setCompare] = useState(false);
   const [dim, setDim] = useState("source");
   const [trendKeys, setTrendKeys] = useState(["newLeads"]);
   const [regionScope, setRegionScope] = useState("all");
 
-  const period = useMemo(() => getPeriod(periodKey, now, custom), [periodKey, now, custom]);
-  const prev = useMemo(() => previousPeriod(period, periodKey), [period, periodKey]);
+  const isAll = periodKey === "all";
+  const period = useMemo(() => (isAll ? allTimePeriod(leads, now) : getPeriod(periodKey, now, custom)), [isAll, leads, periodKey, now, custom]);
+  const doCompare = compare && !isAll;
+  const prev = useMemo(() => (doCompare ? previousPeriod(period, periodKey) : null), [doCompare, period, periodKey]);
   const coh = useMemo(() => cohort(leads, period), [leads, period]);
-  const prevCoh = useMemo(() => cohort(leads, prev), [leads, prev]);
-  const kpi = useMemo(() => kpiSummary(coh), [coh]);
-  const prevKpi = useMemo(() => kpiSummary(prevCoh), [prevCoh]);
+  const prevCoh = useMemo(() => (prev ? cohort(leads, prev) : null), [leads, prev]);
   const funnel = useMemo(() => cohortFunnel(coh), [coh]);
-  const tr = useMemo(() => trend(leads, period, compare ? prev : null), [leads, period, prev, compare]);
-  const quality = useMemo(() => leadQuality(coh), [coh]);
-  const reasons = useMemo(() => unqualifiedReasons(coh, UNQUALIFIED_REASONS), [coh]);
+  const prevFunnel = useMemo(() => (prevCoh ? cohortFunnel(prevCoh) : null), [prevCoh]);
+  const kpi = useMemo(() => kpiSummary(coh), [coh]);
+  const tr = useMemo(() => trend(leads, period, prev), [leads, period, prev]);
   const follow = useMemo(() => followUpStats(coh, leads, now), [coh, leads, now]);
-  const shows = useMemo(() => showUp(leads, period, now), [leads, period, now]);
   const groups = useMemo(() => groupStats(coh, dim), [coh, dim]);
   const regionLeads = useMemo(() => (regionScope === "all" ? coh : coh.filter((l) => reached(l, regionScope))), [coh, regionScope]);
-  const partnerRows = useMemo(
-    () =>
-      partnerStats(partners, links, leads, now)
-        .filter((r) => r.forwarded > 0)
-        .sort((a, b) => b.forwarded - a.forwarded),
-    [partners, links, leads, now],
-  );
-  const fin = useMemo(() => commissionSummary(leads, period), [leads, period]);
+  const partnerRows = useMemo(() => partnerStats(partners, links, leads, now).filter((r) => r.forwarded > 0).sort((a, b) => b.forwarded - a.forwarded), [partners, links, leads, now]);
+  const fin = useMemo(() => commissionSummary(leads, isAll ? null : period), [leads, isAll, period]);
   const showTeam = useMemo(() => distinctOwners(leads) > 1, [leads]);
-  const team = useMemo(
-    () =>
-      showTeam
-        ? teamStats(
-            leads,
-            period,
-            users.filter((u) => u.active !== false),
-            now,
-          )
-        : [],
-    [showTeam, leads, period, users, now],
-  );
+  const team = useMemo(() => (showTeam ? teamStats(leads, period, users.filter((u) => u.active !== false), now) : []), [showTeam, leads, period, users, now]);
   const dq = useMemo(() => dataQuality(coh), [coh]);
 
-  const range = `${formatDate(period.start)} – ${formatDate(new Date(period.end - 1))}`;
-  const iso = (d) => todayISO(d);
-  const cohortFilter = { arrivedFrom: iso(period.start), arrivedTo: iso(new Date(period.end - 1)), scope: "all" };
+  const knownTerm = coh.filter((l) => l.purchaseTimeline && l.purchaseTimeline !== "unknown");
+  const shortTerm = knownTerm.filter((l) => ["immediate", "within_3_months", "3_to_6_months"].includes(l.purchaseTimeline)).length;
+  const budgets = coh.map((l) => Number(l.budgetMax)).filter((v) => Number.isFinite(v) && v > 0);
+  const avgBudget = budgets.length ? Math.round(budgets.reduce((a, b) => a + b, 0) / budgets.length) : null;
+
+  const range = isAll ? `Alles sinds ${formatDate(period.start)}` : `${formatDate(period.start)} – ${formatDate(new Date(period.end - 1))}`;
+  const cohortFilter = isAll ? { scope: "all" } : { arrivedFrom: todayISO(period.start), arrivedTo: todayISO(new Date(period.end - 1)), scope: "all" };
   const showCohort = (extra = {}) => onShowLeads({ ...cohortFilter, ...extra });
-  const cmp = (a, b, rate) => (compare ? change(a, b, { asRate: rate }) : null);
+  const periodWord = isAll ? "alle leads" : "leads uit deze periode";
 
   const trendSeries = trendKeys.flatMap((k, i) => {
     const color = [CHART_COLORS.primary, CHART_COLORS.accent, CHART_COLORS.secondary, CHART_COLORS.positive][i % 4];
     const label = TREND_SERIES.find((s) => s.key === k).label;
     const main = { key: k, label, values: tr.series[k], color };
-    return compare ? [main, { key: `${k}-prev`, label: `${label} (vorige periode)`, values: tr.previous[k], color, dashed: true }] : [main];
+    return doCompare ? [main, { key: `${k}-prev`, label: `${label} (vorige periode)`, values: tr.previous[k], color, dashed: true }] : [main];
   });
-
-  const stepConversions = funnel.stages.map((s, i) => ({
-    from: i === 0 ? "Nieuwe leads" : funnel.stages[i - 1].label,
-    to: s.label,
-    value: s.fromPrevious,
-    count: s.count,
-    base: i === 0 ? funnel.total : funnel.stages[i - 1].count,
-  }));
 
   return (
     <div>
       <PageHeader title="KPI's" subtitle="Inzicht in leadkwaliteit, conversie en resultaten." />
 
       {/* TOOLBAR */}
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          flexWrap: "wrap",
-          alignItems: "center",
-          marginBottom: 18,
-          background: C.surface,
-          border: `1px solid ${C.border}`,
-          borderRadius: 12,
-          padding: "8px 12px",
-        }}
-      >
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "8px 12px" }}>
         <select value={periodKey} onChange={(e) => setPeriodKey(e.target.value)} style={{ ...selectStyle, height: 34 }} aria-label="Periode">
           {PERIODS.map((p) => (
             <option key={p.value} value={p.value}>
@@ -328,130 +254,50 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
         </select>
         {periodKey === "custom" && (
           <>
-            <input
-              type="date"
-              value={custom.from}
-              onChange={(e) => setCustom({ ...custom, from: e.target.value })}
-              style={{ ...inputStyle, width: "auto", minHeight: 34 }}
-              aria-label="Van"
-            />
-            <input
-              type="date"
-              value={custom.to}
-              onChange={(e) => setCustom({ ...custom, to: e.target.value })}
-              style={{ ...inputStyle, width: "auto", minHeight: 34 }}
-              aria-label="Tot en met"
-            />
+            <input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} style={{ ...inputStyle, width: "auto", minHeight: 34 }} aria-label="Van" />
+            <span style={{ color: C.textMuted, fontSize: 13 }}>t/m</span>
+            <input type="date" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} style={{ ...inputStyle, width: "auto", minHeight: 34 }} aria-label="Tot en met" />
           </>
         )}
-        <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: C.textBody }}>
-          <input type="checkbox" checked={compare} onChange={(e) => setCompare(e.target.checked)} /> Vergelijk met vorige periode
-        </label>
+        {!isAll && (
+          <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: C.textBody }}>
+            <input type="checkbox" checked={compare} onChange={(e) => setCompare(e.target.checked)} /> Vergelijk met vorige periode
+          </label>
+        )}
         <span style={{ marginLeft: "auto", fontSize: 13, color: C.textMuted, display: "flex", gap: 6, alignItems: "center" }}>
           <Icon name="calendar" size={14} /> {range}
         </span>
       </div>
 
-      {/* HOOFD-KPI'S (cohort) */}
-      <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 8, display: "flex", gap: 6, alignItems: "center" }}>
-        Leads binnengekomen in deze periode
-        <InfoTip
-          text="Cohort: alle leads die in de geselecteerde periode zijn binnengekomen. Per stap: welk deel heeft die stap (inmiddels) bereikt. Bij vergelijken heeft de vorige periode meer tijd gehad om te converteren."
-          label="Cohort"
-        />
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(170px, 46%), 1fr))", gap: 12, marginBottom: 18 }}>
-        <KpiCard icon="userPlus" label="Nieuwe leads" value={kpi.newLeads} sub="binnengekomen" delta={cmp(kpi.newLeads, prevKpi.newLeads)} onClick={() => showCohort()} />
-        <KpiCard
-          icon="phone"
-          label="Contactpercentage"
-          value={pct(kpi.contact.pct)}
-          sub={kpi.contact.total ? `${kpi.contact.count} van ${kpi.contact.total} leads` : "Nog geen leads"}
-          info="Deel van de nieuwe leads waarmee daadwerkelijk contact is geregistreerd (een poging zonder gehoor telt niet)."
-          delta={cmp(kpi.contact.pct, prevKpi.contact.pct, true)}
-          onClick={() => showCohort({ reached: "contact" })}
-        />
-        <KpiCard
-          icon="calendar"
-          label="Gesprekpercentage"
-          value={pct(kpi.meeting.pct)}
-          sub={kpi.meeting.total ? `${kpi.meeting.count} van ${kpi.meeting.total} leads` : "Nog geen leads"}
-          info="Deel van de nieuwe leads met een gevoerd gesprek (of al verder in de funnel)."
-          delta={cmp(kpi.meeting.pct, prevKpi.meeting.pct, true)}
-          onClick={() => showCohort({ reached: "meeting" })}
-        />
-        <KpiCard
-          icon="checkCircle"
-          label="Gekwalificeerd"
-          value={kpi.qualified.count}
-          sub={kpi.qualified.total ? `${pct(kpi.qualified.pct)} van nieuwe leads` : "–"}
-          info="Kwalificatie 'Gekwalificeerd', of al doorgestuurd."
-          delta={cmp(kpi.qualified.count, prevKpi.qualified.count)}
-          onClick={() => showCohort({ reached: "qualified" })}
-        />
-        <KpiCard
-          icon="briefcase"
-          label="Doorgestuurd"
-          value={kpi.forwarded.count}
-          sub={kpi.forwarded.total ? `${pct(kpi.forwarded.pct)} van nieuwe leads` : "–"}
-          delta={cmp(kpi.forwarded.count, prevKpi.forwarded.count)}
-          onClick={() => showCohort({ reached: "forwarded" })}
-        />
-        <KpiCard
-          icon="home"
-          label="Aankopen afgerond"
-          value={kpi.purchased.count}
-          sub={kpi.forwardedToPurchase.total ? `${pct(kpi.forwardedToPurchase.pct)} van doorgestuurd` : "Nog niets doorgestuurd"}
-          info="Leads uit deze periode die inmiddels een aankoop afrondden. Aankopen ín de periode (ongeacht binnenkomst) staan onder Financieel."
-          delta={cmp(kpi.purchased.count, prevKpi.purchased.count)}
-          onClick={() => showCohort({ reached: "purchased" })}
-        />
-      </div>
+      {/* FUNNEL */}
+      <Section
+        title="Van lead tot aankoop"
+        subtitle={funnel.total ? funnelSentence(funnel) : undefined}
+        info={`Voor ${periodWord}: hoeveel zijn we elke stap verder gekomen? Het percentage is steeds het deel van de stap ervoor. Een lead die al verder is (bijv. doorgestuurd), telt ook mee bij de stappen ervoor. Klik op een blok om die leads te zien.`}
+        style={{ marginBottom: 16 }}
+      >
+        {funnel.total === 0 ? (
+          <NoData text="Er zijn nog geen leads binnengekomen in deze periode." />
+        ) : (
+          <>
+            <Funnel funnel={funnel} prevFunnel={prevFunnel} onStep={(k) => showCohort(k === "new" ? {} : { reached: k })} />
+            <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: C.textBody, marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.borderSoft}` }}>
+              <Icon name="checkCircle" size={15} /> Van nieuwe lead tot aankoop:
+              <strong style={{ color: C.navy }}>{pct(kpi.purchased.pct)}</strong>
+              <span style={{ color: C.textMuted }}>
+                ({kpi.purchased.count} van {kpi.purchased.total})
+              </span>
+            </div>
+          </>
+        )}
+      </Section>
 
-      {/* FUNNEL + TREND */}
+      {/* TREND + OPVOLGING */}
       <div className="msk-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16, marginBottom: 16 }}>
         <Section
-          title="Conversiefunnel"
-          subtitle="Van nieuwe lead tot afgeronde aankoop."
-          info="Elke stap telt leads die die stap óf een latere stap bereikten. Zo kan een stap nooit hoger zijn dan de vorige."
-        >
-          {funnel.total === 0 ? (
-            <NoData text="Er zijn nog geen leads binnengekomen in deze periode." />
-          ) : (
-            <>
-              <Funnel funnel={funnel} onStage={(k) => showCohort(k === "new" ? {} : { reached: k })} />
-              <div style={{ borderTop: `1px solid ${C.borderSoft}`, marginTop: 14, paddingTop: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, marginBottom: 6 }}>Conversie tussen stappen</div>
-                <div style={{ display: "grid", gap: 5 }}>
-                  {stepConversions.slice(1).map((s) => (
-                    <div key={s.to} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12.5 }} title={`${s.count} van ${s.base}`}>
-                      <span style={{ color: C.textBody }}>
-                        {s.from.split(" ")[0]} → {s.to.split(" ")[0].toLowerCase()}
-                      </span>
-                      <span style={{ fontWeight: 600, color: C.text, fontVariantNumeric: "tabular-nums" }}>
-                        {pct(s.value)}{" "}
-                        <span style={{ fontWeight: 400, color: C.textSubtle }}>
-                          ({s.count}/{s.base})
-                        </span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                {dq.impliedLeads > 0 && (
-                  <div style={{ fontSize: 11.5, color: C.textSubtle, marginTop: 8, display: "flex", gap: 5, alignItems: "center" }}>
-                    {dq.impliedLeads} {dq.impliedLeads === 1 ? "lead telt" : "leads tellen"} in een eerdere stap mee via een latere stap
-                    <InfoTip text="Bijvoorbeeld: doorgestuurd zonder geregistreerd gesprek. Zo blijft de funnel kloppend; registreer gesprekken en kwalificatie voor scherpere cijfers." />
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </Section>
-
-        <Section
           title="Leadontwikkeling"
-          subtitle={`Gebeurtenissen per ${tr.unit}`}
-          info="Telt op de datum van de gebeurtenis (binnenkomst, gesprek, doorsturen, aankoop). Gebeurtenissen zonder bekende datum (oude data) ontbreken hier."
+          subtitle={`Aantal per ${tr.unit}`}
+          info="Geteld op de datum waarop het gebeurde (binnenkomst, contact, doorsturen, aankoop)."
           right={
             <div role="group" aria-label="Lijnen" style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
               {TREND_SERIES.map((s) => {
@@ -462,17 +308,7 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
                     type="button"
                     aria-pressed={on}
                     onClick={() => setTrendKeys((k) => (on ? (k.length > 1 ? k.filter((x) => x !== s.key) : k) : [...k, s.key]))}
-                    style={{
-                      border: `1px solid ${on ? C.navy : C.border}`,
-                      background: on ? C.navySoft : C.surface,
-                      color: on ? C.navy : C.textMuted,
-                      borderRadius: 999,
-                      padding: "3px 10px",
-                      fontSize: 11.5,
-                      fontWeight: on ? 600 : 500,
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                    }}
+                    style={{ border: `1px solid ${on ? C.navy : C.border}`, background: on ? C.navySoft : C.surface, color: on ? C.navy : C.textMuted, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: on ? 600 : 500, cursor: "pointer", fontFamily: "inherit" }}
                   >
                     {s.label}
                   </button>
@@ -483,73 +319,36 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
         >
           <LineChart labels={tr.labels} series={trendSeries} />
         </Section>
-      </div>
 
-      {/* KWALITEIT + OPVOLGING */}
-      <div className="msk-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16, marginBottom: 16 }}>
-        <Section title="Leadkwaliteit" subtitle="Leads binnengekomen in deze periode.">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-            <Tile label="Gekwalificeerd" value={quality.qualified.count} sub={quality.unqualified ? `${quality.unqualified} niet gekwalificeerd` : undefined} />
-            <Tile
-              label="Kwalificatie"
-              value={pct(quality.qualified.pct)}
-              sub={quality.qualified.total ? `${quality.qualified.count} van ${quality.qualified.total} · ${quality.assessed.count} beoordeeld` : "–"}
-              info="Gekwalificeerd gedeeld door alle nieuwe leads. 'Beoordeeld' = gekwalificeerd of niet gekwalificeerd."
-            />
-            <Tile
-              label="Kooptermijn ≤ 6 maanden"
-              value={pct(quality.shortTerm.pct)}
-              sub={quality.shortTerm.total ? `${quality.shortTerm.count} van ${quality.shortTerm.total} met bekende termijn` : "Geen termijnen bekend"}
-            />
-            <Tile
-              label="Gem. max. budget"
-              value={quality.avgBudgetMax ? formatEuro(quality.avgBudgetMax) : "–"}
-              sub={quality.budgetSample ? `op basis van ${quality.budgetSample} leads` : "Geen budgetten bekend"}
-              info="Gemiddelde van het ingevulde maximale budget (alleen numerieke waarden)."
-            />
-            <Tile
-              label="Show-up gesprekken"
-              value={pct(shows.rate.pct)}
-              sub={shows.rate.total ? `${shows.rate.count} van ${shows.rate.total}${shows.noShow ? ` · ${shows.noShow} no-show` : ""}` : "Geen gesprekken gepland"}
-              info="Gevoerde gesprekken / gesprekken die in deze periode hadden moeten plaatsvinden. Het CRM bewaart één (laatste) afspraak per lead, dus dit is een benadering."
-            />
-            <Tile label="Gesprek nog niet afgerond" value={shows.unresolved} tone={shows.unresolved ? "warn" : undefined} sub="datum voorbij, status nog 'gepland'" />
-          </div>
-          {reasons.length > 0 && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, marginBottom: 6 }}>Redenen niet gekwalificeerd</div>
-              <HBarChart rows={reasons} color={CHART_COLORS.negative} labelWidth={170} />
-            </div>
-          )}
-        </Section>
-
-        <Section title="Opvolging" subtitle="Snelheid (leads uit deze periode) en huidige werkvoorraad.">
+        <Section title="Hoe snel reageren we?" subtitle="Benaderen = bellen, appen of mailen, ook als er niet wordt opgenomen.">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
             <Tile
-              label="Gem. tot eerste poging"
-              value={formatDuration(follow.avgFirstAttemptMs)}
-              sub={follow.sample ? `mediaan ${formatDuration(follow.medianFirstAttemptMs)} · ${follow.sample} leads` : "Nog geen pogingen geregistreerd"}
-              info="Tijd tussen binnenkomst en de eerste contactpoging (bellen, WhatsApp, e-mail), ook als er niet werd opgenomen."
+              label="Reactietijd"
+              value={formatDuration(follow.medianFirstAttemptMs)}
+              sub={follow.sample ? `Typische tijd tot we een nieuwe lead benaderen (${follow.sample} leads)` : "Nog geen contactpogingen vastgelegd"}
+              info="De mediaan: de helft van de leads benaderen we sneller dan dit, de andere helft langzamer. Minder gevoelig voor één uitschieter dan een gemiddelde."
             />
             <Tile
-              label="Binnen 24 uur opgevolgd"
+              label="Binnen 24 uur benaderd"
               value={pct(follow.within24h.pct)}
-              sub={follow.within24h.total ? `${follow.within24h.count} van ${follow.within24h.total}` : "–"}
+              sub={follow.within24h.total ? `${follow.within24h.count} van ${follow.within24h.total} leads` : "–"}
               tone={follow.within24h.pct !== null && follow.within24h.pct < 0.8 ? "warn" : undefined}
-              info="Leads met een eerste contactpoging binnen 24 uur na binnenkomst. Leads die nog geen 24 uur binnen zijn, tellen pas mee als ze zijn opgevolgd."
             />
-            <Tile label="Nog niet opgevolgd" value={follow.noAttempt} tone={follow.noAttempt ? "danger" : undefined} sub="> 24 uur, geen poging" />
-            <Tile label="Niet bereikt" value={follow.notReached} sub="wel geprobeerd, nog geen contact" />
-            <Tile label="Zonder volgende actie" value={follow.withoutNextAction} tone={follow.withoutNextAction ? "warn" : undefined} sub="open leads, nu" />
-            <Tile label="Achterstallig" value={follow.overdue} tone={follow.overdue ? "danger" : undefined} sub="follow-ups, nu" />
+            <Tile label="Nooit benaderd" value={follow.noAttempt} tone={follow.noAttempt ? "danger" : undefined} sub="Al langer dan 24 uur binnen, nog geen enkele poging" />
+            <Tile label="Achterstallige acties" value={follow.overdue} tone={follow.overdue ? "danger" : undefined} sub="Open leads waarvan de geplande actie over datum is" />
           </div>
+          {follow.overdue > 0 && (
+            <button type="button" onClick={() => navigate("agenda", "today")} className="msk-link" style={{ border: "none", background: "none", color: C.goldText, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 10, padding: 0, display: "flex", gap: 4, alignItems: "center" }}>
+              Bekijk in Agenda <Icon name="arrowRight" size={13} />
+            </button>
+          )}
         </Section>
       </div>
 
       {/* BRONNEN */}
       <Section
-        title="Leadkwaliteit per bron"
-        subtitle="Leads binnengekomen in deze periode. Klik op een rij om de leads te zien."
+        title="Waar komen de beste leads vandaan?"
+        subtitle={`${isAll ? "Alle leads" : "Leads uit deze periode"}, per ${ATTRIBUTION[dim].col.toLowerCase()}. Klik op een rij om de leads te zien.`}
         right={<Segmented label="Indeling" value={dim} onChange={setDim} options={Object.entries(ATTRIBUTION).map(([value, d]) => ({ value, label: d.label }))} />}
         style={{ marginBottom: 16 }}
       >
@@ -558,60 +357,32 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 18 }}>
             <div style={{ overflowX: "auto", border: `1px solid ${C.border}`, borderRadius: 12 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: dim === "content" ? 560 : 680 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
                 <thead>
                   <tr>
                     <th style={{ ...th, textAlign: "left" }}>{ATTRIBUTION[dim].col}</th>
                     <th style={th}>Leads</th>
-                    {dim !== "content" && <th style={th}>Contact</th>}
-                    <th style={th}>Gesprek</th>
-                    <th style={th}>Gekwal.</th>
-                    <th style={th}>Doorgest.</th>
-                    {dim === "source" && <th style={th}>Gereserv.</th>}
+                    <th style={th}>Contact gehad</th>
+                    <th style={th}>Doorgestuurd</th>
+                    <th style={th}>Gereserveerd</th>
                     <th style={th}>Aankopen</th>
-                    {dim === "source" && <th style={th}>Lead → doorgest.</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {groups.map((g) => (
-                    <tr
-                      key={g.key}
-                      className="msk-row"
-                      onClick={() => showCohort(g.key === "__unknown" ? { [dim === "source" ? "source" : dim]: "__none" } : { [dim === "source" ? "source" : dim]: g.key })}
-                      style={{ cursor: "pointer" }}
-                    >
-                      <td
-                        style={{
-                          ...td,
-                          textAlign: "left",
-                          fontWeight: 600,
-                          color: g.key === "__unknown" ? C.textSubtle : C.text,
-                          maxWidth: 260,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                        title={g.label}
-                      >
+                    <tr key={g.key} className="msk-row" onClick={() => showCohort({ [dim]: g.key === "__unknown" ? "__none" : g.key })} style={{ cursor: "pointer" }}>
+                      <td style={{ ...td, textAlign: "left", fontWeight: 600, color: g.key === "__unknown" ? C.textSubtle : C.text, maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis" }} title={g.label}>
                         {g.label}
                       </td>
                       <td style={td}>{g.leads}</td>
-                      {dim !== "content" && (
-                        <td style={td}>
-                          <RatioCell r={g.contact} />
-                        </td>
-                      )}
                       <td style={td}>
-                        <RatioCell r={g.meeting} />
+                        <RatioCell r={g.contact} />
                       </td>
-                      <td style={td}>{g.qualified}</td>
-                      <td style={td}>{g.forwarded}</td>
-                      {dim === "source" && <td style={td}>{g.reserved}</td>}
+                      <td style={td}>
+                        <RatioCell r={g.toForwarded} />
+                      </td>
+                      <td style={td}>{g.reserved}</td>
                       <td style={td}>{g.purchased}</td>
-                      {dim === "source" && (
-                        <td style={td}>
-                          <RatioCell r={g.toForwarded} />
-                        </td>
-                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -619,12 +390,7 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
             </div>
             <div style={{ maxWidth: 760 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Doorgestuurde leads per {ATTRIBUTION[dim].col.toLowerCase()}</div>
-              <HBarChart
-                rows={groups.map((g) => ({ key: g.key, label: g.label, value: g.forwarded }))}
-                total={kpi.forwarded.count}
-                labelWidth={220}
-                emptyText="Nog geen leads doorgestuurd in dit cohort."
-              />
+              <HBarChart rows={groups.map((g) => ({ key: g.key, label: g.label, value: g.forwarded }))} total={kpi.forwarded.count} labelWidth={220} emptyText="Nog geen leads doorgestuurd." />
             </div>
           </div>
         )}
@@ -632,35 +398,16 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
 
       {/* VERDELINGEN */}
       <div className="msk-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16, marginBottom: 16 }}>
-        <Section title="Wanneer willen leads kopen?" subtitle="Aankooptermijn, leads uit deze periode.">
+        <Section title="Wanneer willen leads kopen?" subtitle={knownTerm.length ? `${pct(shortTerm / knownTerm.length)} wil binnen 6 maanden kopen (${shortTerm} van ${knownTerm.length} met bekende termijn)` : "Aankooptermijn"}>
           <HBarChart rows={distribution(coh, "timeline")} color={CHART_COLORS.primary} emptyText="Geen leads in deze periode." />
         </Section>
-        <Section
-          title="Interesse per regio"
-          subtitle="Een lead met meerdere regio's telt bij elke regio."
-          right={
-            <Segmented
-              label="Regio-selectie"
-              value={regionScope}
-              onChange={setRegionScope}
-              options={[
-                { value: "all", label: "Alle" },
-                { value: "qualified", label: "Gekwal." },
-                { value: "forwarded", label: "Doorgest." },
-              ]}
-            />
-          }
-        >
+        <Section title="Interesse per regio" subtitle="Een lead met meerdere regio's telt bij elke regio." right={<Segmented label="Regio-selectie" value={regionScope} onChange={setRegionScope} options={[{ value: "all", label: "Alle leads" }, { value: "forwarded", label: "Doorgestuurd" }]} />}>
           <HBarChart rows={distribution(regionLeads, "region")} total={regionLeads.length} color={CHART_COLORS.secondary} emptyText="Geen leads in deze selectie." />
         </Section>
         <Section title="Aankoopdoel">
-          {coh.filter((l) => l.purchaseGoal).length < 3 ? (
-            <NoData text="Nog onvoldoende gegevens (minder dan 3 leads met een aankoopdoel)." />
-          ) : (
-            <HBarChart rows={distribution(coh, "goal")} color={CHART_COLORS.primary} />
-          )}
+          {coh.filter((l) => l.purchaseGoal).length < 3 ? <NoData text="Nog onvoldoende gegevens (minder dan 3 leads met een aankoopdoel)." /> : <HBarChart rows={distribution(coh, "goal")} color={CHART_COLORS.primary} />}
         </Section>
-        <Section title="Budget van leads" info="Ingedeeld op maximaal budget (of minimaal budget als er geen maximum is).">
+        <Section title="Budget van leads" subtitle={avgBudget ? `Gemiddeld maximaal budget ${formatEuro(avgBudget)} (${budgets.length} leads)` : undefined} info="Ingedeeld op maximaal budget (of minimaal budget als er geen maximum is).">
           <HBarChart rows={distribution(coh, "budget")} color={CHART_COLORS.accent} labelWidth={170} emptyText="Geen leads in deze periode." />
         </Section>
       </div>
@@ -679,7 +426,7 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
                   <th style={th}>Doorgestuurd</th>
                   <th style={th}>Gereserveerd</th>
                   <th style={th}>Aankopen</th>
-                  <th style={th}>Doorstuur → aankoop</th>
+                  <th style={th}>Doorgestuurd → aankoop</th>
                   <th style={th}>Open opvolging</th>
                 </tr>
               </thead>
@@ -687,11 +434,7 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
                 {partnerRows.map((r) => (
                   <tr key={r.partner.id} className="msk-row">
                     <td style={{ ...td, textAlign: "left" }}>
-                      <button
-                        type="button"
-                        onClick={() => onOpenPartner(r.partner)}
-                        style={{ border: "none", background: "none", padding: 0, color: C.navy, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}
-                      >
+                      <button type="button" onClick={() => onOpenPartner(r.partner)} style={{ border: "none", background: "none", padding: 0, color: C.navy, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>
                         {r.partner.name}
                       </button>
                     </td>
@@ -702,15 +445,7 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
                     <td style={td}>
                       <RatioCell r={r.toPurchase} />
                     </td>
-                    <td style={td}>
-                      {r.followUpDue ? (
-                        <span style={{ color: C.danger, fontWeight: 600 }}>
-                          {r.openFollowUps} ({r.followUpDue} nu)
-                        </span>
-                      ) : (
-                        r.openFollowUps
-                      )}
-                    </td>
+                    <td style={td}>{r.followUpDue ? <span style={{ color: C.danger, fontWeight: 600 }}>{r.openFollowUps} ({r.followUpDue} nu)</span> : r.openFollowUps}</td>
                   </tr>
                 ))}
               </tbody>
@@ -723,23 +458,7 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
       <Section
         title="Financieel"
         right={
-          <button
-            type="button"
-            onClick={() => navigate("commissies")}
-            className="msk-link"
-            style={{
-              border: "none",
-              background: "none",
-              color: C.goldText,
-              fontSize: 12.5,
-              fontWeight: 600,
-              cursor: "pointer",
-              fontFamily: "inherit",
-              display: "flex",
-              gap: 4,
-              alignItems: "center",
-            }}
-          >
+          <button type="button" onClick={() => navigate("commissies")} className="msk-link" style={{ border: "none", background: "none", color: C.goldText, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 4, alignItems: "center" }}>
             Naar Commissies <Icon name="arrowRight" size={13} />
           </button>
         }
@@ -748,8 +467,8 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
           <Tile label="Verwachte commissie" value={formatEuro(fin.expected)} sub="huidige stand" />
           <Tile label="Openstaand" value={formatEuro(fin.outstanding)} sub="nog niet betaald" />
-          <Tile label="Ontvangen in periode" value={formatEuro(fin.received)} />
-          <Tile label="Aankopen afgerond" value={fin.purchasesInPeriod} sub="in deze periode" info="Op aankoopdatum, ongeacht wanneer de lead binnenkwam (event)." />
+          <Tile label={isAll ? "Ontvangen (totaal)" : "Ontvangen in periode"} value={formatEuro(fin.received)} />
+          <Tile label="Aankopen afgerond" value={fin.purchasesInPeriod} sub={isAll ? "totaal" : "in deze periode (op aankoopdatum)"} />
         </div>
       </Section>
 
@@ -757,10 +476,10 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
       {showTeam && team.length > 0 && (
         <Section title="Team" subtitle="Per verantwoordelijke. Geen score of ranking." style={{ marginBottom: 16 }}>
           <div style={{ overflowX: "auto", border: `1px solid ${C.border}`, borderRadius: 12 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
               <thead>
                 <tr>
-                  {["Verantwoordelijke", "Nieuwe leads", "Contact", "Gesprekken", "Doorgestuurd", "Open follow-ups", "Achterstallig"].map((h, i) => (
+                  {["Verantwoordelijke", "Nieuwe leads", "Contact gehad", "Doorgestuurd", "Open follow-ups", "Achterstallig"].map((h, i) => (
                     <th key={h} style={{ ...th, textAlign: i === 0 ? "left" : "right" }}>
                       {h}
                     </th>
@@ -773,7 +492,6 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
                     <td style={{ ...td, textAlign: "left", fontWeight: 600, color: C.text }}>{r.name}</td>
                     <td style={td}>{r.newLeads}</td>
                     <td style={td}>{r.contact}</td>
-                    <td style={td}>{r.meeting}</td>
                     <td style={td}>{r.forwarded}</td>
                     <td style={td}>{r.openFollowUps}</td>
                     <td style={{ ...td, color: r.overdue ? C.danger : C.textBody, fontWeight: r.overdue ? 600 : 400 }}>{r.overdue}</td>
@@ -787,9 +505,8 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
 
       {(dq.unknownSource > 0 || dq.unknownTimeline > 0 || dq.noBudget > 0) && dq.total > 0 && (
         <div style={{ fontSize: 12, color: C.textSubtle, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          <Icon name="info" size={13} /> Datakwaliteit dit cohort ({dq.total}): {dq.unknownSource} zonder bekende bron · {dq.unknownTimeline} zonder termijn · {dq.noBudget} zonder
-          budget
-          {dq.possibleDuplicates ? ` · ${dq.possibleDuplicates} mogelijk dubbel` : ""}. Deze staan als "Onbekend" in de analyses.
+          <Icon name="info" size={13} /> Datakwaliteit ({dq.total} leads): {dq.unknownSource} zonder bekende bron · {dq.unknownTimeline} zonder termijn · {dq.noBudget} zonder budget
+          {dq.possibleDuplicates ? ` · ${dq.possibleDuplicates} mogelijk dubbel` : ""}. Deze staan als "Onbekend" in de overzichten.
         </div>
       )}
     </div>

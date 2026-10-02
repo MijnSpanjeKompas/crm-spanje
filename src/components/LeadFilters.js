@@ -32,14 +32,13 @@ function Sel({ value, onChange, allLabel, options }) {
 }
 
 // Pipelinetabs: de dagelijkse fases direct zichtbaar, de rest onder "Meer".
-const PRIMARY_TABS = ["open", "new_lead", "contact_phase", "appointment_scheduled", "partner_connected", "follow_up_later"];
+const PRIMARY_TABS = ["open", "new_lead", "appointment_scheduled", "partner_connected", "follow_up_later"];
 const MORE_TABS = ["purchase_process", "completed", "unreachable", "stopped", "archived"];
 
 // Korte namen (volledige fasenaam in de tooltip).
 const SHORT_LABELS = {
   open: "Alle open",
   new_lead: "Nieuw",
-  contact_phase: "Contact",
   appointment_scheduled: "Gesprek",
   partner_connected: "Doorgestuurd",
   follow_up_later: "Later",

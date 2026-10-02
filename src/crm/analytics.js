@@ -61,6 +61,7 @@ function startOfDay(d) {
 
 // ─── PERIODES ────────────────────────────────────────────────────────────────
 export const PERIODS = [
+  { value: "all", label: "Altijd" },
   { value: "week", label: "Deze week" },
   { value: "month", label: "Deze maand" },
   { value: "quarter", label: "Dit kwartaal" },
@@ -89,6 +90,13 @@ export function getPeriod(key, now = new Date(), custom = {}) {
   return { start: new Date(d.getFullYear(), d.getMonth(), 1), end: new Date(d.getFullYear(), d.getMonth() + 1, 1) };
 }
 
+/** "Altijd": van de eerste binnengekomen lead (begin van die maand) t/m vandaag. */
+export function allTimePeriod(leads, now = new Date()) {
+  const first = leads.map((l) => leadArrivedAt(l)).filter(Boolean).sort((a, b) => a - b)[0];
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return { start: first ? new Date(first.getFullYear(), first.getMonth(), 1) : new Date(now.getFullYear(), now.getMonth(), 1), end, all: true };
+}
+
 /** Even lange periode direct ervoor (kalendermaand/-kwartaal/-jaar waar van toepassing). */
 export function previousPeriod({ start, end }, key) {
   if (key === "month") return { start: new Date(start.getFullYear(), start.getMonth() - 1, 1), end: start };
@@ -104,13 +112,15 @@ export function cohort(leads, period) {
   return leads.filter((l) => inRange(leadArrivedAt(l), period));
 }
 
+// Vier stappen, zoals MSK werkt: we spreken de lead, sturen door, de klant
+// reserveert en koopt. "Contact gehad" = we hebben de lead echt gesproken
+// (telefoon, WhatsApp-gesprek of een gevoerd gesprek); een poging zonder
+// gehoor telt niet.
 export const FUNNEL_STEPS = [
-  { key: "contact", label: "Contact gelegd", info: "Daadwerkelijk contact geregistreerd (niet alleen een poging), of een latere stap bereikt." },
-  { key: "meeting", label: "Gesprek gevoerd", info: "Een gesprek is als afgerond geregistreerd, of een latere stap bereikt." },
-  { key: "qualified", label: "Gekwalificeerd", info: "Kwalificatie staat op 'Gekwalificeerd', of de lead is al doorgestuurd." },
-  { key: "forwarded", label: "Doorgestuurd", info: "Aan een partner doorgegeven." },
-  { key: "reserved", label: "Gereserveerd", info: "De klant heeft gereserveerd of een bod gedaan." },
-  { key: "purchased", label: "Aankoop afgerond", info: "De aankoop is afgerond." },
+  { key: "contact", label: "Contact gehad", short: "die we spraken" },
+  { key: "forwarded", label: "Doorgestuurd", short: "die zijn doorgestuurd" },
+  { key: "reserved", label: "Gereserveerd", short: "die hebben gereserveerd" },
+  { key: "purchased", label: "Aankoop afgerond", short: "die hebben gekocht" },
 ];
 
 /**
@@ -126,7 +136,8 @@ export function cohortFunnel(cohortLeads) {
     const st = {
       key: s.key,
       label: s.label,
-      info: s.info,
+      short: s.short,
+      prevCount: prev,
       count,
       pctOfCohort: total ? count / total : null,
       fromPrevious: prev ? count / prev : null,
@@ -146,8 +157,6 @@ export function kpiSummary(cohortLeads) {
   return {
     newLeads: n,
     contact: ratio(count("contact"), n),
-    meeting: ratio(count("meeting"), n),
-    qualified: ratio(count("qualified"), n),
     forwarded: ratio(forwarded, n),
     reserved: ratio(count("reserved"), n),
     purchased: ratio(count("purchased"), n),
@@ -158,7 +167,7 @@ export function kpiSummary(cohortLeads) {
 // ─── EVENTS & TREND ──────────────────────────────────────────────────────────
 export const TREND_SERIES = [
   { key: "newLeads", label: "Nieuwe leads" },
-  { key: "meeting", label: "Gesprekken" },
+  { key: "contact", label: "Contact gehad" },
   { key: "forwarded", label: "Doorgestuurd" },
   { key: "purchased", label: "Aankopen" },
 ];
@@ -420,7 +429,7 @@ export function partnerStats(partners, links, leads, now = new Date()) {
 export function teamStats(leads, period, users, now = new Date()) {
   const rows = new Map();
   const row = (id, name) => {
-    if (!rows.has(id)) rows.set(id, { id, name, newLeads: 0, contact: 0, meeting: 0, forwarded: 0, openFollowUps: 0, overdue: 0 });
+    if (!rows.has(id)) rows.set(id, { id, name, newLeads: 0, contact: 0, forwarded: 0, openFollowUps: 0, overdue: 0 });
     return rows.get(id);
   };
   users.forEach((u) => row(u.id, u.displayName));
@@ -430,7 +439,6 @@ export function teamStats(leads, period, users, now = new Date()) {
     if (inRange(leadArrivedAt(l), period)) {
       r.newLeads += 1;
       if (reached(l, "contact")) r.contact += 1;
-      if (reached(l, "meeting")) r.meeting += 1;
       if (reached(l, "forwarded")) r.forwarded += 1;
     }
     if (!isClosedStage(l.pipelineStage) && hasNextAction(l)) {

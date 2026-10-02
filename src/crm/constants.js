@@ -21,7 +21,6 @@ export function optionOf(options, value) {
 // bestaande Firestore-data niet gemigreerd hoeft te worden.
 export const PIPELINE_STAGES = [
   { value: "new_lead", label: "Nieuwe lead", group: "main", color: "#33506b", bg: "#edf1f5" },
-  { value: "contact_phase", label: "Contactfase", group: "main", color: "#3a6788", bg: "#eaf1f6" },
   { value: "appointment_scheduled", label: "Gesprek gepland", group: "main", color: "#2f6f82", bg: "#e8f2f4" },
   { value: "partner_connected", label: "Doorgestuurd", group: "main", color: "#85663a", bg: "#f4ede2" },
   { value: "purchase_process", label: "Gereserveerd", group: "main", color: "#8c6010", bg: "#fbefd2" },
@@ -36,6 +35,9 @@ export const PIPELINE_STAGES = [
 
 /** Fases uit de vorige versie → fase in de huidige, vereenvoudigde pipeline. */
 export const STAGE_ALIASES = {
+  // Contactfase is vervallen: zulke leads staan weer op Nieuwe lead.
+  // Het contact zelf blijft bewaard (firstContactAt / tijdlijn).
+  contact_phase: "new_lead",
   appointment_completed: "appointment_scheduled",
   qualified: "appointment_scheduled",
   active_search: "partner_connected",
@@ -62,7 +64,6 @@ export const STAGES_REQUIRING_CLOSURE_REASON = ["stopped"];
 /** Fases waarin een lead altijd een volgende actie hoort te hebben. */
 export const STAGES_REQUIRING_NEXT_ACTION = [
   "new_lead",
-  "contact_phase",
   "appointment_scheduled",
   "partner_connected",
   "purchase_process",

@@ -19,8 +19,6 @@ import {
   VISIT_SPAIN_STATUSES,
   ACTIVITY_TYPES,
   CONSENT_STATUSES,
-  QUALIFICATION_STATUSES,
-  UNQUALIFIED_REASONS,
   isWebsiteSource,
   selectableStages,
   isClosedStage,
@@ -148,18 +146,6 @@ export function StatusSection({ form, set, setMany, errors, users, lead }) {
       )}
       <SelectField label="Prioriteit" value={form.priority} onChange={(v) => set("priority", v)} options={PRIORITIES} allowEmpty={false} />
       <SelectField label="Koopintentie" value={form.purchaseIntent} onChange={(v) => set("purchaseIntent", v)} options={PURCHASE_INTENTS} allowEmpty={false} />
-      <SelectField
-        label="Kwalificatie"
-        value={form.qualificationStatus || "unknown"}
-        onChange={(v) => setMany({ qualificationStatus: v, ...(v !== "unqualified" ? { unqualifiedReason: "" } : {}) })}
-        options={QUALIFICATION_STATUSES}
-        allowEmpty={false}
-      />
-      {form.qualificationStatus === "unqualified" ? (
-        <SelectField label="Reden" value={form.unqualifiedReason} onChange={(v) => set("unqualifiedReason", v)} options={UNQUALIFIED_REASONS} placeholder="Kies reden (optioneel)" />
-      ) : (
-        <div />
-      )}
       {form.pipelineStage === "purchase_process" && (
         <TextField
           label="Datum reservering"

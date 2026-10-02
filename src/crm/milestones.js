@@ -179,7 +179,8 @@ export function reachedAt(lead, step) {
     case "attempt":
       return toDate(lead.firstContactAttemptAt) || toDate(lead.firstContactAt);
     case "contact":
-      return toDate(lead.firstContactAt);
+      // Een gevoerd gesprek is ook contact.
+      return toDate(lead.firstContactAt) || toDate(lead.firstMeetingCompletedAt) || (lead.appointmentStatus === "completed" ? dateFromISO(lead.appointmentDate) : null);
     case "meeting":
       return toDate(lead.firstMeetingCompletedAt) || (lead.appointmentStatus === "completed" ? dateFromISO(lead.appointmentDate) : null);
     case "qualified":

@@ -74,18 +74,18 @@ test("volledige leadflow", async () => {
   expect(lead.lastContactAttemptAt).toBeTruthy();
   expect(lead.lastActivityType).toBe("phone_call");
 
-  // 3. Geslaagd contact + direct volgende actie plannen + fase naar contactfase
+  // 3. Geslaagd contact + direct volgende actie plannen (fase blijft Nieuwe lead; Contactfase bestaat niet meer)
   await addActivity(lead, { type: "phone_call", outcome: "spoken", title: "Kennismakingsgesprek telefonisch", description: "Wil emigreren", occurredAt: new Date() }, INDY, {
     nextAction: { nextActionType: "schedule_appointment", nextActionDate: addDaysISO(today, 2), nextActionAssignedTo: "uIndy", nextActionAssignedToName: "Indy Klijn" },
-    pipelineStage: "contact_phase",
   });
   lead = read(id);
-  expect(lead.pipelineStage).toBe("contact_phase");
+  expect(lead.pipelineStage).toBe("new_lead");
+  expect(lead.firstContactAt).toBeInstanceOf(Date);
   expect(lead.lastContactAt).toBeTruthy();
   expect(lead.lastContactMethod).toBe("phone");
   expect(lead.nextActionType).toBe("schedule_appointment");
   expect(lead.nextActionAssignedTo).toBe("uIndy");
-  expect(titles(id)).toEqual(expect.arrayContaining(["Pipelinefase gewijzigd van Nieuwe lead naar Contactfase", "Kennismakingsgesprek telefonisch"]));
+  expect(titles(id)).toEqual(expect.arrayContaining(["Kennismakingsgesprek telefonisch"]));
   const call = sub(id, "activities").find((a) => a.title === "Kennismakingsgesprek telefonisch");
   expect(call).toMatchObject({ type: "phone_call", outcome: "spoken", contactMethod: "phone", createdByUserId: "uIndy" });
 

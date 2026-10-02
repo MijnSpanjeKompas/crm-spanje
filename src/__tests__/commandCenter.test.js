@@ -99,7 +99,9 @@ describe("KPI-definities", () => {
     const counts = f.stages.map((s) => s.count);
     expect(counts).toEqual([...counts].sort((a, b) => b - a)); // nooit stijgend
     expect(f.stages.find((s) => s.key === "contact").count).toBe(3); // sep1 + gesprek (sep3) + doorgestuurd (sheet)
-    expect(f.stages.find((s) => s.key === "meeting").implied).toBe(1); // sheet: doorgestuurd zonder geregistreerd gesprek
+    expect(f.stages.map((s) => s.key)).toEqual(["contact", "forwarded", "reserved", "purchased"]); // 4 heldere stappen
+    expect(f.stages[0].implied).toBe(2); // gesprek zonder los contact (sep3) en doorgestuurd zonder contact (sheet) tellen toch als contact gehad
+    expect(f.stages[1].prevCount).toBe(3); // "x van de 3 die we spraken"
     const k = kpiSummary(c);
     expect(k.contact).toEqual({ count: 3, total: 4, pct: 0.75 });
     expect(k.purchased.count).toBe(0); // aankoop van juni-lead telt niet in het sep-cohort…
@@ -208,8 +210,11 @@ describe("Command Center UI", () => {
 
     // KPI's
     fireEvent.click(within(nav).getByRole("button", { name: /KPI's/ }));
-    expect(await screen.findByRole("heading", { name: "Conversiefunnel" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Leadkwaliteit per bron" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Van lead tot aankoop" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Waar komen de beste leads vandaan?" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Periode" })).toHaveValue("all"); // standaard: Altijd
+    expect(screen.getByText(/Alles sinds/)).toBeInTheDocument();
+    expect(screen.queryByText(/Vergelijk met vorige periode/)).not.toBeInTheDocument(); // niet bij Altijd
 
     // Partners → dossier
     fireEvent.click(within(nav).getByRole("button", { name: /Partners/ }));
@@ -219,7 +224,7 @@ describe("Command Center UI", () => {
   });
 
   test("statuswijziging via fasebadge: doorsturen zonder gegevens opent dossier met ontbrekende velden", async () => {
-    fake.__setDoc("leads/nieuw", { schemaVersion: 2, name: "Nieuwe Nina", email: "n@x.nl", pipelineStage: "contact_phase", nextActionType: "call_back", nextActionDate: "2099-01-01" });
+    fake.__setDoc("leads/nieuw", { schemaVersion: 2, name: "Nieuwe Nina", email: "n@x.nl", pipelineStage: "new_lead", nextActionType: "call_back", nextActionDate: "2099-01-01" });
     window.location.hash = "#/leads";
     render(<App />);
     const sel = await screen.findByRole("combobox", { name: /Pipelinefase van Nieuwe Nina wijzigen/ });
@@ -228,7 +233,9 @@ describe("Command Center UI", () => {
     });
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getAllByText(/Vul eerst deze gegevens aan voordat de lead kan worden doorgestuurd/).length).toBeGreaterThan(0);
-    expect(fake.__getDoc("leads/nieuw").pipelineStage).toBe("contact_phase");
+    expect(fake.__getDoc("leads/nieuw").pipelineStage).toBe("new_lead");
+    // Oude leads op "Contactfase" worden als Nieuwe lead gelezen
+    expect(normalizeLead({ id: "c", schemaVersion: 2, name: "C", pipelineStage: "contact_phase" }).pipelineStage).toBe("new_lead");
   });
 });
 
