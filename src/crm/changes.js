@@ -20,7 +20,7 @@ import {
   nextActionText,
   hasNextAction,
 } from "./constants";
-import { formatDate } from "./dates";
+import { formatDate, formatActionDate } from "./dates";
 
 function euro(n) {
   return n === null || n === undefined || n === "" ? "–" : `€ ${Number(n).toLocaleString("nl-NL")}`;
@@ -120,10 +120,10 @@ export function describeLeadChanges(before, after) {
       metadata: { field: "ownerId", from: before.ownerId || null, to: after.ownerId || null },
     });
   }
-  if (field("nextActionType") || field("nextActionDate") || field("nextActionAssignedTo")) {
+  if (field("nextActionType") || field("nextActionDate") || field("nextActionMonthOnly") || field("nextActionAssignedTo")) {
     out.push({
       title: hasNextAction(after)
-        ? `Volgende actie gepland: ${nextActionText(after)}${after.nextActionDate ? ` op ${formatDate(after.nextActionDate)}` : ""}${after.nextActionAssignedToName ? ` (${after.nextActionAssignedToName})` : ""}`
+        ? `Volgende actie gepland: ${nextActionText(after)}${after.nextActionDate ? `${after.nextActionMonthOnly ? " in" : " op"} ${formatActionDate(after.nextActionDate, after.nextActionMonthOnly)}` : ""}${after.nextActionAssignedToName ? ` (${after.nextActionAssignedToName})` : ""}`
         : "Volgende actie verwijderd",
       metadata: { field: "nextAction", to: after.nextActionType, date: after.nextActionDate || null },
     });
@@ -149,7 +149,7 @@ export function describeLeadChanges(before, after) {
   const SALE_KEYS = ["saleDate", "salePrice", "saleProperty", "saleCommission", "saleNotes"];
   if (before.pipelineStage === "completed" && after.pipelineStage === "completed" && SALE_KEYS.some(field)) {
     out.push({
-      title: "Verkoopgegevens bijgewerkt",
+      title: "Aankoopgegevens bijgewerkt",
       description: saleSummary(after),
       metadata: { event: "sale_updated", fields: SALE_KEYS.filter(field) },
     });

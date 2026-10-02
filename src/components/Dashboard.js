@@ -1,25 +1,23 @@
 import { useState } from "react";
-import { PIPELINE_STAGES } from "../crm/constants";
 import { QUICK_FILTERS, SEVERITY_STYLE } from "../crm/signals";
 import { Icon, cardStyle, cardTitleStyle, linkBtnStyle, Empty, C } from "./ui";
 
 // Kleur zit alleen in het icoon; de kaart zelf blijft rustig wit.
+// Actiegerichte cijfers. Aantallen per fase staan in de tabbladen boven de lijst.
 const KPI_CONFIG = [
-  { key: "new", icon: "userPlus", hint: "Met status nieuwe lead", color: C.navy, bg: C.navySoft },
   { key: "today", icon: "bell", hint: "Acties en afspraken vandaag", color: C.goldText, bg: C.goldSoft },
   { key: "overdue", icon: "alertCircle", hint: "Datum is verstreken", color: C.danger, bg: C.dangerBg },
   { key: "appointments", icon: "calendar", hint: "Gesprekken ingepland", color: C.info, bg: C.infoBg },
-  { key: "forwarded", icon: "users", hint: "Bij een partner", color: "#85663a", bg: "#f4ede2" },
-  { key: "reserved", icon: "home", hint: "Bod gedaan, nog niet verkocht", color: C.goldText, bg: C.goldSoft },
+  { key: "reserved", icon: "home", hint: "Bod gedaan, aankoop nog niet rond", color: "#85663a", bg: "#f4ede2" },
 ];
 
-function StatCard({ label, value, hint, icon, color, bg, active, onClick }) {
+function StatCard({ label, value, hint, icon, color, bg, active, onClick, title = "Klik om de lijst hierop te filteren" }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      title="Klik om de lijst hierop te filteren"
+      title={title}
       className="msk-kpi"
       style={{
         background: active ? C.surfaceWarm : C.surface,
@@ -44,7 +42,7 @@ function StatCard({ label, value, hint, icon, color, bg, active, onClick }) {
           <Icon name={icon} size={17} />
         </span>
       </div>
-      <div style={{ fontFamily: C.fontDisplay, fontSize: 32, fontWeight: 600, color: C.navy, lineHeight: 1, margin: "4px 0 14px" }}>{value}</div>
+      <div style={{ fontFamily: C.fontDisplay, fontSize: String(value).length > 6 ? 26 : 32, fontWeight: 600, color: C.navy, lineHeight: 1, margin: "4px 0 14px", whiteSpace: "nowrap" }}>{value}</div>
       <div style={{ marginTop: "auto", borderTop: `1px solid ${C.borderSoft}`, paddingTop: 10, fontSize: 11.5, color: active ? C.goldText : C.textSubtle, fontWeight: active ? 600 : 400 }}>
         {active ? "Filter actief · klik om te wissen" : hint}
       </div>
@@ -52,9 +50,9 @@ function StatCard({ label, value, hint, icon, color, bg, active, onClick }) {
   );
 }
 
-export function KpiRow({ kpis, activeQuick, onQuick }) {
+export function KpiRow({ kpis, activeQuick, onQuick, commission }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 42vw), 1fr))", gap: 14, marginBottom: 16 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(170px, 42vw), 1fr))", gap: 14, marginBottom: 16 }}>
       {KPI_CONFIG.map((k) => (
         <StatCard
           key={k.key}
@@ -68,6 +66,19 @@ export function KpiRow({ kpis, activeQuick, onQuick }) {
           onClick={() => onQuick(activeQuick === k.key ? null : k.key)}
         />
       ))}
+      {commission && (
+        <StatCard
+          label={`Commissie ${commission.year}`}
+          value={commission.value}
+          hint={`${commission.count} ${commission.count === 1 ? "aankoop" : "aankopen"} · bekijk alles`}
+          icon="chart"
+          color={C.success}
+          bg={C.successBg}
+          active={false}
+          title="Open het commissie-overzicht"
+          onClick={commission.onOpen}
+        />
+      )}
     </div>
   );
 }
@@ -93,38 +104,6 @@ function CountPill({ children, tone = "neutral" }) {
   };
   const t = tones[tone];
   return <span style={{ background: t.bg, color: t.color, borderRadius: 999, padding: "1px 8px", fontSize: 11.5, fontWeight: 600 }}>{children}</span>;
-}
-
-export function StageChart({ leads, onPick }) {
-  const open = leads.filter((l) => !l.archived);
-  const counts = {};
-  PIPELINE_STAGES.forEach((s) => (counts[s.value] = open.filter((l) => l.pipelineStage === s.value).length));
-  const max = Math.max(...Object.values(counts), 1);
-  return (
-    <div style={cardStyle}>
-      <CardHead icon="chart">Leads per fase</CardHead>
-      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        {PIPELINE_STAGES.map((s) => (
-          <button
-            type="button"
-            key={s.value}
-            onClick={() => onPick(s.value)}
-            className="msk-stage-row"
-            title={`Toon leads in fase '${s.label}'`}
-            style={{ display: "flex", alignItems: "center", gap: 10, border: "none", background: "none", padding: "3px 0", cursor: "pointer", fontFamily: "inherit" }}
-          >
-            <div className="msk-stage-label" style={{ width: 150, fontSize: 12, color: C.textMuted, flexShrink: 0, textAlign: "left" }}>
-              {s.label}
-            </div>
-            <div className="msk-stage-track" style={{ flex: 1, background: C.surfaceSoft, borderRadius: 99, height: 8, overflow: "hidden" }}>
-              <div style={{ width: `${(counts[s.value] / max) * 100}%`, height: "100%", background: s.color, borderRadius: 99, opacity: 0.85 }} />
-            </div>
-            <div style={{ width: 22, fontSize: 12, fontWeight: 600, color: counts[s.value] ? C.text : C.textDisabled, textAlign: "right" }}>{counts[s.value]}</div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 const KIND_META = {

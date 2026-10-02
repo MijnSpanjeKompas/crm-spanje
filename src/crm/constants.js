@@ -25,8 +25,10 @@ export const PIPELINE_STAGES = [
   { value: "appointment_scheduled", label: "Gesprek gepland", group: "main", color: "#2f6f82", bg: "#e8f2f4" },
   { value: "partner_connected", label: "Doorgestuurd", group: "main", color: "#85663a", bg: "#f4ede2" },
   { value: "purchase_process", label: "Gereserveerd", group: "main", color: "#8c6010", bg: "#fbefd2" },
-  // "Verkocht" zet je alleen via de knop Verkocht (met aankoopprijs, woning en commissie).
-  { value: "completed", label: "Verkocht", group: "main", closed: true, viaSaleOnly: true, color: "#2f7a55", bg: "#eaf4ee" },
+  // Backendwaarde blijft "completed" (backwards compatible). MSK verkoopt zelf geen
+  // woningen, dus in de UI heet dit "Aankoop afgerond". Alleen te zetten via
+  // "Aankoop afgerond vastleggen" (met aankoopprijs, woning en commissie).
+  { value: "completed", label: "Aankoop afgerond", group: "main", closed: true, viaSaleOnly: true, color: "#2f7a55", bg: "#eaf4ee" },
   { value: "follow_up_later", label: "Later opvolgen", group: "side", color: "#97581a", bg: "#fbefe3" },
   { value: "unreachable", label: "Niet bereikbaar", group: "side", color: "#a0522d", bg: "#f8ece4" },
   { value: "stopped", label: "Gestopt", group: "side", closed: true, color: "#9b4a43", bg: "#f6eae8" },
@@ -90,6 +92,8 @@ export const PRIORITIES = [
 ];
 
 // ─── VOLGENDE ACTIE ──────────────────────────────────────────────────────────
+// Volgorde = volgorde in de dropdown. Opties met `hidden` kies je niet meer,
+// maar bestaande leads die ze nog hebben blijven correct getoond.
 export const NEXT_ACTION_TYPES = [
   { value: "first_contact", label: "Eerste contact opnemen" },
   { value: "call_back", label: "Terugbellen" },
@@ -97,16 +101,24 @@ export const NEXT_ACTION_TYPES = [
   { value: "send_email", label: "E-mail sturen" },
   { value: "schedule_appointment", label: "Gesprek inplannen" },
   { value: "conduct_appointment", label: "Gesprek voeren" },
-  { value: "complete_search_profile", label: "Zoekprofiel aanvullen" },
-  { value: "select_partner", label: "Partner selecteren" },
-  { value: "connect_partner", label: "Koppelen aan partner" },
-  { value: "follow_up_partner", label: "Partner opvolgen" },
-  { value: "follow_up_lead", label: "Lead opvolgen" },
+  { value: "follow_up_whatsapp", label: "Follow-up appje" },
+  { value: "check_realtor", label: "Contact met makelaar checken" },
   { value: "follow_up_spain_visit", label: "Bezoek Spanje opvolgen" },
-  { value: "request_document", label: "Document opvragen" },
   { value: "other", label: "Anders" },
   { value: "none", label: "Geen actie gepland" },
+  // niet meer kiesbaar
+  { value: "complete_search_profile", label: "Zoekprofiel aanvullen", hidden: true },
+  { value: "select_partner", label: "Partner selecteren", hidden: true },
+  { value: "connect_partner", label: "Koppelen aan partner", hidden: true },
+  { value: "follow_up_partner", label: "Partner opvolgen", hidden: true },
+  { value: "follow_up_lead", label: "Lead opvolgen", hidden: true },
+  { value: "request_document", label: "Document opvragen", hidden: true },
 ];
+
+/** Acties voor de dropdown: zonder verborgen opties, behalve de huidige waarde. */
+export function selectableActionTypes(current, { includeNone = true } = {}) {
+  return NEXT_ACTION_TYPES.filter((o) => (!o.hidden || o.value === current) && (includeNone || o.value !== "none"));
+}
 
 export function hasNextAction(lead) {
   return Boolean(lead?.nextActionType) && lead.nextActionType !== "none";
@@ -125,7 +137,7 @@ export const ACTIVITY_TYPES = [
   { value: "whatsapp", label: "WhatsApp", customerContact: true, contactMethod: "whatsapp", icon: "chat" },
   { value: "email", label: "E-mail", customerContact: true, contactMethod: "email", icon: "mail" },
   { value: "appointment", label: "Gesprek", customerContact: true, contactMethod: "appointment", icon: "calendar" },
-  { value: "note", label: "Notitie", icon: "edit" },
+  { value: "note", label: "Interne notitie", icon: "edit" },
   { value: "partner_contact", label: "Partnercontact", icon: "users" },
   { value: "document", label: "Document", icon: "file" },
   { value: "viewing", label: "Bezichtiging", icon: "home" },
@@ -170,6 +182,8 @@ export const PREFERRED_CONTACT_METHODS = [
   { value: "phone", label: "Telefoon" },
   { value: "whatsapp", label: "WhatsApp" },
   { value: "email", label: "E-mail" },
+  { value: "whatsapp_then_phone", label: "Eerst WhatsApp, daarna telefonisch" },
+  { value: "phone_then_whatsapp", label: "Eerst telefonisch, daarna WhatsApp" },
   { value: "no_preference", label: "Geen voorkeur" },
 ];
 
@@ -177,7 +191,8 @@ export const PREFERRED_CONTACT_MOMENTS = [
   { value: "morning", label: "Ochtend" },
   { value: "afternoon", label: "Middag" },
   { value: "evening", label: "Avond" },
-  { value: "no_preference", label: "Geen voorkeur" },
+  { value: "weekend", label: "Weekend" },
+  { value: "no_preference", label: "Maakt niet uit" },
 ];
 
 // ─── AFSPRAKEN ───────────────────────────────────────────────────────────────
@@ -292,6 +307,7 @@ export const PURCHASE_GOALS = [
   { value: "holiday_home", label: "Vakantiehuis" },
   { value: "investment", label: "Investering" },
   { value: "rental", label: "Verhuur" },
+  { value: "wintering", label: "Overwinteren" },
   { value: "other", label: "Anders" },
 ];
 
@@ -424,3 +440,31 @@ export const THRESHOLDS = {
   /** "Binnenkort" = binnen zoveel dagen. */
   UPCOMING_DAYS: 7,
 };
+
+// ─── BEZOEK SPANJE ───────────────────────────────────────────────────────────
+export const VISIT_SPAIN_STATUSES = [
+  { value: "not_planned", label: "Nog niet gepland" },
+  { value: "planned_no_date", label: "Wel gepland, datum onbekend" },
+  { value: "date_known", label: "Datum bekend" },
+  { value: "in_spain_or_visited", label: "Is in Spanje / is al geweest" },
+];
+
+// ─── TIJDLIJN ────────────────────────────────────────────────────────────────
+/** Filters in de tijdlijn. Systeem staat standaard uit. */
+export const TIMELINE_FILTERS = [
+  { value: "all", label: "Alles" },
+  { value: "contact", label: "Contact" },
+  { value: "notes", label: "Notities" },
+  { value: "partners", label: "Partners" },
+  { value: "system", label: "Systeem" },
+];
+
+/** Typen die je via "+ Activiteit" kiest (in deze volgorde). */
+export const QUICK_ACTIVITY_TYPES = ["phone_call", "whatsapp", "email", "appointment", "note"];
+
+/** Wie heeft iets gedaan? Voor audit en toekomstige AI-agents. */
+export const ACTOR_TYPES = [
+  { value: "human", label: "Medewerker" },
+  { value: "agent", label: "AI-agent" },
+  { value: "system", label: "Systeem" },
+];

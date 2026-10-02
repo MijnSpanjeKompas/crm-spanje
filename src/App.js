@@ -9,16 +9,17 @@ import { normalizeLead } from "./crm/normalize";
 import { validateLead, FIELD_TABS } from "./crm/validation";
 import { computeKpis, getTodayItems, getAttentionList } from "./crm/signals";
 import { DEFAULT_FILTERS, applyFilters } from "./crm/filters";
-import { labelOf, PIPELINE_STAGES } from "./crm/constants";
-import { baseTextSelection, Icon, Notice, C, btnStyle, iconBtnStyle, cardStyle, BrandLogo } from "./components/ui";
+import { labelOf, PIPELINE_STAGES, isClosedStage } from "./crm/constants";
+import { baseTextSelection, Icon, Notice, C, btnStyle, iconBtnStyle, cardStyle, BrandLogo, formatEuro } from "./components/ui";
 import { LoginScreen, LoadingScreen } from "./components/LoginScreen";
-import { KpiRow, StageChart, TodayPanel, AttentionPanel } from "./components/Dashboard";
+import { KpiRow, TodayPanel, AttentionPanel } from "./components/Dashboard";
 import { LeadFilters } from "./components/LeadFilters";
 import { LeadCard, LeadTable } from "./components/LeadList";
 import { LeadDetailModal } from "./components/lead/LeadDetailModal";
 import { PartnersModal } from "./components/PartnersModal";
 import { SaleDialog } from "./components/SaleDialog";
 import { CommissionsModal } from "./components/CommissionsModal";
+import { ImportModal } from "./components/ImportModal";
 
 function scrollToList() {
   const el = document.getElementById("lead-list");
@@ -50,6 +51,7 @@ export function Crm({ user, onSignOut }) {
   const [modal, setModal] = useState(null);
   const [partnersOpen, setPartnersOpen] = useState(false);
   const [commissionsOpen, setCommissionsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [saleLeadId, setSaleLeadId] = useState(null);
   const [notice, setNotice] = useState(null);
   const [now, setNow] = useState(() => new Date());
@@ -92,6 +94,26 @@ export function Crm({ user, onSignOut }) {
     () => Array.from(new Set(leads.flatMap((l) => l.places || []))).sort((a, b) => a.localeCompare(b, "nl")),
     [leads]
   );
+  // Aantallen per tabblad (fase), los van de andere filters.
+  const tabCounts = useMemo(() => {
+    const c = { open: 0, archived: 0 };
+    leads.forEach((l) => {
+      if (l.archived) {
+        c.archived += 1;
+        return;
+      }
+      c[l.pipelineStage] = (c[l.pipelineStage] || 0) + 1;
+      if (!isClosedStage(l.pipelineStage)) c.open += 1;
+    });
+    return c;
+  }, [leads]);
+
+  const commission = useMemo(() => {
+    const year = now.getFullYear();
+    const sold = leads.filter((l) => l.pipelineStage === "completed" && String(l.saleDate || "").startsWith(String(year)));
+    return { year, count: sold.length, total: sold.reduce((sum, l) => sum + (Number(l.saleCommission) || 0), 0) };
+  }, [leads, now]);
+
   const filtered = useMemo(() => applyFilters(leads, filters, { currentUserId: user.id, now }), [leads, filters, user.id, now]);
 
   const modalLead = modal && !modal.isNew ? leads.find((l) => l.id === modal.leadId) : null;
@@ -282,6 +304,9 @@ export function Crm({ user, onSignOut }) {
             <div style={{ fontSize: 14, color: C.textMuted, marginTop: 6 }}>Beheer en volg alle potentiële kopers.</div>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button type="button" onClick={() => setImportOpen(true)} style={{ ...btnStyle("primary"), padding: "9px 15px", minHeight: 40, fontSize: 13 }}>
+              <Icon name="upload" size={15} /> Importeren
+            </button>
             <button type="button" onClick={() => setCommissionsOpen(true)} style={{ ...btnStyle("primary"), padding: "9px 15px", minHeight: 40, fontSize: 13 }}>
               <Icon name="chart" size={15} /> Commissies
             </button>
@@ -310,18 +335,16 @@ export function Crm({ user, onSignOut }) {
           </div>
         )}
 
-        <KpiRow kpis={kpis} activeQuick={filters.quick} onQuick={setQuick} />
+        <KpiRow
+          kpis={kpis}
+          activeQuick={filters.quick}
+          onQuick={setQuick}
+          commission={{ year: commission.year, count: commission.count, value: formatEuro(commission.total), onOpen: () => setCommissionsOpen(true) }}
+        />
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, marginBottom: 28 }}>
-          <StageChart
-            leads={leads}
-            onPick={(stage) => {
-              setFilters((f) => ({ ...f, stage, quick: null, scope: "all" }));
-              scrollToList();
-            }}
-          />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(380px, 100%), 1fr))", gap: 16, marginBottom: 28 }}>
           <TodayPanel items={todayItems} onOpen={(lead, tab) => openLead(lead, tab)} />
-          <AttentionPanel list={attention} onOpen={(lead) => openLead(lead, "overview")} onShowAll={() => setQuick("attention")} />
+          <AttentionPanel list={attention} onOpen={(lead) => openLead(lead, "followup")} onShowAll={() => setQuick("attention")} />
         </div>
 
         <LeadFilters
@@ -335,6 +358,7 @@ export function Crm({ user, onSignOut }) {
           loading={loading}
           view={view}
           setView={setView}
+          tabCounts={tabCounts}
         />
 
         {loading ? (
@@ -371,7 +395,7 @@ export function Crm({ user, onSignOut }) {
           allLeads={leads}
           user={user}
           onClose={() => setModal(null)}
-          onCreated={(id) => setModal({ key: `${id}-created`, leadId: id, isNew: false, initialTab: "activities", initialMessage: { tone: "ok", text: "Lead aangemaakt. Leg hier direct het eerste contact vast." } })}
+          onCreated={(id) => setModal({ key: `${id}-created`, leadId: id, isNew: false, initialTab: "overview", initialMessage: { tone: "ok", text: "Lead aangemaakt. Wijzigingen worden vanaf nu automatisch opgeslagen." } })}
           onOpenLead={(l) => openLead(l)}
           onManagePartners={() => setPartnersOpen(true)}
           onSold={handleSold}
@@ -389,6 +413,19 @@ export function Crm({ user, onSignOut }) {
         />
       )}
 
+      {importOpen && (
+        <ImportModal
+          leads={leads}
+          user={user}
+          onClose={() => setImportOpen(false)}
+          onOpenLead={(l) => {
+            if (!l) return;
+            setImportOpen(false);
+            openLead(l);
+          }}
+        />
+      )}
+
       {saleLead && (
         <SaleDialog
           key={saleLead.id}
@@ -396,7 +433,7 @@ export function Crm({ user, onSignOut }) {
           user={user}
           onClose={() => setSaleLeadId(null)}
           onSaved={(l, wasEdit) =>
-            setNotice({ tone: "ok", text: wasEdit ? `Verkoopgegevens van ${l.name || "de lead"} bijgewerkt.` : `${l.name || "Lead"} staat op Verkocht. De commissie staat onder Commissies.` })
+            setNotice({ tone: "ok", text: wasEdit ? `Aankoopgegevens van ${l.name || "de lead"} bijgewerkt.` : `${l.name || "Lead"} staat op Aankoop afgerond. De commissie staat onder Commissies.` })
           }
         />
       )}

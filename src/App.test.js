@@ -53,18 +53,22 @@ test("dashboard en lijst renderen oude leads", async () => {
   expect(screen.queryByText(/Geen strenge datum/i)).not.toBeInTheDocument();
 });
 
-test("leaddetail: alle tabbladen, activiteit toevoegen en opslaan (migratie)", async () => {
+test("leaddossier: nieuwe tabs, tijdlijn en autosave (migratie)", async () => {
   render(<App />);
   fireEvent.click(await cardTitle("Ewoud Kremer"));
   const dialog = await screen.findByRole("dialog");
   expect(within(dialog).getByText(/oude CRM-versie/i)).toBeInTheDocument();
 
-  for (const tab of ["Zoekprofiel", "Opvolging", "Partners", "Bestanden", "Details", "Activiteiten"]) {
+  // Exact deze tabs, geen Details meer, geen Opslaan-knop
+  expect(within(dialog).getAllByRole("tab").map((t) => t.textContent.replace(/\d+$/, ""))).toEqual(["Overzicht", "Zoekprofiel", "Opvolging", "Tijdlijn", "Partners", "Bestanden"]);
+  expect(within(dialog).queryByRole("button", { name: /^Opslaan$/ })).not.toBeInTheDocument();
+  for (const tab of ["Zoekprofiel", "Opvolging", "Partners", "Bestanden", "Tijdlijn"]) {
     fireEvent.click(within(dialog).getByRole("tab", { name: new RegExp(tab) }));
   }
 
-  // Activiteit toevoegen
-  fireEvent.click(within(dialog).getByRole("button", { name: /Activiteit toevoegen/ }));
+  // Tijdlijn: + Activiteit → Telefoongesprek
+  fireEvent.click(within(dialog).getByRole("button", { name: /^Activiteit$/ }));
+  fireEvent.click(within(dialog).getByRole("menuitem", { name: /Telefoongesprek/ }));
   fireEvent.change(within(dialog).getByPlaceholderText(/Wat is er besproken/), { target: { value: "Gebeld over bezoek" } });
   const outcome = within(dialog).getAllByRole("combobox").find((sel) => within(sel).queryByText("Gesproken"));
   fireEvent.change(outcome, { target: { value: "spoken" } });
@@ -74,20 +78,29 @@ test("leaddetail: alle tabbladen, activiteit toevoegen en opslaan (migratie)", a
   await waitFor(() => expect(within(dialog).getByText("Gebeld over bezoek")).toBeInTheDocument());
   expect(fake.__getDoc("leads/ewoud").lastContactAt).toBeInstanceOf(Date);
 
-  // Opslaan zonder datum bij actie → validatiefout op tab Opvolging
+  // Autosave: samenvatting typen. De volgende actie mist nog een datum → niet opgeslagen, met uitleg.
   fireEvent.click(within(dialog).getByRole("tab", { name: /Overzicht/ }));
+  fireEvent.change(within(dialog).getByPlaceholderText(/Wil samen met partner/), { target: { value: "Wil emigreren, woning moet eerst verkocht." } });
+  await waitFor(() => expect(within(dialog).getByText(/Nog niet opgeslagen/)).toBeInTheDocument(), { timeout: 3000 });
+  expect(fake.__getDoc("leads/ewoud").schemaVersion).toBeUndefined();
+
+  // Datum kiezen via Opvolging → wordt direct opgeslagen, samen met de samenvatting
+  fireEvent.click(within(dialog).getByRole("button", { name: /naar Opvolging/ }));
   await act(async () => {
-    fireEvent.click(within(dialog).getByRole("button", { name: /^Opslaan$/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Morgen" }));
   });
-  expect(within(dialog).getByText(/Kies een datum voor de volgende actie/)).toBeInTheDocument();
-  fireEvent.click(within(dialog).getByRole("button", { name: "Morgen" }));
-  await act(async () => {
-    fireEvent.click(within(dialog).getByRole("button", { name: /^Opslaan$/ }));
-  });
-  await waitFor(() => expect(fake.__getDoc("leads/ewoud").schemaVersion).toBe(2));
+  await waitFor(() => expect(fake.__getDoc("leads/ewoud").schemaVersion).toBe(2), { timeout: 3000 });
   const raw = fake.__getDoc("leads/ewoud");
+  expect(raw.leadSummary).toBe("Wil emigreren, woning moet eerst verkocht.");
   expect(raw.pipelineStage).toBe("partner_connected");
   expect(raw.naam).toBe("Ewoud Kremer"); // oud veld blijft staan
+  await waitFor(() => expect(within(dialog).getByText(/Opgeslagen/)).toBeInTheDocument());
+
+  // Systeemactiviteiten zijn traceerbaar: wie (actorType/actorId) en wat (actionType)
+  const acts = Array.from(fake.__dump().docs.entries()).filter(([p]) => p.startsWith("leads/ewoud/activities/")).map(([, d]) => d);
+  expect(acts.length).toBeGreaterThan(0);
+  acts.forEach((a) => expect(a).toMatchObject({ actorType: "human", actorId: "uLuke" }));
+  expect(acts.every((a) => a.actionType)).toBe(true);
 });
 
 test("nieuwe lead met duplicaatwaarschuwing", async () => {
@@ -106,7 +119,7 @@ test("nieuwe lead met duplicaatwaarschuwing", async () => {
   await act(async () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Toch nieuwe lead aanmaken/ }));
   });
-  await waitFor(() => expect(screen.getByText(/Leg hier direct het eerste contact vast/)).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText(/Wijzigingen worden vanaf nu automatisch opgeslagen/)).toBeInTheDocument());
   const created = Array.from(fake.__dump().docs.entries()).find(([p, d]) => /^leads\/[^/]+$/.test(p) && d.name === "E. Kremer");
   expect(created).toBeTruthy();
   expect(created[1]).toMatchObject({ ownerId: "uLuke", pipelineStage: "new_lead", emailNormalized: "ewoud@example.nl", schemaVersion: 2 });
@@ -140,18 +153,18 @@ test("verwijderen via kaart: na bevestiging is de lead echt weg, zonder bevestig
   await waitFor(() => expect(["ewoud", "heerschap"].filter((id) => fake.__getDoc(`leads/${id}`))).toHaveLength(1));
 });
 
-test("Verkocht-knop: verkoop vastleggen en terugzien onder Commissies", async () => {
+test("Aankoop afgerond: vastleggen en terugzien onder Commissies", async () => {
   fake.__setDoc("leads/devos", { schemaVersion: 2, name: "Jan de Vos", email: "jan@devos.nl", pipelineStage: "purchase_process", nextActionType: "follow_up_lead", nextActionDate: "2099-01-01" });
   render(<App />);
   await cardTitle("Jan de Vos");
-  fireEvent.click(screen.getByRole("button", { name: /^Verkocht$/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^Aankoop afgerond$/ }));
   const dialog = await screen.findByRole("dialog");
   fireEvent.change(within(dialog).getByPlaceholderText(/Calle del Mar/), { target: { value: "Calle del Mar 12" } });
   fireEvent.change(within(dialog).getByPlaceholderText(/245000/), { target: { value: "250000" } });
   const commission = within(dialog).getAllByRole("spinbutton")[1];
   fireEvent.change(commission, { target: { value: "7500" } });
   await act(async () => {
-    fireEvent.click(within(dialog).getByRole("button", { name: /Verkoop opslaan/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /Aankoop opslaan/ }));
   });
   await waitFor(() => expect(fake.__getDoc("leads/devos").pipelineStage).toBe("completed"));
   expect(fake.__getDoc("leads/devos")).toMatchObject({ salePrice: 250000, saleCommission: 7500, saleProperty: "Calle del Mar 12" });
@@ -160,4 +173,45 @@ test("Verkocht-knop: verkoop vastleggen en terugzien onder Commissies", async ()
   const overview = await screen.findByRole("dialog");
   expect(within(overview).getByText("Jan de Vos")).toBeInTheDocument();
   expect(within(overview).getAllByText("€ 7.500").length).toBeGreaterThan(0);
+});
+
+test("tabbladen per pipelinefase filteren de lijst", async () => {
+  fake.__setDoc("leads/a1", { schemaVersion: 2, name: "Anna Doorgestuurd", email: "a@a.nl", pipelineStage: "partner_connected", nextActionType: "check_realtor", nextActionDate: "2099-01-01" });
+  fake.__setDoc("leads/a2", { schemaVersion: 2, name: "Bert Nieuw", email: "b@b.nl", pipelineStage: "new_lead", nextActionType: "first_contact", nextActionDate: "2099-01-01" });
+  render(<App />);
+  await cardTitle("Anna Doorgestuurd");
+  expect(await cardTitle("Bert Nieuw")).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: /^Doorgestuurd/ }));
+  await waitFor(() => expect(screen.queryAllByText("Bert Nieuw").filter((el) => el.tagName === "DIV")).toHaveLength(0));
+  expect(await cardTitle("Anna Doorgestuurd")).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: /^Alle open/ }));
+  expect(await cardTitle("Bert Nieuw")).toBeTruthy();
+});
+
+test("import uit Google Sheet: nieuwe lead, daarna geen dubbele bij tweede import", async () => {
+  const csv = [
+    "Submission ID,Submission time,name,Telefoonnummer,email,region,max_budget,aankooptijd,utm_source,utm_medium,form_source,toestemming,pdf_url,pdf_sent",
+    'sub-77,2026-10-01 19:14,Rory de Leon,31657968628,rory@example.com,Costa Cálida,"0 - 200.000",Binnen 3-6 maanden,fb,paid_social,Website,Ja,https://drive.google.com/x,TRUE',
+  ].join("\n");
+  render(<App />);
+  await cardTitle("Ewoud Kremer");
+  fireEvent.click(screen.getByRole("button", { name: /Importeren/ }));
+  let dialog = await screen.findByRole("dialog");
+  fireEvent.change(within(dialog).getByLabelText("Rijen uit de Sheet"), { target: { value: csv } });
+  expect(within(dialog).getByText("Nieuw: 1")).toBeInTheDocument();
+  await act(async () => {
+    fireEvent.click(within(dialog).getByRole("button", { name: /1 lead importeren/ }));
+  });
+  await waitFor(() => expect(within(dialog).getByText(/geïmporteerd/)).toBeInTheDocument());
+
+  const created = Array.from(fake.__dump().docs.entries()).find(([p, d]) => /^leads\/[^/]+$/.test(p) && d.sourceSubmissionId === "sub-77");
+  expect(created[1]).toMatchObject({ name: "Rory de Leon", phone: "+31 6 57968628", phoneNormalized: "31657968628", budgetMax: 200000, regions: ["costa_calida"], leadSource: "meta_ads", consentContact: true, purchaseTimeline: "3_to_6_months" });
+  expect(created[1].searchProfilePdf).toMatchObject({ url: "https://drive.google.com/x", sent: true });
+  const act1 = Array.from(fake.__dump().docs.entries()).find(([p]) => p.startsWith(`${created[0]}/activities/`))[1];
+  expect(act1).toMatchObject({ actorType: "system", actorId: "sheets_import", actionType: "lead_imported" });
+
+  // Zelfde rij opnieuw → "Bestaat al", niets te importeren
+  fireEvent.change(within(dialog).getByLabelText("Rijen uit de Sheet"), { target: { value: csv } });
+  await waitFor(() => expect(within(dialog).getByText("Bestaat al: 1")).toBeInTheDocument());
+  expect(within(dialog).getByRole("button", { name: /0 leads importeren/ })).toBeDisabled();
 });

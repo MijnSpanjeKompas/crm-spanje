@@ -287,7 +287,7 @@ test("verkoop: Verkocht-knop legt prijs, woning en commissie vast", async () => 
   expect(lead.pipelineStage).toBe("completed");
   expect(raw).toMatchObject({ salePrice: 245000, saleCommission: 7350, saleProperty: "Calle del Mar 12, Torrevieja", saleDate: today, nextActionType: "none" });
   expect(raw.closedAt).toBeInstanceOf(Date);
-  expect(titles(id)).toContain("Verkocht: Calle del Mar 12, Torrevieja");
+  expect(titles(id)).toContain("Aankoop afgerond: Calle del Mar 12, Torrevieja");
   expect(titles(id)).not.toContain("Lead gesloten");
   expect(getLeadSignals(lead)).toEqual([]);
   expect(selectableStages(lead.pipelineStage).map((s) => s.value)).toContain("completed");
@@ -299,5 +299,5 @@ test("verkoop: Verkocht-knop legt prijs, woning en commissie vast", async () => 
   // Commissie later aanpassen wordt gelogd
   await markLeadSold(lead, { saleDate: today, salePrice: 245000, saleProperty: "Calle del Mar 12, Torrevieja", saleCommission: 8000, saleNotes: "" }, LUKE);
   expect(fake.__getDoc(`leads/${id}`).saleCommission).toBe(8000);
-  expect(titles(id)).toContain("Verkoopgegevens bijgewerkt");
+  expect(titles(id)).toContain("Aankoopgegevens bijgewerkt");
 });

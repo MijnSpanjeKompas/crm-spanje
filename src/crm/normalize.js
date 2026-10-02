@@ -29,6 +29,7 @@ import {
   CLOSURE_REASONS,
   CONTACT_METHODS,
   PARTNER_LINK_STATUSES,
+  VISIT_SPAIN_STATUSES,
 } from "./constants";
 import { toDate, todayISO } from "./dates";
 
@@ -42,7 +43,7 @@ export const FORM_FIELDS = [
   "pipelineStage", "purchaseIntent", "priority",
   "ownerId", "ownerName",
   "leadSummary", "notities",
-  "nextActionType", "nextActionLabel", "nextActionDate",
+  "nextActionType", "nextActionLabel", "nextActionDate", "nextActionMonthOnly",
   "nextActionAssignedTo", "nextActionAssignedToName", "nextActionNotes",
   "appointmentDate", "appointmentTime", "appointmentType",
   "appointmentAssignedTo", "appointmentAssignedToName", "appointmentStatus",
@@ -56,6 +57,9 @@ export const FORM_FIELDS = [
   "closureReason", "closureNotes",
   "pinned",
   "saleDate", "salePrice", "saleProperty", "saleCommission", "saleNotes",
+  // toegevoegd voor de nieuwe leadweergave / Google Sheets-import
+  "visitSpainStatus", "consentContact", "formSource",
+  "contactPreferenceText", "contactMomentText",
 ];
 
 const ARRAY_FIELDS = ["regions", "places", "propertyTypes", "requirements", "tags"];
@@ -347,6 +351,7 @@ export function emptyLead(user) {
     nextActionType: "first_contact",
     nextActionLabel: "",
     nextActionDate: todayISO(),
+    nextActionMonthOnly: false,
     nextActionAssignedTo: user?.id || "",
     nextActionAssignedToName: user?.displayName || "",
     nextActionNotes: "",
@@ -391,6 +396,14 @@ export function emptyLead(user) {
     saleProperty: "",
     saleCommission: null,
     saleNotes: "",
+    // bron, toestemming, contactvoorkeur als vrije tekst (import)
+    visitSpainStatus: "",
+    consentContact: null,
+    formSource: "",
+    contactPreferenceText: "",
+    contactMomentText: "",
+    sourceSubmissionId: "",
+    sourceSubmittedAt: null,
     // gedenormaliseerd
     lastContactAt: null,
     lastContactMethod: "",
@@ -579,6 +592,7 @@ export function normalizeLead(raw, ctx = {}) {
     nextActionType: pickKey(NEXT_ACTION_TYPES, pick("nextActionType"), "none"),
     nextActionLabel: str(pick("nextActionLabel")),
     nextActionDate: str(pick("nextActionDate")),
+    nextActionMonthOnly: Boolean(raw.nextActionMonthOnly),
     nextActionAssignedTo: str(raw.nextActionAssignedTo),
     nextActionAssignedToName: str(raw.nextActionAssignedToName),
     nextActionNotes: str(raw.nextActionNotes),
@@ -603,6 +617,14 @@ export function normalizeLead(raw, ctx = {}) {
     currentHousingSituation: pickKey(HOUSING_SITUATIONS, raw.currentHousingSituation, ""),
     visitSpainDate: str(raw.visitSpainDate),
     visitSpainNotes: str(raw.visitSpainNotes),
+    // Oude leads hebben geen status: afleiden uit de datum (niet wegschrijven tot iemand iets wijzigt).
+    visitSpainStatus: pickKey(VISIT_SPAIN_STATUSES, raw.visitSpainStatus, raw.visitSpainDate ? "date_known" : ""),
+    consentContact: raw.consentContact === true || raw.consentContact === false ? raw.consentContact : null,
+    formSource: str(raw.formSource),
+    contactPreferenceText: str(raw.contactPreferenceText),
+    contactMomentText: str(raw.contactMomentText),
+    sourceSubmissionId: str(raw.sourceSubmissionId),
+    sourceSubmittedAt: raw.sourceSubmittedAt || null,
     rentalInterest: pickKey(RENTAL_INTEREST, pick("rentalInterest"), ""),
     requirements: arrayOfKeys(REQUIREMENTS, raw.requirements),
     extraRequirements: str(pick("extraRequirements")),
@@ -665,7 +687,8 @@ export function buildLeadPayload(lead) {
     let v = lead[key];
     if (ARRAY_FIELDS.includes(key)) v = uniq(Array.isArray(v) ? v.map((x) => (typeof x === "string" ? x.trim() : x)) : []);
     else if (NUMBER_FIELDS.includes(key)) v = numOrNull(v);
-    else if (key === "pinned") v = Boolean(v);
+    else if (key === "pinned" || key === "nextActionMonthOnly") v = Boolean(v);
+    else if (key === "consentContact") v = v === true || v === false ? v : null;
     else v = typeof v === "string" ? v.trim() : v === undefined || v === null ? "" : v;
     out[key] = v;
   });
@@ -673,7 +696,9 @@ export function buildLeadPayload(lead) {
     out.nextActionType = "none";
     out.nextActionDate = "";
     out.nextActionLabel = "";
+    out.nextActionMonthOnly = false;
   }
+  if (out.nextActionMonthOnly && out.nextActionDate) out.nextActionDate = `${String(out.nextActionDate).slice(0, 7)}-01`;
   if (out.nextActionType !== "other") out.nextActionLabel = "";
   out.emailNormalized = normalizeEmail(out.email);
   out.phoneNormalized = normalizePhone(out.phone);

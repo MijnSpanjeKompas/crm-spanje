@@ -13,7 +13,7 @@ import {
 } from "../crm/constants";
 import { SoldButton } from "./SaleDialog";
 import { getNextActionInfo, getLeadSignals, SEVERITY_STYLE } from "../crm/signals";
-import { formatDate, formatRelative } from "../crm/dates";
+import { formatDate, formatRelative, formatActionDate } from "../crm/dates";
 import { Icon, Badge, OptionBadge, btnStyle, selectStyle, tdStyle, formatBudget, formatEuro, C } from "./ui";
 
 function whereText(lead) {
@@ -32,7 +32,7 @@ function nextActionLine(lead) {
   const info = getNextActionInfo(lead);
   if (info.state === "none") return { text: "Geen actie gepland", color: info.color, info, none: true };
   const parts = [nextActionText(lead)];
-  if (lead.nextActionDate) parts.push(`${formatDate(lead.nextActionDate)} (${info.label.toLowerCase()})`);
+  if (lead.nextActionDate) parts.push(`${formatActionDate(lead.nextActionDate, lead.nextActionMonthOnly)} (${info.label.toLowerCase()})`);
   else parts.push("datum ontbreekt");
   if (lead.nextActionAssignedToName) parts.push(lead.nextActionAssignedToName);
   return {
@@ -41,7 +41,7 @@ function nextActionLine(lead) {
     info,
     none: false,
     action: nextActionText(lead),
-    when: lead.nextActionDate ? formatDate(lead.nextActionDate) : "Datum ontbreekt",
+    when: lead.nextActionDate ? formatActionDate(lead.nextActionDate, lead.nextActionMonthOnly) : "Datum ontbreekt",
     who: lead.nextActionAssignedToName || "",
   };
 }
@@ -188,7 +188,7 @@ export function LeadCard({ lead, onOpen, onArchive, onDelete, onSold, onStageCha
             <Icon name="checkCircle" size={15} />
           </span>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 11.5, color: C.success, fontWeight: 600 }}>Verkocht{lead.saleDate ? ` · ${formatDate(lead.saleDate)}` : ""}</div>
+            <div style={{ fontSize: 11.5, color: C.success, fontWeight: 600 }}>Aankoop afgerond{lead.saleDate ? ` · ${formatDate(lead.saleDate)}` : ""}</div>
             <div style={{ fontSize: 13, color: C.text, fontWeight: 600, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lead.saleProperty || "Woning onbekend"}</div>
             <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 1 }}>
               {formatEuro(lead.salePrice) || "–"} · Commissie{" "}
@@ -345,7 +345,7 @@ export function LeadTable({ leads, onOpen, onArchive, onDelete, onSold, onToggle
                 <td style={{ ...cell, minWidth: 210, maxWidth: 280 }}>
                   {isSold(lead) ? (
                     <>
-                      <span style={{ display: "block", color: C.success, fontWeight: 600 }}>Verkocht · {formatEuro(lead.salePrice) || "–"}</span>
+                      <span style={{ display: "block", color: C.success, fontWeight: 600 }}>Aankoop afgerond · {formatEuro(lead.salePrice) || "–"}</span>
                       <span style={{ display: "block", fontSize: 12, color: C.textMuted, marginTop: 1 }}>
                         Commissie {lead.saleCommission > 0 ? formatEuro(lead.saleCommission) : "nog invullen"}
                       </span>
@@ -368,7 +368,7 @@ export function LeadTable({ leads, onOpen, onArchive, onDelete, onSold, onToggle
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                     {lead.pipelineStage === "purchase_process" && !lead.archived && onSold && (
                       <button type="button" onClick={() => onSold(lead)} style={btnStyle("gold", true)}>
-                        Verkocht
+                        Aankoop afgerond
                       </button>
                     )}
                     <button type="button" onClick={() => onOpen(lead)} style={btnStyle("primary")}>

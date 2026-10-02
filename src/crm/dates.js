@@ -112,3 +112,41 @@ export function fromDateTimeLocal(str) {
   const d = new Date(str);
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
+
+// ─── MAAND-DATUMS (volgende actie "ergens in oktober") ──────────────────────
+const MONTHS = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
+
+/** "2026-10-17" → "2026-10-01" */
+export function monthStartISO(iso) {
+  return /^\d{4}-\d{2}/.test(String(iso || "")) ? `${String(iso).slice(0, 7)}-01` : "";
+}
+
+/** "2026-10-01" → "2026-10-31" */
+export function monthEndISO(iso) {
+  const start = monthStartISO(iso);
+  if (!start) return "";
+  const [y, m] = start.split("-").map(Number);
+  return toISODate(new Date(y, m, 0));
+}
+
+/** "2026-10-01" → "oktober 2026" */
+export function formatMonth(iso) {
+  const start = monthStartISO(iso);
+  if (!start) return "–";
+  const [y, m] = start.split("-").map(Number);
+  return `${MONTHS[m - 1]} ${y}`;
+}
+
+/** Eerste dag van de maand, `months` maanden na `iso`. */
+export function addMonthsISO(iso, months) {
+  const start = monthStartISO(iso);
+  if (!start) return "";
+  const [y, m] = start.split("-").map(Number);
+  return toISODate(new Date(y, m - 1 + months, 1));
+}
+
+/** Datum van een volgende actie als tekst: exacte dag of alleen maand. */
+export function formatActionDate(iso, monthOnly) {
+  if (!iso) return "–";
+  return monthOnly ? formatMonth(iso) : formatDate(iso);
+}

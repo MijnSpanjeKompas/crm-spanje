@@ -37,6 +37,7 @@ import {
 import { buildLeadPayload, buildMigrationFields } from "./normalize";
 import { changedKeys, describeLeadChanges, saleSummary } from "./changes";
 import { toDate, toMillis } from "./dates";
+import { importActivity, sheetLeadId } from "./sheetImport";
 
 const SUBCOLLECTIONS = ["activities", "files", "partnerLinks", "tasks"];
 const CONTACT_METHOD_BY_ACTIVITY = { phone_call: "phone", whatsapp: "whatsapp", email: "email", appointment: "appointment" };
@@ -99,10 +100,19 @@ export function activityLeadPatch(current, { type, outcome, occurredAt }) {
   return patch;
 }
 
+/**
+ * Activiteit voor de tijdlijn. Elke activiteit legt vast WIE het deed:
+ * actorType "human" (medewerker), "agent" (toekomstige AI-agent) of "system"
+ * (bijv. import). actionType is een stabiele code voor automatiseringen.
+ */
 function buildActivityDoc(activity, user) {
   const u = userFields(user);
+  const actorType = activity.actorType || user?.actorType || (user?.id ? "human" : "system");
   return clean({
     type: activity.type || "system",
+    actorType,
+    actorId: activity.actorId || user?.actorId || u.id || "system",
+    actionType: activity.actionType || activity.metadata?.event || activity.metadata?.field || activity.type || "system",
     title: activity.title || "",
     description: activity.description || "",
     outcome: activity.outcome || "",
@@ -173,12 +183,19 @@ export function subscribeLeadSub(leadId, name, onData, onError) {
 
 // ─── LEADS ───────────────────────────────────────────────────────────────────
 /** Nieuwe lead aanmaken + systeemactiviteit. Geeft het nieuwe id terug. */
-export async function createLead(form, user) {
+/**
+ * @param {Object} form  formulierwaarden
+ * @param {Object} user
+ * @param {{extra?: Object, activities?: Object[], id?: string}} [opts]
+ *   extra = niet-formuliervelden (bron, importmetadata, PDF-referentie, ...)
+ */
+export async function createLead(form, user, opts = {}) {
   const u = userFields(user);
   const payload = buildLeadPayload(form);
   const batch = writeBatch(db);
-  const newRef = doc(collection(db, "leads"));
-  const activities = [
+  // Vaste id (bijv. "sheet-<submissionId>") maakt de import idempotent.
+  const newRef = opts.id ? doc(db, "leads", opts.id) : doc(collection(db, "leads"));
+  const activities = opts.activities || [
     { type: "system", title: "Lead aangemaakt", metadata: { event: "lead_created", source: payload.leadSource } },
   ];
   if (payload.nextActionType !== "none") {
@@ -200,6 +217,7 @@ export async function createLead(form, user) {
       fileCount: 0,
       lastContactAt: null,
       lastContactAttemptAt: null,
+      ...(opts.extra || {}),
       ...actPatch,
       createdAt: serverTimestamp(),
       createdBy: u.id,
@@ -271,10 +289,11 @@ export async function markLeadSold(lead, sale, user) {
     nextActionType: "none",
     nextActionDate: "",
     nextActionLabel: "",
+    nextActionMonthOnly: false,
   };
   const firstTime = lead.pipelineStage !== SOLD_STAGE;
   const extraActivities = firstTime
-    ? [{ type: "system", title: `Verkocht${sale.saleProperty ? `: ${sale.saleProperty}` : ""}`, description: saleSummary(after), metadata: { event: "sold" } }]
+    ? [{ type: "system", title: `Aankoop afgerond${sale.saleProperty ? `: ${sale.saleProperty}` : ""}`, description: saleSummary(after), metadata: { event: "sold" } }]
     : [];
   return updateLead(lead, after, user, { extraActivities });
 }
@@ -700,4 +719,64 @@ export async function downloadLeadFile(file) {
     a.remove();
     return "opened";
   }
+}
+
+// ─── IMPORT UIT GOOGLE SHEETS ────────────────────────────────────────────────
+/**
+ * Schrijft een importplan weg (zie planImport in sheetImport.js).
+ * Maakt alleen leads voor status "new" en "possible_duplicate". Bestaande
+ * Submission ID's worden nooit opnieuw aangemaakt; er wordt nooit gemerged.
+ * @returns {Promise<{created: {id:string, submissionId:string, status:string}[], skipped: number, failed: {submissionId:string, error:string}[]}>}
+ */
+export async function importPlannedLeads(plan, user) {
+  const created = [];
+  const failed = [];
+  let skipped = 0;
+  for (const item of plan) {
+    if (item.status !== "new" && item.status !== "possible_duplicate") {
+      skipped += 1;
+      continue;
+    }
+    try {
+      const id = await createLead(item.form, user, {
+        extra: {
+          ...item.extra,
+          possibleDuplicateOf: item.status === "possible_duplicate" ? (item.duplicates || []).map((d) => d.id) : [],
+          importedAt: serverTimestamp(),
+          importedBy: userFields(user).id,
+        },
+        activities: [importActivity(item, item.status)],
+        id: sheetLeadId(item.submissionId),
+      });
+      created.push({ id, submissionId: item.submissionId, status: item.status });
+    } catch (e) {
+      console.error(e);
+      failed.push({ submissionId: item.submissionId, error: e?.message || "onbekende fout" });
+    }
+  }
+  return { created, skipped, failed };
+}
+
+/** "Mogelijk dubbel"-markering weghalen (na controle door een medewerker). */
+export async function dismissPossibleDuplicate(lead, user) {
+  const batch = writeBatch(db);
+  const actPatch = queueActivities(batch, lead.id, lead, [{ type: "system", title: "Markering 'mogelijk dubbele lead' verwijderd", metadata: { event: "duplicate_dismissed" } }], user);
+  batch.update(leadRef(lead.id), clean({ possibleDuplicateOf: [], ...actPatch, updatedAt: serverTimestamp(), updatedBy: userFields(user).id }));
+  await batch.commit();
+}
+
+/** Losse notities uit het oude veld "Notities" als interne notitie in de tijdlijn zetten. */
+export async function moveNotesToTimeline(lead, user) {
+  const text = String(lead.notities || "").trim();
+  if (!text) return;
+  const batch = writeBatch(db);
+  const actPatch = queueActivities(
+    batch,
+    lead.id,
+    lead,
+    [{ type: "note", title: "Notities (overgezet uit oud notitieveld)", description: text, metadata: { event: "notes_moved_to_timeline" } }],
+    user
+  );
+  batch.update(leadRef(lead.id), clean({ notities: "", ...actPatch, updatedAt: serverTimestamp(), updatedBy: userFields(user).id }));
+  await batch.commit();
 }

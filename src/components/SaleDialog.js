@@ -31,7 +31,7 @@ export function SaleDialog({ lead, user, onClose, onSaved }) {
     const errs = {};
     if (!(form.salePrice > 0)) errs.salePrice = "Vul de aankoopprijs in.";
     if (!form.saleProperty.trim()) errs.saleProperty = "Vul in welke woning het is (adres of omschrijving).";
-    if (!form.saleDate) errs.saleDate = "Kies de datum van de verkoop.";
+    if (!form.saleDate) errs.saleDate = "Kies de datum waarop de aankoop rond was.";
     if (form.saleCommission !== null && form.saleCommission < 0) errs.saleCommission = "Commissie kan niet negatief zijn.";
     setErrors(errs);
     if (Object.keys(errs).length) return;
@@ -52,7 +52,7 @@ export function SaleDialog({ lead, user, onClose, onSaved }) {
   return (
     <Modal onClose={onClose} maxWidth={560} zIndex={1200}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
-        <ModalTitle sub={lead.name || "Lead"}>{editing ? "Verkoop aanpassen" : "Verkocht"}</ModalTitle>
+        <ModalTitle sub={lead.name || "Lead"}>{editing ? "Aankoopgegevens aanpassen" : "Aankoop afgerond"}</ModalTitle>
         <CloseButton onClick={onClose} />
       </div>
 
@@ -76,7 +76,7 @@ export function SaleDialog({ lead, user, onClose, onSaved }) {
           step={100}
           hint={pct !== null ? `≈ ${pct.toLocaleString("nl-NL", { maximumFractionDigits: 2 })}% van de aankoopprijs` : "Mag je ook later invullen."}
         />
-        <TextField label="Datum verkoop *" type="date" value={form.saleDate} onChange={set("saleDate")} error={errors.saleDate} />
+        <TextField label="Datum aankoop *" type="date" value={form.saleDate} onChange={set("saleDate")} error={errors.saleDate} />
         <div style={{ gridColumn: "1 / -1" }}>
           <TextAreaField label="Notitie (optioneel)" value={form.saleNotes} onChange={set("saleNotes")} rows={2} placeholder="Bijv. commissie via Costa Homes, uitbetaling na notaris" />
         </div>
@@ -87,7 +87,7 @@ export function SaleDialog({ lead, user, onClose, onSaved }) {
           <span style={{ display: "flex", marginTop: 1 }}>
             <Icon name="info" size={14} />
           </span>
-          De lead krijgt de fase Verkocht en de volgende actie vervalt. De commissie verschijnt direct onder Commissies.
+          De lead krijgt de fase Aankoop afgerond en de volgende actie vervalt. De commissie verschijnt direct onder Commissies.
         </div>
       )}
 
@@ -106,7 +106,7 @@ export function SaleDialog({ lead, user, onClose, onSaved }) {
             Annuleren
           </button>
           <button type="button" onClick={save} disabled={busy} style={{ ...btnStyle("primary", true), minHeight: 40, padding: "9px 18px", fontSize: 13 }}>
-            <Icon name="check" size={15} /> {busy ? "Opslaan..." : editing ? "Wijzigingen opslaan" : "Verkoop opslaan"}
+            <Icon name="check" size={15} /> {busy ? "Opslaan..." : editing ? "Wijzigingen opslaan" : "Aankoop opslaan"}
           </button>
         </div>
       </div>
@@ -134,7 +134,7 @@ export function SoldButton({ onClick, block = false, size = "md" }) {
         letterSpacing: ".01em",
       }}
     >
-      <Icon name="checkCircle" size={big ? 18 : 16} /> Verkocht
+      <Icon name="checkCircle" size={big ? 18 : 16} /> Aankoop afgerond
     </button>
   );
 }

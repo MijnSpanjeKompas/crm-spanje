@@ -1,17 +1,22 @@
 import { useState } from "react";
 import {
-  NEXT_ACTION_TYPES,
+  selectableActionTypes,
   APPOINTMENT_TYPES,
   APPOINTMENT_STATUSES,
   PIPELINE_STAGES,
   PRIORITIES,
   labelOf,
+  nextActionText,
 } from "../../crm/constants";
 import { getNextActionInfo } from "../../crm/signals";
-import { todayISO, addDaysISO, formatDate, diffInDays } from "../../crm/dates";
+import { todayISO, formatDate, diffInDays, formatActionDate } from "../../crm/dates";
 import { addTask, setTaskStatus } from "../../crm/services";
+import { NextActionDateField } from "./NextActionDateField";
 import {
-  Panel,
+  Card,
+  InfoRow,
+  EmptyState,
+  MoreMenu,
   SelectField,
   TextField,
   TextAreaField,
@@ -22,25 +27,20 @@ import {
   btnStyle,
   inputStyle,
   labelStyle,
+  linkBtnStyle,
   Icon,
   C,
 } from "../ui";
 
 const STAGE_INDEX = (v) => PIPELINE_STAGES.findIndex((s) => s.value === v);
 
-const QUICK_DATES = [
-  { label: "Vandaag", days: 0 },
-  { label: "Morgen", days: 1 },
-  { label: "Over 3 dagen", days: 3 },
-  { label: "Over 1 week", days: 7 },
-  { label: "Over 2 weken", days: 14 },
-];
 
 function TasksSection({ lead, user, users, tasks, isNew }) {
   const [draft, setDraft] = useState({ title: "", dueDate: "", assignedToUserId: user?.id || "", assignedToName: user?.displayName || "", priority: "normal", description: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showDone, setShowDone] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   if (isNew) return <Notice>Sla de lead eerst op. Daarna kun je hier taken toevoegen.</Notice>;
 
@@ -58,6 +58,7 @@ function TasksSection({ lead, user, users, tasks, isNew }) {
     try {
       await addTask(lead, draft, user);
       setDraft((d) => ({ ...d, title: "", description: "", dueDate: "" }));
+      setAdding(false);
     } catch (e) {
       setError(e.message || "Taak toevoegen mislukt.");
     } finally {
@@ -124,11 +125,9 @@ function TasksSection({ lead, user, users, tasks, isNew }) {
           {t.status === "open" ? (
             <>
               <button type="button" onClick={() => changeStatus(t, "completed")} style={btnStyle("success")}>
-                Afronden
+                <Icon name="check" size={13} /> Afronden
               </button>
-              <button type="button" onClick={() => changeStatus(t, "cancelled")} style={btnStyle("neutral")}>
-                Annuleren
-              </button>
+              <MoreMenu label="Meer acties voor taak" items={[{ label: "Taak annuleren", icon: "x", onClick: () => changeStatus(t, "cancelled") }]} />
             </>
           ) : (
             <button type="button" onClick={() => changeStatus(t, "open")} style={btnStyle("primary")}>
@@ -141,53 +140,77 @@ function TasksSection({ lead, user, users, tasks, isNew }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {tasks.error && <Notice tone="error">Taken konden niet worden geladen.</Notice>}
-      {tasks.loading ? <Empty>Taken laden...</Empty> : open.length ? <div>{open.map(renderTask)}</div> : <Empty>Geen open taken.</Empty>}
+      {tasks.loading ? (
+        <Empty>Taken laden...</Empty>
+      ) : open.length ? (
+        <div>{open.map(renderTask)}</div>
+      ) : (
+        !adding && <EmptyState text="Geen open taken" actionLabel="Taak toevoegen" onAction={() => setAdding(true)} />
+      )}
+      {open.length > 0 && !adding && (
+        <button type="button" onClick={() => setAdding(true)} style={{ ...btnStyle("primary"), alignSelf: "flex-start" }}>
+          <Icon name="plus" size={13} /> Taak toevoegen
+        </button>
+      )}
       {done.length > 0 && (
-        <button type="button" onClick={() => setShowDone((s) => !s)} style={{ ...btnStyle("neutral"), alignSelf: "flex-start" }}>
+        <button type="button" onClick={() => setShowDone((v) => !v)} className="msk-link" style={{ ...linkBtnStyle, alignSelf: "flex-start", color: C.textMuted }}>
           {showDone ? "Verberg" : "Toon"} afgeronde/geannuleerde taken ({done.length})
         </button>
       )}
       {showDone && <div>{done.map(renderTask)}</div>}
 
-      <div style={{ background: C.surfaceSoft, border: `1px solid ${C.borderSoft}`, borderRadius: 14, padding: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <TextField label="Nieuwe taak" value={draft.title} onChange={(v) => setDraft({ ...draft, title: v })} placeholder="Bijv. 'Financieringsbewijs opvragen'" />
-        </div>
-        <TextField label="Deadline" type="date" value={draft.dueDate} onChange={(v) => setDraft({ ...draft, dueDate: v })} />
-        <UserSelectField label="Toegewezen aan" value={draft.assignedToUserId} users={users} onChange={(id, name) => setDraft({ ...draft, assignedToUserId: id, assignedToName: name })} />
-        <SelectField label="Prioriteit" value={draft.priority} onChange={(v) => setDraft({ ...draft, priority: v })} options={PRIORITIES} allowEmpty={false} />
-        <div style={{ gridColumn: "1 / -1" }}>
-          <TextAreaField label="Omschrijving (optioneel)" value={draft.description} onChange={(v) => setDraft({ ...draft, description: v })} rows={2} />
-        </div>
-        {error && (
+      {adding && (
+        <div style={{ background: C.surfaceSoft, border: `1px solid ${C.borderSoft}`, borderRadius: 14, padding: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
           <div style={{ gridColumn: "1 / -1" }}>
-            <Notice tone="error">{error}</Notice>
+            <TextField label="Titel *" value={draft.title} onChange={(v) => setDraft({ ...draft, title: v })} placeholder="Bijv. 'Financieringsbewijs opvragen'" autoFocus />
           </div>
-        )}
-        <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" }}>
-          <button type="button" onClick={submit} disabled={busy} style={btnStyle("primary", true)}>
-            {busy ? "Toevoegen..." : "+ Taak toevoegen"}
-          </button>
+          <TextField label="Deadline" type="date" value={draft.dueDate} onChange={(v) => setDraft({ ...draft, dueDate: v })} />
+          <UserSelectField label="Toegewezen aan" value={draft.assignedToUserId} users={users} onChange={(id, name) => setDraft({ ...draft, assignedToUserId: id, assignedToName: name })} />
+          <SelectField label="Prioriteit" value={draft.priority} onChange={(v) => setDraft({ ...draft, priority: v })} options={PRIORITIES} allowEmpty={false} />
+          <div style={{ gridColumn: "1 / -1" }}>
+            <TextAreaField label="Omschrijving (optioneel)" value={draft.description} onChange={(v) => setDraft({ ...draft, description: v })} rows={2} />
+          </div>
+          {error && (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <Notice tone="error">{error}</Notice>
+            </div>
+          )}
+          <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button type="button" onClick={() => { setAdding(false); setError(""); }} style={btnStyle("neutral")}>
+              Annuleren
+            </button>
+            <button type="button" onClick={submit} disabled={busy} style={btnStyle("primary", true)}>
+              {busy ? "Toevoegen..." : "Taak opslaan"}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+      {error && !adding && <Notice tone="error">{error}</Notice>}
     </div>
   );
 }
 
-export function FollowUpTab({ form, set, setMany, errors, users, user, lead, isNew, tasks }) {
+// ─── VOLGENDE ACTIE ──────────────────────────────────────────────────────────
+function NextActionSection({ form, set, setMany, errors, users, user }) {
   const na = getNextActionInfo(form);
   const planned = form.nextActionType && form.nextActionType !== "none";
+  const hasError = Boolean(errors.nextActionDate || errors.nextActionLabel);
+  const [editing, setEditing] = useState(false);
+  const open = editing || hasError;
   const today = todayISO();
 
   function setActionType(v) {
     if (v === "none") {
-      setMany({ nextActionType: "none", nextActionDate: "", nextActionLabel: "" });
+      setMany({ nextActionType: "none", nextActionDate: "", nextActionLabel: "", nextActionMonthOnly: false });
       return;
     }
     const patch = { nextActionType: v };
-    if (!form.nextActionDate) patch.nextActionDate = today;
+    if (!form.nextActionDate) {
+      patch.nextActionDate = today;
+      patch.nextActionMonthOnly = false;
+    }
     if (!form.nextActionAssignedTo && user) {
       patch.nextActionAssignedTo = user.id;
       patch.nextActionAssignedToName = user.displayName;
@@ -196,122 +219,210 @@ export function FollowUpTab({ form, set, setMany, errors, users, user, lead, isN
     setMany(patch);
   }
 
-  function markAppointmentDone() {
-    // De fase blijft "Gesprek gepland" tot de lead wordt doorgestuurd.
-    const patch = { appointmentStatus: "completed" };
-    if (form.nextActionType === "conduct_appointment") {
-      patch.nextActionType = "complete_search_profile";
-      patch.nextActionDate = today;
-    }
-    setMany(patch);
-  }
-
-  function planAppointment() {
-    const patch = { appointmentStatus: "scheduled" };
-    if (!form.appointmentAssignedTo && user) {
-      patch.appointmentAssignedTo = user.id;
-      patch.appointmentAssignedToName = user.displayName;
-    }
-    if (STAGE_INDEX(form.pipelineStage) >= 0 && STAGE_INDEX(form.pipelineStage) < STAGE_INDEX("appointment_scheduled")) {
-      patch.pipelineStage = "appointment_scheduled";
-    }
-    if (form.appointmentDate && (!planned || form.nextActionType === "schedule_appointment")) {
-      patch.nextActionType = "conduct_appointment";
-      patch.nextActionDate = form.appointmentDate;
-    }
-    setMany(patch);
-  }
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 18 }}>
-        <Panel title="Volgende actie" right={<Badge color={na.color} bg={na.bg}>{na.label}</Badge>}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+    <Card
+      icon="bell"
+      title="Volgende actie"
+      right={
+        <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {planned && <Badge color={na.color} bg={na.bg}>{na.label}</Badge>}
+          <button type="button" onClick={() => setEditing((v) => !v)} style={{ ...btnStyle(open ? "primary" : "neutral", open), minHeight: 30, padding: "4px 12px", fontSize: 12 }}>
+            {open ? "Klaar" : planned ? "Wijzigen" : "Plannen"}
+          </button>
+        </span>
+      }
+    >
+      {!open ? (
+        planned ? (
+          <div>
+            <InfoRow label="Actie">
+              <strong style={{ fontWeight: 600 }}>{nextActionText(form)}</strong>
+            </InfoRow>
+            <InfoRow label="Datum" muted={!form.nextActionDate}>
+              {form.nextActionDate ? formatActionDate(form.nextActionDate, form.nextActionMonthOnly) : "Datum ontbreekt"}
+            </InfoRow>
+            <InfoRow label="Uitvoerder" muted={!form.nextActionAssignedToName}>
+              {form.nextActionAssignedToName || "Niemand"}
+            </InfoRow>
+            {form.nextActionNotes && <InfoRow label="Toelichting">{form.nextActionNotes}</InfoRow>}
+          </div>
+        ) : (
+          <EmptyState text="Geen actie gepland" actionLabel="Actie plannen" onAction={() => setEditing(true)} />
+        )
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <SelectField label="Actie" value={form.nextActionType || "none"} onChange={setActionType} options={selectableActionTypes(form.nextActionType)} allowEmpty={false} />
+          </div>
+          {form.nextActionType === "other" && (
             <div style={{ gridColumn: "1 / -1" }}>
-              <SelectField label="Actie" value={form.nextActionType || "none"} onChange={setActionType} options={NEXT_ACTION_TYPES} allowEmpty={false} />
+              <TextField label="Omschrijving actie *" value={form.nextActionLabel} onChange={(v) => set("nextActionLabel", v)} error={errors.nextActionLabel} />
             </div>
-            {form.nextActionType === "other" && (
+          )}
+          {planned && (
+            <>
               <div style={{ gridColumn: "1 / -1" }}>
-                <TextField label="Omschrijving actie *" value={form.nextActionLabel} onChange={(v) => set("nextActionLabel", v)} error={errors.nextActionLabel} />
+                <NextActionDateField value={form.nextActionDate} monthOnly={form.nextActionMonthOnly} onChange={setMany} error={errors.nextActionDate} />
               </div>
-            )}
-            {planned && (
-              <>
-                <TextField label="Datum *" type="date" value={form.nextActionDate} onChange={(v) => set("nextActionDate", v)} error={errors.nextActionDate} />
-                <UserSelectField
-                  label="Uitvoerder"
-                  value={form.nextActionAssignedTo}
-                  users={users}
-                  onChange={(id, name) => setMany({ nextActionAssignedTo: id, nextActionAssignedToName: name })}
-                />
-                <div style={{ gridColumn: "1 / -1", display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {QUICK_DATES.map((q) => (
-                    <button key={q.label} type="button" onClick={() => set("nextActionDate", addDaysISO(today, q.days))} style={{ ...btnStyle("neutral"), minHeight: 30, padding: "5px 11px", borderRadius: 999, fontSize: 12 }}>
-                      {q.label}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <TextAreaField label="Toelichting" value={form.nextActionNotes} onChange={(v) => set("nextActionNotes", v)} rows={2} />
-                </div>
-              </>
-            )}
-            {!planned && (
-              <div style={{ gridColumn: "1 / -1", fontSize: 12, color: C.textMuted }}>
-                Geen actie gepland.
+              <UserSelectField label="Uitvoerder" value={form.nextActionAssignedTo} users={users} onChange={(id, name) => setMany({ nextActionAssignedTo: id, nextActionAssignedToName: name })} />
+              <div style={{ gridColumn: "1 / -1" }}>
+                <TextAreaField label="Toelichting" value={form.nextActionNotes} onChange={(v) => set("nextActionNotes", v)} rows={2} />
               </div>
-            )}
-          </div>
-        </Panel>
-
-        <Panel
-          title="Gesprek"
-          right={form.appointmentStatus ? <Badge>{labelOf(APPOINTMENT_STATUSES, form.appointmentStatus)}</Badge> : null}
-        >
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <TextField label="Datum" type="date" value={form.appointmentDate} onChange={(v) => set("appointmentDate", v)} error={errors.appointmentDate} />
-            <FieldTime value={form.appointmentTime} onChange={(v) => set("appointmentTime", v)} />
-            <SelectField label="Soort" value={form.appointmentType} onChange={(v) => set("appointmentType", v)} options={APPOINTMENT_TYPES} />
-            <UserSelectField
-              label="Door"
-              value={form.appointmentAssignedTo}
-              users={users}
-              onChange={(id, name) => setMany({ appointmentAssignedTo: id, appointmentAssignedToName: name })}
-            />
-            <div style={{ gridColumn: "1 / -1" }}>
-              <SelectField label="Status" value={form.appointmentStatus} onChange={(v) => set("appointmentStatus", v)} options={APPOINTMENT_STATUSES} placeholder="Geen afspraak" />
-            </div>
-            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {form.appointmentStatus !== "scheduled" && form.appointmentStatus !== "completed" && (
-                <button type="button" onClick={planAppointment} disabled={!form.appointmentDate} style={{ ...btnStyle("primary"), opacity: form.appointmentDate ? 1 : 0.5 }}>
-                  Afspraak inplannen
-                </button>
-              )}
-              {form.appointmentStatus === "scheduled" && (
-                <button type="button" onClick={markAppointmentDone} style={btnStyle("success")}>
-                  Markeer als gehad
-                </button>
-              )}
-            </div>
-            <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: C.textSubtle }}>
-              Wijzigingen worden opgeslagen met de knop Opslaan. Een afgerond gesprek telt als klantcontact.
-            </div>
-          </div>
-        </Panel>
-      </div>
-
-      <Panel title="Taken">
-        <TasksSection lead={lead} user={user} users={users} tasks={tasks} isNew={isNew} />
-      </Panel>
-    </div>
+            </>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 
-function FieldTime({ value, onChange }) {
+// ─── GESPREK ─────────────────────────────────────────────────────────────────
+function emptyAppointmentDraft(form, user) {
+  return {
+    appointmentDate: form.appointmentStatus === "scheduled" ? form.appointmentDate || "" : "",
+    appointmentTime: form.appointmentStatus === "scheduled" ? form.appointmentTime || "" : "",
+    appointmentType: form.appointmentStatus === "scheduled" ? form.appointmentType || "phone" : "phone",
+    appointmentAssignedTo: form.appointmentAssignedTo || user?.id || "",
+    appointmentAssignedToName: form.appointmentAssignedToName || user?.displayName || "",
+  };
+}
+
+function AppointmentSection({ form, setMany, errors, users, user, isNew }) {
+  const [draft, setDraft] = useState(null);
+  const [error, setError] = useState("");
+  const planned = form.nextActionType && form.nextActionType !== "none";
+  const today = todayISO();
+  const scheduled = form.appointmentStatus === "scheduled";
+  const hasRecord = Boolean(form.appointmentStatus && form.appointmentDate);
+
+  function startPlanning() {
+    setError("");
+    setDraft(emptyAppointmentDraft(form, user));
+  }
+
+  function savePlan() {
+    if (!draft.appointmentDate) {
+      setError("Kies een datum voor het gesprek.");
+      return;
+    }
+    const patch = { ...draft, appointmentStatus: "scheduled" };
+    if (STAGE_INDEX(form.pipelineStage) >= 0 && STAGE_INDEX(form.pipelineStage) < STAGE_INDEX("appointment_scheduled")) {
+      patch.pipelineStage = "appointment_scheduled";
+    }
+    if (!planned || ["schedule_appointment", "conduct_appointment"].includes(form.nextActionType)) {
+      patch.nextActionType = "conduct_appointment";
+      patch.nextActionDate = draft.appointmentDate;
+      patch.nextActionMonthOnly = false;
+      if (!form.nextActionAssignedTo) {
+        patch.nextActionAssignedTo = draft.appointmentAssignedTo;
+        patch.nextActionAssignedToName = draft.appointmentAssignedToName;
+      }
+    }
+    setMany(patch);
+    setDraft(null);
+  }
+
+  function markDone() {
+    // De fase blijft "Gesprek gepland" tot de lead wordt doorgestuurd.
+    const patch = { appointmentStatus: "completed" };
+    if (form.nextActionType === "conduct_appointment") {
+      patch.nextActionType = "follow_up_whatsapp";
+      patch.nextActionDate = today;
+      patch.nextActionMonthOnly = false;
+    }
+    setMany(patch);
+  }
+
+  const summary = hasRecord
+    ? `${formatDate(form.appointmentDate)}${form.appointmentTime ? ` · ${form.appointmentTime}` : ""}${form.appointmentType ? ` · ${labelOf(APPOINTMENT_TYPES, form.appointmentType)}` : ""}`
+    : "";
+
   return (
-    <div>
-      <label style={labelStyle}>Tijd</label>
-      <input type="time" value={value || ""} onChange={(e) => onChange(e.target.value)} style={inputStyle} />
+    <Card
+      icon="calendar"
+      title="Gesprek"
+      right={
+        scheduled && !draft ? (
+          <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <button type="button" onClick={markDone} style={{ ...btnStyle("success"), minHeight: 30, padding: "4px 12px", fontSize: 12 }}>
+              <Icon name="check" size={13} /> Gesprek gehad
+            </button>
+            <MoreMenu
+              items={[
+                { label: "Gesprek wijzigen", icon: "edit", onClick: startPlanning },
+                { label: "Niet verschenen", icon: "x", onClick: () => setMany({ appointmentStatus: "no_show" }) },
+                { label: "Gesprek annuleren", icon: "x", danger: true, onClick: () => window.confirm("Gesprek annuleren?") && setMany({ appointmentStatus: "cancelled" }) },
+              ]}
+            />
+          </span>
+        ) : null
+      }
+    >
+      {isNew ? (
+        <div style={{ fontSize: 13, color: C.textMuted }}>Plan een gesprek nadat de lead is aangemaakt.</div>
+      ) : draft ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
+          <TextField label="Datum *" type="date" value={draft.appointmentDate} onChange={(v) => setDraft({ ...draft, appointmentDate: v })} />
+          <div>
+            <label style={labelStyle}>Tijd</label>
+            <input type="time" value={draft.appointmentTime} onChange={(e) => setDraft({ ...draft, appointmentTime: e.target.value })} style={inputStyle} aria-label="Tijd" />
+          </div>
+          <SelectField label="Soort gesprek" value={draft.appointmentType} onChange={(v) => setDraft({ ...draft, appointmentType: v })} options={APPOINTMENT_TYPES} allowEmpty={false} />
+          <UserSelectField label="Door" value={draft.appointmentAssignedTo} users={users} onChange={(id, name) => setDraft({ ...draft, appointmentAssignedTo: id, appointmentAssignedToName: name })} />
+          {(error || errors.appointmentDate) && (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <Notice tone="error">{error || errors.appointmentDate}</Notice>
+            </div>
+          )}
+          <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button type="button" onClick={() => setDraft(null)} style={btnStyle("neutral")}>
+              Annuleren
+            </button>
+            <button type="button" onClick={savePlan} style={btnStyle("primary", true)}>
+              <Icon name="calendar" size={13} /> Gesprek inplannen
+            </button>
+          </div>
+        </div>
+      ) : scheduled ? (
+        <div>
+          <InfoRow label="Gepland">
+            <strong style={{ fontWeight: 600 }}>{summary}</strong>
+          </InfoRow>
+          <InfoRow label="Door" muted={!form.appointmentAssignedToName}>
+            {form.appointmentAssignedToName || "Niemand"}
+          </InfoRow>
+          <InfoRow label="Status">{labelOf(APPOINTMENT_STATUSES, form.appointmentStatus)}</InfoRow>
+        </div>
+      ) : (
+        <div>
+          {errors.appointmentDate && (
+            <div style={{ marginBottom: 10 }}>
+              <Notice tone="error">{errors.appointmentDate}</Notice>
+            </div>
+          )}
+          <EmptyState text="Geen gesprek gepland" actionLabel="Gesprek plannen" onAction={startPlanning} />
+          {hasRecord && (
+            <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 8 }}>
+              Laatste gesprek: {summary} · {labelOf(APPOINTMENT_STATUSES, form.appointmentStatus).toLowerCase()}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+export function FollowUpTab(props) {
+  const { lead, user, users, tasks, isNew } = props;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(380px, 100%), 1fr))", gap: 16, alignItems: "start" }}>
+        <NextActionSection {...props} />
+        <AppointmentSection {...props} />
+      </div>
+      <Card icon="check" title={`Taken${lead?.openTaskCount ? ` (${lead.openTaskCount} open)` : ""}`}>
+        {isNew ? <div style={{ fontSize: 13, color: C.textMuted }}>Taken voeg je toe nadat de lead is aangemaakt.</div> : <TasksSection lead={lead} user={user} users={users} tasks={tasks} isNew={isNew} />}
+      </Card>
     </div>
   );
 }

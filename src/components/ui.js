@@ -3,7 +3,7 @@
 // design tokens in src/index.css (zie het `C`-object hieronder), zodat de
 // CRM dezelfde uitstraling heeft als het Command Center.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { labelOf, optionOf } from "../crm/constants";
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
@@ -243,6 +243,9 @@ export const Icon = ({ name, size = 16 }) => {
     clock: <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>,
     userPlus: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></>,
     arrowRight: <><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></>,
+    flag: <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" /></>,
+    tag: <><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></>,
+    link: <><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></>,
   };
   if (name === "star") {
     return (
@@ -619,7 +622,7 @@ export function CloseButton({ onClick, label = "Sluiten" }) {
 
 export function Tabs({ tabs, active, onChange }) {
   return (
-    <div role="tablist" style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.border}`, overflowX: "auto", scrollbarWidth: "thin" }}>
+    <div role="tablist" className="msk-tabbar" style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.border}`, overflowX: "auto", overflowY: "hidden", scrollbarWidth: "none" }}>
       {tabs.map((t) => {
         const on = t.key === active;
         return (
@@ -742,4 +745,228 @@ export function BrandLogo({ height = 34, style }) {
       style={{ height, width: "auto", display: "block", flexShrink: 0, ...style }}
     />
   );
+}
+
+// ─── LEADDOSSIER-BOUWSTENEN ──────────────────────────────────────────────────
+/** Kaart met kop (icoon + titel) en optionele actie rechts. */
+export function Card({ icon, title, right, children, style, bodyStyle }) {
+  return (
+    <section style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadowSm, ...style }}>
+      {title && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "14px 18px", borderBottom: `1px solid ${C.borderSoft}` }}>
+          <h3 style={{ margin: 0, ...cardTitleStyle, display: "flex", gap: 9, alignItems: "center" }}>
+            {icon && (
+              <span style={{ color: C.navy, display: "flex" }}>
+                <Icon name={icon} size={16} />
+              </span>
+            )}
+            {title}
+          </h3>
+          {right}
+        </div>
+      )}
+      <div style={{ padding: "14px 18px 16px", ...bodyStyle }}>{children}</div>
+    </section>
+  );
+}
+
+/** Label + waarde naast elkaar (leesweergave). */
+export function InfoRow({ label, children, muted, action, onClick, icon }) {
+  const Wrap = onClick ? "button" : "div";
+  return (
+    <Wrap
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className={onClick ? "msk-row" : undefined}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(110px, 38%) 1fr auto",
+        gap: 12,
+        alignItems: "center",
+        padding: "8px 6px",
+        margin: "0 -6px",
+        borderRadius: 8,
+        borderTop: 0,
+        borderLeft: 0,
+        borderRight: 0,
+        borderBottom: `1px solid ${C.borderSoft}`,
+        width: "calc(100% + 12px)",
+        textAlign: "left",
+        background: "none",
+        cursor: onClick ? "pointer" : "default",
+        fontFamily: "inherit",
+        fontSize: 13.5,
+      }}
+    >
+      <span style={{ color: C.textMuted, display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
+        {icon && (
+          <span style={{ color: C.textSubtle, display: "flex", flexShrink: 0 }}>
+            <Icon name={icon} size={15} />
+          </span>
+        )}
+        {label}
+      </span>
+      <span style={{ color: muted ? C.textSubtle : C.text, minWidth: 0, overflowWrap: "anywhere" }}>{children}</span>
+      <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        {action}
+        {onClick && !action && (
+          <span style={{ color: C.textSubtle, display: "flex", transform: "rotate(-90deg)" }}>
+            <Icon name="chevron" size={14} />
+          </span>
+        )}
+      </span>
+    </Wrap>
+  );
+}
+
+/** Rustige lege staat met één actie. */
+export function EmptyState({ text, actionLabel, onAction, icon = "plus" }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "4px 0" }}>
+      <span style={{ fontSize: 13.5, color: C.textMuted }}>{text}</span>
+      {onAction && (
+        <button type="button" onClick={onAction} style={btnStyle("primary")}>
+          <Icon name={icon} size={14} /> {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Kleine "Bewerken"-knop in een kaartkop. */
+export function EditToggle({ editing, onToggle }) {
+  return (
+    <button type="button" onClick={onToggle} style={{ ...btnStyle("neutral"), minHeight: 30, padding: "4px 10px", fontSize: 12 }}>
+      <Icon name={editing ? "check" : "edit"} size={13} /> {editing ? "Klaar" : "Bewerken"}
+    </button>
+  );
+}
+
+/**
+ * ⋯-menu voor zeldzame of destructieve acties.
+ * items: [{ label, onClick, danger?, icon?, disabled? }]
+ */
+export function MoreMenu({ items, label = "Meer acties", align = "right", buttonStyle }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
+    const onKey = (e) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  const visible = items.filter(Boolean);
+  if (!visible.length) return null;
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        style={{ ...btnStyle("neutral"), width: 34, padding: 0, fontSize: 16, letterSpacing: 1, ...buttonStyle }}
+      >
+        ⋯
+      </button>
+      {open && (
+        <div
+          role="menu"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            [align]: 0,
+            zIndex: 50,
+            minWidth: 220,
+            background: C.surface,
+            border: `1px solid ${C.border}`,
+            borderRadius: 12,
+            boxShadow: C.shadowMd,
+            padding: 6,
+          }}
+        >
+          {visible.map((it) => (
+            <button
+              key={it.label}
+              type="button"
+              role="menuitem"
+              disabled={it.disabled}
+              className="msk-list-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                it.onClick();
+              }}
+              style={{
+                display: "flex",
+                gap: 9,
+                alignItems: "center",
+                width: "100%",
+                textAlign: "left",
+                border: "1px solid transparent",
+                background: "none",
+                borderRadius: 8,
+                padding: "8px 10px",
+                fontSize: 13,
+                fontFamily: "inherit",
+                cursor: "pointer",
+                color: it.danger ? C.danger : C.text,
+              }}
+            >
+              {it.icon && <Icon name={it.icon} size={14} />}
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Uitklapbaar blok voor technische of zelden gebruikte gegevens. */
+export function Disclosure({ summary, children, defaultOpen = false }) {
+  return (
+    <details open={defaultOpen} style={{ marginTop: 10 }}>
+      <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: C.navy, padding: "6px 0", listStyle: "revert" }}>{summary}</summary>
+      <div style={{ paddingTop: 6 }}>{children}</div>
+    </details>
+  );
+}
+
+/** Link die eruitziet als knop (bellen, WhatsApp, e-mail). */
+export function ActionLink({ href, icon, label, compact = false, title }) {
+  return (
+    <a
+      href={href}
+      target={href.startsWith("http") ? "_blank" : undefined}
+      rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
+      title={title || label}
+      aria-label={compact ? label : undefined}
+      onClick={(e) => e.stopPropagation()}
+      style={{ ...btnStyle("primary"), textDecoration: "none", ...(compact ? { width: 32, minHeight: 32, padding: 0 } : null) }}
+    >
+      <Icon name={icon} size={14} />
+      {!compact && label}
+    </a>
+  );
+}
+
+/** Telefoon/e-mail → links voor de actieknoppen. */
+export function contactLinks(lead) {
+  const digits = String(lead?.phoneNormalized || lead?.phone || "").replace(/\D/g, "");
+  const phone = String(lead?.phone || "").trim();
+  return {
+    tel: phone ? `tel:${phone.replace(/[^\d+]/g, "")}` : null,
+    whatsapp: digits.length >= 8 ? `https://wa.me/${digits}` : null,
+    mail: lead?.email ? `mailto:${lead.email}` : null,
+  };
 }

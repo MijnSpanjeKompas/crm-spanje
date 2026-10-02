@@ -49,7 +49,7 @@ export function CommissionsModal({ leads, onClose, onOpenLead }) {
   return (
     <Modal onClose={onClose} maxWidth={940} zIndex={1100}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
-        <ModalTitle sub="Alle verkochte woningen en wat we eraan hebben verdiend.">Commissies</ModalTitle>
+        <ModalTitle sub="Alle afgeronde aankopen en wat we eraan hebben verdiend.">Commissies</ModalTitle>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {years.length > 0 && (
             <select value={year} onChange={(e) => setYear(e.target.value)} style={selectStyle} aria-label="Jaar">
@@ -67,20 +67,20 @@ export function CommissionsModal({ leads, onClose, onOpenLead }) {
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         <Stat strong label={year ? `Totale commissie ${year}` : "Totale commissie"} value={formatEuro(totalCommission)} />
-        <Stat label="Verkopen" value={rows.length} />
+        <Stat label="Afgeronde aankopen" value={rows.length} />
         <Stat label="Totale aankoopwaarde" value={formatEuro(totalVolume)} />
       </div>
 
       {missing > 0 && (
         <div style={{ fontSize: 12.5, color: C.goldText, display: "flex", gap: 7, alignItems: "center" }}>
           <Icon name="alertCircle" size={14} />
-          Bij {missing} {missing === 1 ? "verkoop" : "verkopen"} is de commissie nog niet ingevuld. Die {missing === 1 ? "telt" : "tellen"} nog niet mee in het totaal.
+          Bij {missing} {missing === 1 ? "aankoop" : "aankopen"} is de commissie nog niet ingevuld. Die {missing === 1 ? "telt" : "tellen"} nog niet mee in het totaal.
         </div>
       )}
 
       {rows.length === 0 ? (
         <div style={{ border: `1px dashed ${C.borderStrong}`, borderRadius: 14, padding: "28px 20px", textAlign: "center", background: C.surfaceSoft }}>
-          <Empty>Nog geen verkopen. Druk bij een lead op de knop Verkocht om de eerste vast te leggen.</Empty>
+          <Empty>Nog geen afgeronde aankopen. Kies bij een lead "Aankoop afgerond vastleggen" om de eerste vast te leggen.</Empty>
         </div>
       ) : (
         <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, overflow: "auto" }}>

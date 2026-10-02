@@ -14,10 +14,11 @@ import {
   emptyLead,
 } from "../crm/normalize";
 import { validateLead } from "../crm/validation";
-import { getLeadSignals, computeKpis, getTodayItems } from "../crm/signals";
+import { getLeadSignals, computeKpis, getTodayItems, getNextActionInfo } from "../crm/signals";
+import { selectableActionTypes, NEXT_ACTION_TYPES } from "../crm/constants";
 import { applyFilters, DEFAULT_FILTERS } from "../crm/filters";
 import { describeLeadChanges } from "../crm/changes";
-import { todayISO, addDaysISO } from "../crm/dates";
+import { todayISO, addDaysISO, addMonthsISO, formatActionDate } from "../crm/dates";
 
 const USERS = [
   { id: "uLuke", displayName: "Luke van Spronsen", role: "admin", active: true },
@@ -332,5 +333,42 @@ describe("systeemactiviteiten bij wijzigingen", () => {
     expect(titles).toEqual(expect.arrayContaining(["Pipelinefase gewijzigd van Gesprek gepland naar Doorgestuurd"]));
     expect(titles.some((t) => /Prioriteit/.test(t))).toBe(true);
     expect(titles.some((t) => /otitie/.test(t))).toBe(false);
+  });
+});
+
+describe("volgende actie: alleen een maand", () => {
+  const now = new Date(2026, 9, 15); // 15 oktober 2026
+  const mk = (over) => ({ ...emptyLead(null), id: "m", name: "X", email: "x@x.nl", createdAt: now, nextActionType: "follow_up_whatsapp", ...over });
+
+  test("deze maand: niet te laat, niet vandaag", () => {
+    const l = mk({ nextActionDate: "2026-10-01", nextActionMonthOnly: true });
+    expect(getNextActionInfo(l, now).state).toBe("month");
+    expect(getLeadSignals(l, now)).toEqual([]);
+    expect(getTodayItems([mk({ nextActionDate: "2026-10-15", nextActionMonthOnly: true })], now)).toHaveLength(0);
+  });
+  test("pas te laat als de maand voorbij is", () => {
+    const l = mk({ nextActionDate: "2026-09-01", nextActionMonthOnly: true });
+    expect(getNextActionInfo(l, now).state).toBe("overdue");
+    expect(getLeadSignals(l, now).map((s) => s.key)).toEqual(["overdue_action"]);
+  });
+  test("latere maand en weergave", () => {
+    const l = mk({ nextActionDate: "2026-12-01", nextActionMonthOnly: true });
+    expect(getNextActionInfo(l, now).state).toBe("later");
+    expect(formatActionDate("2026-12-01", true)).toBe("december 2026");
+    expect(addMonthsISO("2026-10-15", 3)).toBe("2027-01-01");
+  });
+  test("opslaan zet de datum op de 1e van de maand; geen actie wist de maand-vlag", () => {
+    expect(buildLeadPayload(mk({ nextActionDate: "2026-11-20", nextActionMonthOnly: true })).nextActionDate).toBe("2026-11-01");
+    const none = buildLeadPayload(mk({ nextActionType: "none", nextActionDate: "2026-11-01", nextActionMonthOnly: true }));
+    expect(none.nextActionMonthOnly).toBe(false);
+  });
+  test("actie-opties: oude opties verborgen, behalve als een lead ze nog heeft", () => {
+    const visible = selectableActionTypes("").map((o) => o.label);
+    expect(visible).toEqual([
+      "Eerste contact opnemen", "Terugbellen", "WhatsApp sturen", "E-mail sturen", "Gesprek inplannen", "Gesprek voeren",
+      "Follow-up appje", "Contact met makelaar checken", "Bezoek Spanje opvolgen", "Anders", "Geen actie gepland",
+    ]);
+    expect(selectableActionTypes("follow_up_lead").map((o) => o.value)).toContain("follow_up_lead");
+    expect(NEXT_ACTION_TYPES.find((o) => o.value === "follow_up_lead").label).toBe("Lead opvolgen");
   });
 });

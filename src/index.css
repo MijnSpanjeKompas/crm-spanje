@@ -304,3 +304,12 @@ button:disabled {
     scroll-behavior: auto !important;
   }
 }
+
+/* Tabbalken: horizontaal scrollen mag, maar zonder zichtbare mini-scrollbar. */
+.msk-tabbar::-webkit-scrollbar {
+  display: none;
+}
+
+details > summary::-webkit-details-marker {
+  color: var(--msk-gold-text);
+}

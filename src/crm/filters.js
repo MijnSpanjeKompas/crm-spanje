@@ -137,10 +137,9 @@ export function sortLeads(leads, sort, now = new Date()) {
   });
 }
 
+/** Filters die onder "Meer filters" staan. */
+export const MORE_FILTER_KEYS = ["priority", "intent", "region", "place", "goal", "timeline", "source", "partner", "nextAction", "lastActivity"];
+
 export function countActiveFilters(f) {
-  return Object.entries(f).filter(([k, v]) => {
-    if (["sort", "scope", "search", "quick"].includes(k)) return false;
-    if (k === "owner") return v !== "all";
-    return Boolean(v);
-  }).length;
+  return MORE_FILTER_KEYS.filter((k) => Boolean(f[k])).length;
 }

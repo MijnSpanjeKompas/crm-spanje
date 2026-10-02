@@ -8,6 +8,7 @@ import {
   PURCHASE_TIMELINES,
   LEAD_SOURCES,
   NEXT_ACTION_TYPES,
+  labelOf,
 } from "../crm/constants";
 import { DEFAULT_FILTERS, countActiveFilters } from "../crm/filters";
 import { QUICK_FILTERS } from "../crm/signals";
@@ -26,17 +27,120 @@ function Sel({ value, onChange, allLabel, options }) {
   );
 }
 
-export function LeadFilters({ filters, setFilters, users, partners, places, currentUser, resultCount, loading, view, setView }) {
+// Tabbladen in pipelinevolgorde. Groepen worden met een streepje gescheiden:
+// de hoofdlijn, de zijsporen en het archief.
+const TAB_GROUPS = [
+  ["open", "new_lead", "contact_phase", "appointment_scheduled", "partner_connected", "purchase_process", "completed"],
+  ["follow_up_later", "unreachable", "stopped"],
+  ["archived"],
+];
+
+// Korte namen zodat alle tabbladen op één regel passen (volledige naam in de tooltip).
+const SHORT_LABELS = {
+  open: "Alle open",
+  new_lead: "Nieuw",
+  contact_phase: "Contact",
+  appointment_scheduled: "Gesprek",
+  follow_up_later: "Later",
+  unreachable: "Onbereikbaar",
+  completed: "Afgerond",
+  archived: "Archief",
+};
+
+function tabLabel(key) {
+  return SHORT_LABELS[key] || labelOf(PIPELINE_STAGES, key);
+}
+
+function tabTitle(key) {
+  if (key === "open") return "Alle leads die nog lopen";
+  if (key === "archived") return "Gearchiveerde leads";
+  return `Fase: ${labelOf(PIPELINE_STAGES, key)}`;
+}
+
+/** Welk tabblad hoort bij de huidige filters (null als een snelfilter actief is). */
+export function activeTabOf(filters) {
+  if (filters.quick) return null;
+  if (filters.scope === "archived") return "archived";
+  if (filters.stage) return filters.stage;
+  return filters.scope === "open" ? "open" : null;
+}
+
+export function filtersForTab(key) {
+  if (key === "open") return { scope: "open", stage: "", quick: null };
+  if (key === "archived") return { scope: "archived", stage: "", quick: null };
+  return { scope: "open", stage: key, quick: null };
+}
+
+function StageTabs({ counts, active, onChange }) {
+  return (
+    <div role="tablist" aria-label="Pipelinefase" style={{ display: "flex", alignItems: "stretch", gap: 2, overflowX: "auto", borderBottom: `1px solid ${C.border}`, margin: "0 -18px", padding: "0 12px", scrollbarWidth: "thin" }}>
+      {TAB_GROUPS.map((group, gi) => (
+        <div key={gi} style={{ display: "flex", alignItems: "stretch", gap: 2 }}>
+          {gi > 0 && <span aria-hidden="true" style={{ width: 1, background: C.border, margin: "12px 6px" }} />}
+          {group.map((key) => {
+            const on = active === key;
+            const n = counts[key] || 0;
+            return (
+              <button
+                key={key}
+                role="tab"
+                type="button"
+                aria-selected={on}
+                title={tabTitle(key)}
+                className="msk-tab"
+                onClick={() => onChange(key)}
+                style={{
+                  border: "none",
+                  borderBottom: `2px solid ${on ? C.gold : "transparent"}`,
+                  marginBottom: -1,
+                  background: "none",
+                  padding: "13px 7px 12px",
+                  fontSize: 13,
+                  fontWeight: on ? 600 : 500,
+                  color: on ? C.navy : n ? C.textBody : C.textSubtle,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  fontFamily: "inherit",
+                  display: "flex",
+                  gap: 7,
+                  alignItems: "center",
+                }}
+              >
+                {tabLabel(key)}
+                <span
+                  style={{
+                    background: on ? C.navy : C.surfaceSunken,
+                    color: on ? "#fff" : n ? C.textMuted : C.textSubtle,
+                    borderRadius: 999,
+                    padding: "1px 7px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    minWidth: 20,
+                    textAlign: "center",
+                  }}
+                >
+                  {n}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function LeadFilters({ filters, setFilters, users, partners, places, currentUser, resultCount, loading, view, setView, tabCounts = {} }) {
   const [more, setMore] = useState(false);
   const set = (k) => (v) => setFilters((f) => ({ ...f, [k]: v }));
   const active = countActiveFilters(filters);
+  const tab = activeTabOf(filters);
 
   return (
-    <div
-      id="lead-list"
-      style={{ ...cardStyle, padding: "16px 18px", marginBottom: 18, scrollMarginTop: 84 }}
-    >
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+    <div id="lead-list" style={{ ...cardStyle, padding: "0 18px 16px", marginBottom: 18, scrollMarginTop: 84 }}>
+      <StageTabs counts={tabCounts} active={tab} onChange={(key) => setFilters((f) => ({ ...f, ...filtersForTab(key) }))} />
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginTop: 16 }}>
         <div
           className="msk-search"
           style={{
@@ -59,22 +163,14 @@ export function LeadFilters({ filters, setFilters, users, partners, places, curr
             className="msk-bare"
             value={filters.search}
             onChange={(e) => set("search")(e.target.value)}
-            placeholder="Zoek op naam, e-mail, telefoon, regio, plaats, tag of partner..."
+            placeholder="Zoek op naam, e-mail, telefoon, plaats of partner..."
             aria-label="Leads zoeken"
             style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, flex: 1, minWidth: 0, color: C.text, fontFamily: "inherit", height: "100%" }}
           />
         </div>
 
-        <select value={filters.scope} onChange={(e) => set("scope")(e.target.value)} style={selectStyle} aria-label="Welke leads">
-          <option value="open">Open leads</option>
-          <option value="sold">Verkocht</option>
-          <option value="closed">Gesloten leads</option>
-          <option value="archived">Archief</option>
-          <option value="all">Alles (incl. archief)</option>
-        </select>
-
         <select value={filters.owner} onChange={(e) => set("owner")(e.target.value)} style={selectStyle} aria-label="Verantwoordelijke">
-          <option value="all">Alle verantwoordelijken</option>
+          <option value="all">Iedereen</option>
           <option value="me">Mijn leads</option>
           {users.map((u) => (
             <option key={u.id} value={u.id}>
@@ -84,25 +180,23 @@ export function LeadFilters({ filters, setFilters, users, partners, places, curr
           <option value="none">Geen verantwoordelijke</option>
         </select>
 
-        <Sel value={filters.stage} onChange={set("stage")} allLabel="Alle fases" options={PIPELINE_STAGES} />
-        <Sel value={filters.priority} onChange={set("priority")} allLabel="Alle prioriteiten" options={PRIORITIES} />
-
         <select value={filters.followUp} onChange={(e) => set("followUp")(e.target.value)} style={selectStyle} aria-label="Opvolgdatum">
           <option value="">Alle opvolgdata</option>
           <option value="overdue">Te laat</option>
           <option value="today">Vandaag</option>
           <option value="week">Komende 7 dagen</option>
+          <option value="month">Ergens deze maand</option>
           <option value="later">Later</option>
           <option value="nodate">Actie zonder datum</option>
           <option value="none">Geen actie gepland</option>
         </select>
 
         <select value={filters.sort} onChange={(e) => set("sort")(e.target.value)} style={selectStyle} aria-label="Sorteren">
-          <option value="followup">Sorteren: eerst opvolgen</option>
-          <option value="newest">Sorteren: nieuwste eerst</option>
-          <option value="priority">Sorteren: prioriteit</option>
-          <option value="last_activity">Sorteren: laatste activiteit</option>
-          <option value="name">Sorteren: naam</option>
+          <option value="followup">Eerst opvolgen</option>
+          <option value="newest">Nieuwste eerst</option>
+          <option value="priority">Prioriteit</option>
+          <option value="last_activity">Laatste activiteit</option>
+          <option value="name">Naam A–Z</option>
         </select>
 
         <button type="button" onClick={() => setMore((v) => !v)} aria-expanded={more} style={{ ...btnStyle(active ? "gold" : "primary"), minHeight: 38 }}>
@@ -115,6 +209,7 @@ export function LeadFilters({ filters, setFilters, users, partners, places, curr
 
       {more && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.borderSoft}` }}>
+          <Sel value={filters.priority} onChange={set("priority")} allLabel="Alle prioriteiten" options={PRIORITIES} />
           <Sel value={filters.intent} onChange={set("intent")} allLabel="Alle koopintenties" options={PURCHASE_INTENTS} />
           <Sel value={filters.region} onChange={set("region")} allLabel="Alle regio's" options={REGIONS} />
           <Sel value={filters.place} onChange={set("place")} allLabel="Alle plaatsen" options={places.map((p) => ({ value: p, label: p }))} />

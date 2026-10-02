@@ -3,7 +3,7 @@
 // dashboard nooit per lead subcollections hoeft op te halen.
 
 import { THRESHOLDS, isClosedStage, hasNextAction, nextActionText } from "./constants";
-import { diffInDays, todayISO, formatDate } from "./dates";
+import { diffInDays, todayISO, formatDate, monthStartISO, monthEndISO, formatMonth } from "./dates";
 
 export function isOpenLead(lead) {
   return !lead.archived && !isClosedStage(lead.pipelineStage);
@@ -16,6 +16,15 @@ export function getNextActionInfo(lead, now = new Date()) {
   }
   if (!lead.nextActionDate) {
     return { state: "nodate", label: "Datum ontbreekt", color: "#97581a", bg: "#fbefe3", sort: -99999 };
+  }
+  if (lead.nextActionMonthOnly) {
+    // Alleen een maand bekend: pas te laat als de maand voorbij is.
+    const start = monthStartISO(lead.nextActionDate);
+    const afterEnd = diffInDays(monthEndISO(start), now);
+    const untilStart = diffInDays(start, now);
+    if (afterEnd < 0) return { state: "overdue", label: `${formatMonth(start)} is voorbij`, color: "#b3453a", bg: "#fbedeb", sort: afterEnd };
+    if (untilStart <= 0) return { state: "month", label: "Deze maand", color: "#3a6788", bg: "#eaf1f6", sort: 0.5 };
+    return { state: "later", label: formatMonth(start), color: "#5f6e80", bg: "#f3f2ef", sort: untilStart };
   }
   const diff = diffInDays(lead.nextActionDate, now);
   if (diff < 0) {
@@ -68,7 +77,7 @@ export function getTodayItems(leads, now = new Date()) {
   const today = todayISO(now);
   const items = [];
   leads.filter(isOpenLead).forEach((lead) => {
-    if (hasNextAction(lead) && lead.nextActionDate === today) {
+    if (hasNextAction(lead) && !lead.nextActionMonthOnly && lead.nextActionDate === today) {
       items.push({ lead, kind: "action", label: nextActionText(lead), who: lead.nextActionAssignedToName, sort: 1 });
     }
     if (lead.appointmentStatus === "scheduled" && lead.appointmentDate === today) {
@@ -109,7 +118,7 @@ export const QUICK_FILTERS = {
       const t = todayISO(now);
       return (
         isOpenLead(l) &&
-        ((hasNextAction(l) && l.nextActionDate === t) ||
+        ((hasNextAction(l) && !l.nextActionMonthOnly && l.nextActionDate === t) ||
           (l.appointmentStatus === "scheduled" && l.appointmentDate === t) ||
           (l.openTaskCount > 0 && l.nextTaskDueDate === t) ||
           (l.partnerSummary?.waitingCount > 0 && l.partnerSummary?.nextFollowUpAt === t))
