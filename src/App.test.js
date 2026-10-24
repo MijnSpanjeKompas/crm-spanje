@@ -67,9 +67,9 @@ test("leaddossier: nieuwe tabs, tijdlijn en autosave (migratie)", async () => {
   expect(within(dialog).getByText(/oude CRM-versie/i)).toBeInTheDocument();
 
   // Exact deze tabs, geen Details meer, geen Opslaan-knop
-  expect(within(dialog).getAllByRole("tab").map((t) => t.textContent.replace(/\d+$/, ""))).toEqual(["Overzicht", "Zoekprofiel", "Opvolging", "Tijdlijn", "Partners", "Bestanden"]);
+  expect(within(dialog).getAllByRole("tab").map((t) => t.textContent.replace(/\d+$/, ""))).toEqual(["Overzicht", "Gesprek", "Zoekprofiel", "Opvolging", "Tijdlijn", "Partners", "Bestanden"]);
   expect(within(dialog).queryByRole("button", { name: /^Opslaan$/ })).not.toBeInTheDocument();
-  for (const tab of ["Zoekprofiel", "Opvolging", "Partners", "Bestanden", "Tijdlijn"]) {
+  for (const tab of ["Gesprek", "Zoekprofiel", "Opvolging", "Partners", "Bestanden", "Tijdlijn"]) {
     fireEvent.click(within(dialog).getByRole("tab", { name: new RegExp(tab) }));
   }
 

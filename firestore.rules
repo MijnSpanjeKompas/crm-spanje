@@ -42,6 +42,18 @@ service cloud.firestore {
       match /tasks/{taskId} {
         allow read, create, update, delete: if signedIn();
       }
+
+      // Gesprekken (opname → AI-samenvattingen). De Cloud Function schrijft
+      // met admin-rechten; teamleden mogen lezen, teksten aanpassen en goedkeuren.
+      match /calls/{callId} {
+        allow read, create, update, delete: if signedIn();
+      }
+    }
+
+    // Instellingen voor gesprekken (tegoed, AI-model, woordenlijst).
+    match /settings/{settingId} {
+      allow read, create, update: if signedIn();
+      allow delete: if false;
     }
 
     // Overzichten over alle leads heen (Agenda, KPI's, Partners-pagina):

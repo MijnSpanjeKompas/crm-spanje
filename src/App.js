@@ -24,6 +24,8 @@ import { KpiPage } from "./components/pages/KpiPage";
 import { PartnersPage } from "./components/pages/PartnersPage";
 import { CommissionsPage } from "./components/pages/CommissionsPage";
 import { SettingsPage, HelpPage } from "./components/pages/SettingsPage";
+import { RecordingBar, CallFlowNotices } from "./components/CallFlowBar";
+import { useCallSettings } from "./crm/useCallFlow";
 
 function subscriptionError(e) {
   if (e?.code === "permission-denied") {
@@ -57,6 +59,7 @@ export function Crm({ user, onSignOut }) {
   const [saleLeadId, setSaleLeadId] = useState(null);
   const [notice, setNotice] = useState(null);
   const [now, setNow] = useState(() => new Date());
+  const callSettings = useCallSettings();
 
   const userId = user.id;
   useEffect(() => {
@@ -133,6 +136,11 @@ export function Crm({ user, onSignOut }) {
 
   function openLead(lead, tab, extra = {}) {
     setModal({ key: `${lead.id}-${Date.now()}`, leadId: lead.id, isNew: false, initialTab: tab || "overview", ...extra });
+  }
+
+  function openLeadById(id, tab) {
+    const l = leads.find((x) => x.id === id);
+    if (l) openLead(l, tab);
   }
 
   function openNew() {
@@ -247,6 +255,7 @@ export function Crm({ user, onSignOut }) {
               <Notice tone="error">{error}</Notice>
             </div>
           )}
+          <CallFlowNotices settings={callSettings} leads={leads} onOpenLead={(id) => openLeadById(id, "calls")} />
           {notice && (
             <div style={{ marginBottom: 16, display: "flex", gap: 8, alignItems: "flex-start" }}>
               <div style={{ flex: 1 }}>
@@ -285,10 +294,12 @@ export function Crm({ user, onSignOut }) {
             <PartnersPage partners={partners} links={links} leads={leads} user={user} now={now} onOpenLead={(l, tab) => l && openLead(l, tab)} openPartnerId={route.param || null} setOpenPartnerId={(id) => route.navigate("partners", id || "")} />
           )}
           {page === "commissies" && <CommissionsPage leads={leads} partners={partners} users={activeUsers} user={user} now={now} onOpenLead={(l) => openLead(l)} onOpenPartner={openPartner} />}
-          {page === "instellingen" && <SettingsPage user={user} leads={leads} view={view} setView={setView} onImport={() => setImportOpen(true)} onResetNotifications={() => setReadIds([])} />}
+          {page === "instellingen" && <SettingsPage user={user} leads={leads} view={view} setView={setView} onImport={() => setImportOpen(true)} onResetNotifications={() => setReadIds([])} callSettings={callSettings} />}
           {page === "help" && <HelpPage />}
         </main>
       </div>
+
+      <RecordingBar user={user} onOpenLead={(id) => openLeadById(id, "calls")} />
 
       {modal && (
         <LeadDetailModal

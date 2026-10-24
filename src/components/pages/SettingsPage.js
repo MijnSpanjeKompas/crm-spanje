@@ -3,9 +3,10 @@ import { MILESTONES } from "../../crm/constants";
 import { backfillMilestones } from "../../crm/services";
 import { Card, InfoRow, Notice, Icon, btnStyle, C } from "../ui";
 import { PageHeader } from "../shell/AppShell";
+import { CallSettingsCard } from "./CallSettingsCard";
 
 /** Instellingen: account, voorkeuren en databeheer. */
-export function SettingsPage({ user, leads, view, setView, onImport, onResetNotifications }) {
+export function SettingsPage({ user, leads, view, setView, onImport, onResetNotifications, callSettings }) {
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
@@ -33,6 +34,7 @@ export function SettingsPage({ user, leads, view, setView, onImport, onResetNoti
     <div>
       <PageHeader title="Instellingen" subtitle="Account, voorkeuren en databeheer." />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))", gap: 16, alignItems: "start" }}>
+        <CallSettingsCard settings={callSettings} />
         <Card icon="user" title="Account">
           <InfoRow label="Naam">{user.displayName}</InfoRow>
           <InfoRow label="E-mail">{user.email}</InfoRow>
@@ -95,7 +97,8 @@ export function HelpPage() {
   const sections = [
     ["Dashboard", "Wat moet er vandaag gebeuren: nieuwe leads, opvolging, achterstallige acties, gesprekken en recente leads."],
     ["Leads", "Zoeken, filteren per fase en direct bellen, WhatsAppen of mailen. Klik op de fasebadge om de fase te wijzigen; zeldzame acties staan onder ⋯."],
-    ["Leaddossier", "Overzicht, Zoekprofiel, Opvolging, Tijdlijn, Partners en Bestanden. Wijzigingen worden automatisch opgeslagen."],
+    ["Gesprek verwerken", "Open een lead → tab Gesprek. Neem het gesprek op (met een tweede telefoon of laptop) of upload de opname uit Dictafoon. Na 1 à 2 minuten staan het appje, de uitgebreide samenvatting en de korte samenvatting klaar. Lees ze na (oranje [check]-punten eerst), pas aan waar nodig en klik op Goedkeuren. De lead sheet vul je zelf in. Tijdens het opnemen mag je van tabblad wisselen; de opname loopt door en wordt elke paar seconden op het toestel bewaard."],
+    ["Leaddossier", "Overzicht, Gesprek, Zoekprofiel, Opvolging, Tijdlijn, Partners en Bestanden. Wijzigingen worden automatisch opgeslagen."],
     ["Fases en verplichte gegevens", "Bij aanmaken: naam, telefoon of e-mail, bron en toestemming. Voor 'Doorgestuurd': aankoopdoel, termijn, budget, regio, woningtype, bouwtype, financiering, samenvatting, partner en toestemming = Ja. 'Later opvolgen' vraagt een opvolgdatum, 'Gestopt' een reden, 'Gereserveerd' een partner. 'Aankoop afgerond' vraagt datum, partner en commissiestatus."],
     ["Agenda", "Gesprekken, follow-ups, taken en partneropvolgingen per dag, week of maand. Verlopen items staan rechts."],
     ["KPI's", "Gebeurtenissen per periode en conversie van leads die in de periode binnenkwamen (cohort), per bron, campagne, regio en meer."],

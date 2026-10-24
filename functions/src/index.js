@@ -141,3 +141,10 @@ exports.importLeads = onRequest({ region: "europe-west1", secrets: [LEAD_IMPORT_
   const failed = results.some((r) => r.status === "error");
   return res.status(failed ? 207 : 200).json({ results });
 });
+
+// ─── GESPREK VERWERKEN (opname → samenvattingen) ────────────────────────────
+// Zie functions/src/gesprek.js. Secrets: GROQ_API_KEY en ANTHROPIC_API_KEY.
+const gesprek = require("./gesprek");
+
+exports.processCall = gesprek.processCall;
+exports.cleanupCallAudio = gesprek.cleanupCallAudio;

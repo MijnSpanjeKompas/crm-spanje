@@ -331,6 +331,13 @@ export async function restoreLead(lead, user) {
 
 /** Definitief verwijderen (alleen beheerders). Ruimt subcollections en bestanden op. */
 export async function deleteLeadPermanently(lead) {
+  // Gesprekken: audio in Storage + documenten.
+  const callSnap = await getDocs(subCol(lead.id, "calls"));
+  for (const d of callSnap.docs) {
+    const path = d.data().audioPath;
+    if (path) await deleteObject(ref(storage, path)).catch(() => {});
+    await deleteDoc(d.ref);
+  }
   for (const name of SUBCOLLECTIONS) {
     const snap = await getDocs(subCol(lead.id, name));
     if (name === "files") {

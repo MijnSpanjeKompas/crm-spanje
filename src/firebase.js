@@ -19,7 +19,7 @@ const firebaseConfig = {
   measurementId: env.REACT_APP_FIREBASE_MEASUREMENT_ID || "G-KHTNK22WFQ",
 };
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
 export const db = getFirestore(app);
 export const auth = getAuth(app);

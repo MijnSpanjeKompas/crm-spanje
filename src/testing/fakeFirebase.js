@@ -9,6 +9,7 @@ let listeners = new Set();
 let idCounter = 0;
 
 class ServerTimestamp {}
+class DeleteField {}
 class Increment {
   constructor(n) {
     this.n = n;
@@ -172,8 +173,18 @@ function applyUpdate(ref, data) {
   const prev = docs.get(ref.path);
   const next = { ...prev };
   Object.entries(data).forEach(([k, v]) => {
-    if (k.includes(".")) throw new Error("Dotted field paths not supported in fake");
-    next[k] = resolve(v, prev[k]);
+    // Geneste velden ("result.kort") zoals de echte Firestore.
+    const parts = k.split(".");
+    let target = next;
+    let before = prev;
+    for (let i = 0; i < parts.length - 1; i += 1) {
+      target[parts[i]] = { ...(target[parts[i]] || {}) };
+      target = target[parts[i]];
+      before = before ? before[parts[i]] : undefined;
+    }
+    const key = parts[parts.length - 1];
+    if (v instanceof DeleteField) delete target[key];
+    else target[key] = resolve(v, before ? before[key] : undefined);
   });
   docs.set(ref.path, next);
 }
@@ -221,6 +232,10 @@ export function writeBatch() {
 
 export function serverTimestamp() {
   return new ServerTimestamp();
+}
+
+export function deleteField() {
+  return new DeleteField();
 }
 
 export function increment(n) {

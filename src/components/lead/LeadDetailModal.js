@@ -32,6 +32,8 @@ import { FollowUpTab } from "./FollowUpTab";
 import { TimelineTab } from "./TimelineTab";
 import { PartnersTab } from "./PartnersTab";
 import { FilesTab } from "./FilesTab";
+import { CallsTab } from "./CallsTab";
+import { useCallSettings } from "../../crm/useCallFlow";
 
 /** Wachttijd na de laatste toetsaanslag voordat een tekstveld wordt opgeslagen. */
 export const AUTOSAVE_DELAY_MS = 900;
@@ -91,7 +93,7 @@ function dirtyKeys(edits, base) {
   return Object.keys(edits).filter((k) => !same(edits[k], base?.[k]));
 }
 
-const TAB_LABEL = { overview: "Overzicht", profile: "Zoekprofiel", followup: "Opvolging", timeline: "Tijdlijn" };
+const TAB_LABEL = { overview: "Overzicht", calls: "Gesprek", profile: "Zoekprofiel", followup: "Opvolging", timeline: "Tijdlijn" };
 
 // ─── HEADER ──────────────────────────────────────────────────────────────────
 function HeaderChips({ lead }) {
@@ -218,6 +220,8 @@ export function LeadDetailModal({ lead, isNew, initialEdits, initialTab, initial
   const partnerLinks = useLeadSub(leadId, "partnerLinks");
   const files = useLeadSub(leadId, "files");
   const tasks = useLeadSub(leadId, "tasks");
+  const calls = useLeadSub(leadId, "calls");
+  const callSettings = useCallSettings();
 
   const form = useMemo(() => ({ ...base, ...edits }), [base, edits]);
   const dirty = dirtyKeys(edits, base).length > 0;
@@ -410,6 +414,7 @@ export function LeadDetailModal({ lead, isNew, initialEdits, initialTab, initial
   const dupLeads = dupIds.map((id) => allLeads.find((l) => l.id === id)).filter(Boolean);
   const tabs = [
     { key: "overview", label: "Overzicht", alert: ["name", "email", "phone", "closureReason", "closureNotes", "forwarding", "consentStatus", "leadSource"].some((k) => errors[k]) },
+    { key: "calls", label: "Gesprek", count: calls.items.length, alert: calls.items.some((c) => c.status === "done" || c.status === "error") },
     { key: "profile", label: "Zoekprofiel", alert: Boolean(errors.budgetMax) },
     { key: "followup", label: "Opvolging", count: base.openTaskCount || 0, alert: ["nextActionDate", "nextActionLabel", "appointmentDate"].some((k) => errors[k]) },
     { key: "timeline", label: "Tijdlijn", count: activities.items.filter((a) => a.type !== "system").length },
@@ -583,6 +588,7 @@ export function LeadDetailModal({ lead, isNew, initialEdits, initialTab, initial
         ) : (
           <>
             {tab === "overview" && <OverviewTab {...ctx} stats={{ activities: activities.items, partnerLinks: partnerLinks.items }} onGoTab={setTab} />}
+            {tab === "calls" && <CallsTab {...ctx} calls={calls} settings={callSettings} />}
             {tab === "profile" && <ProfileTab {...ctx} />}
             {tab === "followup" && <FollowUpTab {...ctx} tasks={tasks} />}
             {tab === "timeline" && <TimelineTab {...ctx} activities={activities} clearEdits={clearEdits} />}

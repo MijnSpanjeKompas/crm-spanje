@@ -21,6 +21,16 @@ service firebase.storage {
       allow update: if false;
     }
 
+    // Gespreksopnames: alleen audio, max 500 MB. Verwijderen gebeurt door
+    // teamleden (gesprek verwijderen) of automatisch 14 dagen na goedkeuren.
+    match /leads/{leadId}/gesprekken/{fileName} {
+      allow read, delete: if signedIn();
+      allow create: if signedIn()
+        && request.resource.size <= 500 * 1024 * 1024
+        && request.resource.contentType.matches('audio/.*|video/mp4|video/quicktime|application/octet-stream');
+      allow update: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

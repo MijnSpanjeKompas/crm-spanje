@@ -37,6 +37,36 @@ Drempelwaarden voor signalen (24 uur zonder contact, 14 dagen inactief, 7 dagen 
 Niet verplicht. De Firebase web-config staat als fallback in `src/firebase.js` (dit is geen geheim; de beveiliging zit in Auth + rules). Overschrijven kan met:
 `REACT_APP_FIREBASE_API_KEY`, `REACT_APP_FIREBASE_AUTH_DOMAIN`, `REACT_APP_FIREBASE_PROJECT_ID`, `REACT_APP_FIREBASE_STORAGE_BUCKET`, `REACT_APP_FIREBASE_MESSAGING_SENDER_ID`, `REACT_APP_FIREBASE_APP_ID`, `REACT_APP_FIREBASE_MEASUREMENT_ID`.
 
+## Gesprek verwerken (opname → samenvattingen)
+
+Per lead staat een tab **Gesprek**. Daar neem je het gesprek op (tweede telefoon of laptop) of upload je de opname uit Dictafoon. De Cloud Function `processCall` transcribeert met Groq Whisper (gratis) en laat Claude drie teksten maken: het appje voor het makelaarskantoor, de uitgebreide samenvatting en de korte samenvatting. De lead sheet blijft handwerk.
+
+- Code: `src/crm/callFlow.js` (opnemen + lokale backup + upload), `src/crm/calls.js` (Firestore/Storage), `src/crm/gesprekPrompt.js` (prompt, woordenlijst, prijzen), `functions/src/gesprek.js` (server), `src/components/lead/CallsTab.js` (UI), `src/components/pages/CallSettingsCard.js` (instellingen).
+- Veiligheid audio: tijdens opnemen elke 4 sec een backup in IndexedDB op het toestel; die wordt pas verwijderd als de upload bevestigd is. De server verwijdert nooit audio bij een fout. Na **Goedkeuren** gaat het transcript direct weg en de audio na 14 dagen (`cleanupCallAudio`, dagelijks 04:00).
+- Kosten: Groq gratis (8 uur audio per dag). Claude Sonnet ± $0,04–0,07 per gesprek. Het CRM telt de kosten bij en waarschuwt onder Instellingen → Gesprekken & AI als het tegoed bijna op is.
+
+### Eenmalige setup
+
+1. **Groq**: maak een account op console.groq.com → *API Keys* → *Create API Key*.
+2. **Anthropic**: console.anthropic.com → *Billing*: koop $10 tegoed en zet **auto-reload uit** → *API Keys* → *Create Key*.
+3. **Keys als geheim in Firebase** (nooit in de code of in een chat):
+   ```
+   firebase functions:secrets:set GROQ_API_KEY
+   firebase functions:secrets:set ANTHROPIC_API_KEY
+   ```
+4. **Deployen** (vanuit de hoofdmap van het project):
+   ```
+   cd functions && npm install && cd ..
+   firebase deploy --only functions,firestore:rules,firestore:indexes,storage
+   ```
+   ⚠️ Rules publiceren vervangt de bestaande rules (zie punt 3 hierboven bij Firebase-setup).
+   Vraagt Firebase om de Cloud Scheduler API aan te zetten: ja.
+5. **Frontend**: push naar GitHub, Vercel bouwt automatisch.
+6. In het CRM: **Instellingen → Gesprekken & AI** → vul het huidige tegoed in (in dollars).
+7. iPhone: bij de eerste opname vraagt Safari om de microfoon → *Sta toe*.
+
+De vaste prompt staat in `src/crm/gesprekPrompt.js`. Na aanpassen: `firebase deploy --only functions`. De eigen woordenlijst en de transcriptiehint pas je zonder deploy aan onder Instellingen.
+
 ## Oude leads
 
 Leads uit de vorige versie worden bij het uitlezen automatisch vertaald naar de nieuwe velden. Pas bij de eerste keer opslaan worden de nieuwe velden weggeschreven (`schemaVersion: 2`, `legacyInfo`, `legacyTags`). Oude velden worden nooit verwijderd.
