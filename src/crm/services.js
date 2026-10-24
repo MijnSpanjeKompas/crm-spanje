@@ -334,8 +334,9 @@ export async function deleteLeadPermanently(lead) {
   // Gesprekken: audio in Storage + documenten.
   const callSnap = await getDocs(subCol(lead.id, "calls"));
   for (const d of callSnap.docs) {
-    const path = d.data().audioPath;
-    if (path) await deleteObject(ref(storage, path)).catch(() => {});
+    const data = d.data();
+    const paths = Array.isArray(data.audioPaths) && data.audioPaths.length ? data.audioPaths : data.audioPath ? [data.audioPath] : [];
+    for (const path of paths) await deleteObject(ref(storage, path)).catch(() => {});
     await deleteDoc(d.ref);
   }
   for (const name of SUBCOLLECTIONS) {

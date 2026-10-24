@@ -129,13 +129,23 @@ De korte samenvatting (kort) zet MSK in de eigen lead sheet.
 ## Harde regels
 
 1. **Niets verzinnen.** Gebruik alleen wat in het gesprek of in de notitie van de beller staat. Is iets niet besproken, laat het dan weg. Vul geen gaten met aannames en maak niets mooier of stelliger dan de lead het zei.
-2. **Bij twijfel: markeren.** Is een bedrag, datum, aantal, plaatsnaam of naam onduidelijk of tegenstrijdig in het transcript, zet er dan **[check]** achter in de tekst en zet het punt ook in de lijst "checks".
+2. **Bij twijfel: markeren.** Is een bedrag, datum, aantal, plaatsnaam of naam onduidelijk of tegenstrijdig in het transcript, zet dan direct achter dat stukje tekst **[check]** (met een spatie ervoor), en neem het op in de lijst "checks" met:
+   - "punt": korte vraag aan de beller, bijv. "Regio: Costa Dorada of Costa Blanca?"
+   - "tekst": letterlijk het twijfelachtige stukje zoals het in de tekst staat, zonder [check], zo kort mogelijk (1–6 woorden), bijv. "Costa Dorada". Gebruik in alle drie de teksten exact dezelfde schrijfwijze, zodat de beller het met één correctie overal kan aanpassen.
+   Maximaal 8 checks; alleen echte twijfel, geen dingen die gewoon niet besproken zijn.
+   Schrijf nooit opmerkingen over het transcript of het gesprek zelf in de teksten (zoals "het jaar is niet genoemd" of "onduidelijk in de opname"). Wat niet bekend is, laat je weg.
 3. **De notitie van de beller en de CRM-gegevens winnen altijd** van het transcript. Neem bedragen, namen en data uit de notitie letterlijk over.
 4. **Verbeter transcriptiefouten** met de woordenlijst hieronder. Schrijf plaatsnamen altijd correct, met accenten.
-5. **Het transcript heeft geen sprekerlabels.** Er praten een MSK-medewerker en de lead (soms ook een partner). Leid uit de context af wie wat zegt. Wat de MSK-medewerker vertelt of uitlegt, is geen wens van de lead. Inhoudelijke uitleg mag wel als context, bijvoorbeeld: "Er is uitgelegd dat er rekening gehouden moet worden met circa 13–15% bijkomende aankoopkosten; dit was nieuw voor Ed."
+5. **Wie zegt wat? Dit is het belangrijkste punt.** Het transcript heeft geen sprekerlabels; elke regel is een los zinsdeel. Er praten een MSK-medewerker (de beller: Luke of Indy) en de lead (soms ook een partner). Ga als volgt te werk:
+   - **De beller vertelt ook over zichzelf**: waar hij woont of vandaan komt, eigen ervaringen in Spanje, plaatsen die hij kent, voorbeelden van andere klanten, hoe MSK werkt. Dat is **nooit** informatie over de lead. Zinnen als "ik woon zelf in…", "ik kom uit…", "wij zitten in…", "ik ben vaak in… geweest", "een klant van ons…" komen meestal van de beller.
+   - **Typische zinnen van de beller**: vragen stellen ("Waar wonen jullie nu?", "Wat is jullie budget?"), uitleg geven (kosten, NIE-nummer, hypotheek, advocaat, gestor, aankoopproces), samenvatten of herhalen ter controle ("Dus als ik het goed begrijp…"), en verwijzen naar de makelaar. Een feit dat alleen in zo'n vraag of samenvatting van de beller staat, neem je pas over als de lead het bevestigt.
+   - **Typische zinnen van de lead**: antwoorden op die vragen, eigen wensen, eigen situatie ("wij wonen…", "mijn vrouw…", "onze kinderen…").
+   - **Twijfel je wie iets zei**, en is het een persoonlijk feit (woonplaats, herkomst, beroep, gezinssituatie, bezochte plaatsen, bedragen)? Laat het dan weg, of neem het op met [check] en een punt in "checks" ("Komt X van Michael of van de beller?"). Nooit gokken.
+   - Wat de beller uitlegt, is geen wens van de lead. Inhoudelijke uitleg mag wel als context, bijvoorbeeld: "Er is uitgelegd dat er rekening gehouden moet worden met circa 13–15% bijkomende aankoopkosten; dit was nieuw voor Ed."
+   - Staat er "[De opname was hier even onderbroken…]", dan ontbreekt daar een stuk. Vul dat niet zelf in.
 6. **Geen telefoonnummers, e-mailadressen of rekeningnummers** in de teksten. Die staan in de lead sheet.
 7. **Schrijf in het Nederlands**, in de derde persoon, met de voornaam van de lead (bij een stel beide voornamen). Zakelijk maar menselijk, zoals een ervaren collega schrijft. Vermijd AI-taal zoals "cruciaal", "essentieel", "naadloos", "in een notendop", "kortom" en overdreven superlatieven.
-8. **Is het transcript leeg, onverstaanbaar of geen leadgesprek**, schrijf dan geen samenvatting maar zet dat in "checks" en geef in de drie teksten alleen "Niet genoeg informatie uit het gesprek." terug.
+8. **Is het transcript leeg, onverstaanbaar of geen leadgesprek**, schrijf dan geen samenvatting maar zet dat als punt in "checks" (met lege "tekst") en geef in de drie teksten alleen "Niet genoeg informatie uit het gesprek." terug.
 
 ## Woordenlijst (juiste spelling)
 
@@ -232,7 +242,7 @@ export function buildUserMessage({ naam, telefoon, zekerWeten, transcript, datum
 ## Notitie "Zeker weten" van de beller (altijd correct, gaat boven het transcript)
 ${String(zekerWeten || "").trim() || "(geen notitie)"}
 
-## Transcript van het gesprek (automatisch gemaakt, zonder sprekerlabels, kan fouten bevatten)
+## Transcript van het gesprek (automatisch gemaakt, één zinsdeel per regel, zonder sprekerlabels, kan fouten bevatten)
 <transcript>
 ${transcript}
 </transcript>
@@ -249,10 +259,79 @@ export const OUTPUT_TOOL = {
       uitgebreid: { type: "string", description: "Uitgebreide samenvatting in Markdown, begint met '# Uitgebreide samenvatting lead – {naam}'." },
       kort: { type: "string", description: "Korte samenvatting voor de lead sheet, platte tekst, 3–5 zinnen." },
       appje: { type: "string", description: "Appje aan het makelaarskantoor, platte tekst, begint met 'Nieuwe lead: …' en eindigt met 'Uitgebreide samenvatting stuur ik mee.'" },
-      checks: { type: "array", items: { type: "string" }, description: "Punten die de beller moet controleren (onduidelijke bedragen, data, namen, plaatsen). Leeg als alles duidelijk is." },
+      checks: {
+        type: "array",
+        description: "Punten die de beller moet controleren (onduidelijke bedragen, data, namen, plaatsen). Leeg als alles duidelijk is.",
+        items: {
+          type: "object",
+          properties: {
+            punt: { type: "string", description: "Korte vraag aan de beller." },
+            tekst: { type: "string", description: "Letterlijk het twijfelachtige stukje zoals het in de teksten staat, zonder [check]." },
+          },
+          required: ["punt", "tekst"],
+        },
+      },
       leadtemperatuur: { type: "string", enum: ["heet", "warm", "koud"] },
       leadtype: { type: "string", enum: ["emigratie", "tweede woning", "investering", "B&B/bedrijfsmatig", "vakantiewoning", "combinatie", "onduidelijk"] },
     },
     required: ["uitgebreid", "kort", "appje", "checks", "leadtemperatuur", "leadtype"],
   },
 };
+
+// ─── CHECKS ──────────────────────────────────────────────────────────────────
+export const CHECK_MARK_RE = /\s*\[check\]/gi;
+
+/** Haalt alle [check]-markeringen uit een tekst. */
+export function stripChecks(text) {
+  return String(text || "").replace(CHECK_MARK_RE, "");
+}
+
+/** Oude (tekst) en nieuwe ({punt, tekst}) checks naar één vorm. */
+export function normalizeChecks(checks) {
+  if (!Array.isArray(checks)) return [];
+  return checks
+    .map((c) => (typeof c === "string" ? { punt: c, tekst: "" } : { punt: String(c?.punt || ""), tekst: String(c?.tekst || ""), status: c?.status || "", correctie: c?.correctie || "" }))
+    .filter((c) => c.punt || c.tekst);
+}
+
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Past één check toe op de drie teksten.
+ * - Klopt: haalt de [check] achter dat stukje weg.
+ * - Corrigeren: vervangt het stukje (met en zonder [check]) overal door de correctie.
+ * Zijn daarna alle checks afgehandeld, dan gaan alle overgebleven [check]'s weg.
+ * @returns {{uitgebreid, kort, appje, checks}}
+ */
+export function applyCheck(result, index, { correctie } = {}) {
+  const checks = normalizeChecks(result.checks).map((c) => ({ ...c }));
+  const check = checks[index];
+  if (!check) return { ...result, checks };
+  const fields = ["uitgebreid", "kort", "appje"];
+  const out = { ...result };
+  const from = check.tekst.trim();
+  const to = String(correctie ?? "").trim();
+  fields.forEach((f) => {
+    let t = String(out[f] || "");
+    if (from) {
+      const withMark = new RegExp(`${escapeRe(from)}\\s*\\[check\\]`, "gi");
+      if (to && to !== from) {
+        t = t.replace(withMark, to).split(from).join(to);
+      } else {
+        t = t.replace(withMark, from);
+      }
+    }
+    out[f] = t;
+  });
+  check.status = to && to !== from ? "fixed" : "ok";
+  if (to && to !== from) check.correctie = to;
+  const allDone = checks.every((c) => c.status === "ok" || c.status === "fixed");
+  if (allDone) fields.forEach((f) => (out[f] = stripChecks(out[f])));
+  return { uitgebreid: out.uitgebreid, kort: out.kort, appje: out.appje, checks };
+}
+
+export function openChecks(result) {
+  return normalizeChecks(result?.checks).filter((c) => c.status !== "ok" && c.status !== "fixed").length;
+}

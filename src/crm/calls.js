@@ -10,6 +10,7 @@ import { ref, uploadBytesResumable, deleteObject, getDownloadURL } from "firebas
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { app, db, storage } from "../firebase";
 import { addActivity, clean } from "./services";
+import { stripChecks } from "./gesprekPrompt";
 
 export const AUDIO_DELETE_DAYS = 14;
 export const MAX_AUDIO_BYTES = 500 * 1024 * 1024;
@@ -39,18 +40,20 @@ function callRef(leadId, callId) {
  * Stap 1: audio veilig in Firebase Storage zetten. Pas als dit gelukt is,
  * mag de lokale kopie op het toestel weg.
  */
-export async function uploadCallAudio({ leadId, callId, blob, mimeType, fileName, source, durationSec, zekerWeten, user, onProgress }) {
-  if (!blob || !blob.size) throw new Error("De opname is leeg.");
-  if (blob.size > MAX_AUDIO_BYTES) throw new Error("Dit audiobestand is groter dan 500 MB.");
+export async function uploadCallAudio({ leadId, callId, blobs, blob, mimeType, fileName, source, durationSec, zekerWeten, user, onProgress }) {
+  const parts = (blobs || (blob ? [blob] : [])).filter((b) => b && b.size);
+  if (!parts.length) throw new Error("De opname is leeg.");
+  const total = parts.reduce((n, b) => n + b.size, 0);
+  if (total > MAX_AUDIO_BYTES) throw new Error("Dit audiobestand is groter dan 500 MB.");
   const { ext, contentType } = audioMeta(mimeType, fileName);
-  const storagePath = `leads/${leadId}/gesprekken/${callId}.${ext}`;
   await setDoc(
     callRef(leadId, callId),
     clean({
       status: "uploading",
       source: source || "opname",
       fileName: fileName || "",
-      size: blob.size,
+      size: total,
+      parts: parts.length,
       durationSec: durationSec || null,
       zekerWeten: zekerWeten || {},
       createdAt: serverTimestamp(),
@@ -59,12 +62,28 @@ export async function uploadCallAudio({ leadId, callId, blob, mimeType, fileName
     }),
     { merge: true }
   );
-  await new Promise((resolve, reject) => {
-    const task = uploadBytesResumable(ref(storage, storagePath), blob, { contentType, customMetadata: { leadId, callId } });
-    task.on("state_changed", (s) => onProgress && s.totalBytes && onProgress(s.bytesTransferred / s.totalBytes), reject, resolve);
-  });
-  await updateDoc(callRef(leadId, callId), { status: "uploaded", audioPath: storagePath, audioContentType: contentType, uploadedAt: serverTimestamp() });
-  return storagePath;
+  const paths = [];
+  let done = 0;
+  for (let i = 0; i < parts.length; i += 1) {
+    const part = parts[i];
+    const offset = done;
+    const storagePath = `leads/${leadId}/gesprekken/${callId}${i ? `_deel${i + 1}` : ""}.${ext}`;
+    const report = (bytes) => onProgress && total && onProgress((offset + bytes) / total);
+    await new Promise((resolve, reject) => {
+      const task = uploadBytesResumable(ref(storage, storagePath), part, { contentType, customMetadata: { leadId, callId, deel: String(i + 1) } });
+      task.on("state_changed", (s) => report(s.bytesTransferred), reject, resolve);
+    });
+    done += part.size;
+    paths.push(storagePath);
+  }
+  await updateDoc(callRef(leadId, callId), { status: "uploaded", audioPath: paths[0], audioPaths: paths, audioContentType: contentType, uploadedAt: serverTimestamp() });
+  return paths;
+}
+
+/** Alle audiobestanden van een gesprek (oude gesprekken hebben er één). */
+export function callAudioPaths(call) {
+  if (Array.isArray(call?.audioPaths) && call.audioPaths.length) return call.audioPaths;
+  return call?.audioPath ? [call.audioPath] : [];
 }
 
 let callable = null;
@@ -97,13 +116,17 @@ export async function approveCall(lead, call, user) {
     approvedByName: user?.displayName || user?.email || "",
     audioDeleteAfter: deleteAfter,
     transcript: deleteField(),
+    // Vangnet: nooit [check] in goedgekeurde teksten.
+    "result.uitgebreid": stripChecks(call.result?.uitgebreid),
+    "result.kort": stripChecks(call.result?.kort),
+    "result.appje": stripChecks(call.result?.appje),
   });
   await addActivity(
     lead,
     {
       type: "system",
       title: "Gesprek verwerkt: samenvattingen goedgekeurd",
-      description: call.result?.kort || "",
+      description: stripChecks(call.result?.kort),
       metadata: { event: "call_approved", callId: call.id },
     },
     user
@@ -115,16 +138,16 @@ export async function reopenCall(leadId, callId) {
 }
 
 export async function deleteCall(leadId, call) {
-  if (call.audioPath) {
-    await deleteObject(ref(storage, call.audioPath)).catch((e) => {
+  for (const path of callAudioPaths(call)) {
+    await deleteObject(ref(storage, path)).catch((e) => {
       if (e?.code !== "storage/object-not-found") throw e;
     });
   }
   await deleteDoc(callRef(leadId, call.id));
 }
 
-export function getCallAudioUrl(call) {
-  return getDownloadURL(ref(storage, call.audioPath));
+export function getCallAudioUrl(call, index = 0) {
+  return getDownloadURL(ref(storage, callAudioPaths(call)[index]));
 }
 
 // ─── INSTELLINGEN & TEGOED ───────────────────────────────────────────────────
@@ -238,39 +261,6 @@ export function markdownToHtml(md) {
   flushPara();
   flushList();
   return out.join("\n");
-}
-
-/** Opent een opgemaakte pagina en het printvenster (→ "Bewaar als PDF"). */
-export function openSummaryPdf(markdown, leadName) {
-  const win = window.open("", "_blank");
-  if (!win) throw new Error("Je browser blokkeert pop-ups. Sta pop-ups toe voor deze site.");
-  const title = `Leadsamenvatting ${leadName || ""}`.trim();
-  const logo = `${window.location.origin}/msk-logo.png`;
-  win.document.write(`<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-  @page { size: A4; margin: 18mm 18mm 20mm; }
-  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1d2a38; font-size: 11pt; line-height: 1.5; max-width: 760px; margin: 24px auto; padding: 0 16px; }
-  header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #e5b13a; padding-bottom: 10px; margin-bottom: 18px; }
-  header img { height: 34px; }
-  header span { font-size: 9pt; color: #6b7785; }
-  h1 { font-size: 18pt; color: #0d2b4a; margin: 0 0 14px; line-height: 1.2; }
-  h2 { font-size: 12.5pt; color: #0d2b4a; margin: 18px 0 6px; break-after: avoid; }
-  h3 { font-size: 11pt; color: #0d2b4a; margin: 12px 0 4px; }
-  p { margin: 0 0 8px; }
-  ul, ol { margin: 0 0 8px; padding-left: 20px; }
-  li { margin: 2px 0; }
-  mark.check { background: #fde7b0; color: #7d5710; padding: 0 3px; border-radius: 3px; }
-  footer { margin-top: 26px; padding-top: 8px; border-top: 1px solid #e3ddd1; font-size: 9pt; color: #6b7785; }
-  @media print { body { margin: 0 auto; } .noprint { display: none; } }
-</style></head><body>
-<header><img src="${logo}" alt="Mijn Spanje Kompas" onerror="this.style.display='none'"><span>Mijn Spanje Kompas – leadsamenvatting</span></header>
-${markdownToHtml(markdown)}
-<footer>Mijn Spanje Kompas – leadsamenvatting</footer>
-<p class="noprint" style="margin-top:20px;font-size:10pt;color:#6b7785">Kies in het printvenster “Bewaar als PDF” (iPhone: Deel → Opslaan in Bestanden).</p>
-<script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); };</script>
-</body></html>`);
-  win.document.close();
 }
 
 export async function copyText(text) {

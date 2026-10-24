@@ -12,6 +12,7 @@ import {
   startProcessing,
   recordingSupported,
   clearJob,
+  resumeRecording,
 } from "../../crm/callFlow";
 import {
   approveCall,
@@ -19,15 +20,17 @@ import {
   deleteCall,
   saveCallResult,
   getCallAudioUrl,
+  callAudioPaths,
   creditStatus,
   formatUsd,
   toWhatsApp,
   markdownToHtml,
-  openSummaryPdf,
   copyText,
   STALE_PROCESSING_MS,
   AUDIO_DELETE_DAYS,
 } from "../../crm/calls";
+import { applyCheck, normalizeChecks, openChecks, stripChecks } from "../../crm/gesprekPrompt";
+import { shareSummaryPdf, deliverFile, preloadPdf } from "../../crm/summaryPdf";
 import { Card, Notice, Icon, Badge, MoreMenu, btnStyle, inputStyle, labelStyle, formatBytes, C } from "../ui";
 
 const STATUS = {
@@ -315,17 +318,25 @@ export function CallsTab({ lead, form, set, user, calls, settings }) {
 
       {/* OPNAME LOOPT */}
       {recordingHere && (
-        <Card icon="mic" title="Opname loopt">
+        <Card icon="mic" title={rec.status === "interrupted" ? "Opname onderbroken" : `Opname loopt${rec.parts > 1 ? ` (deel ${rec.parts})` : ""}`}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-            <span className="msk-rec-dot" style={{ width: 14, height: 14, borderRadius: 99, background: C.danger, display: "inline-block" }} aria-hidden="true" />
+            <span className={rec.status === "interrupted" ? "" : "msk-rec-dot"} style={{ width: 14, height: 14, borderRadius: 99, background: rec.status === "interrupted" ? C.gold : C.danger, display: "inline-block" }} aria-hidden="true" />
             <span style={{ fontSize: 30, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: C.navy }}>{fmtDuration(rec.elapsedMs)}</span>
-            <button type="button" onClick={stop} disabled={rec.status !== "recording" || Boolean(busy)} style={{ ...btnStyle("danger", true), padding: "12px 22px", fontSize: 14, minHeight: 46, marginLeft: "auto" }}>
-              <Icon name="stop" size={16} /> {rec.status === "stopping" ? "Stoppen…" : "Stop & verwerken"}
-            </button>
+            <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
+              {rec.status === "interrupted" && (
+                <button type="button" onClick={() => run("resume", () => resumeRecording())} disabled={Boolean(busy)} style={{ ...btnStyle("primary", true), padding: "12px 18px", fontSize: 14, minHeight: 46 }}>
+                  <Icon name="mic" size={16} /> Opname hervatten
+                </button>
+              )}
+              <button type="button" onClick={stop} disabled={(rec.status !== "recording" && rec.status !== "interrupted") || Boolean(busy)} style={{ ...btnStyle("danger", true), padding: "12px 22px", fontSize: 14, minHeight: 46 }}>
+                <Icon name="stop" size={16} /> {rec.status === "stopping" ? "Stoppen…" : "Stop & verwerken"}
+              </button>
+            </div>
           </div>
           <div style={{ fontSize: 12, color: C.textMuted, marginTop: 10, lineHeight: 1.5 }}>
             Laat het scherm aan en deze pagina open. Je kunt wel van tabblad wisselen in het CRM (bijv. naar Zoekprofiel).{" "}
-            {rec.backup ? "Elke paar seconden wordt een backup op dit toestel gemaakt." : "Let op: lokale backup werkt niet in deze browser."}
+            {rec.backup ? "Elke paar seconden wordt een backup op dit toestel gemaakt." : "Let op: lokale backup werkt niet in deze browser."}{" "}
+            Tip: zet deze telefoon op Niet storen of vliegtuigmodus met wifi aan, dan kan een telefoontje de opname niet onderbreken.
           </div>
           {rec.warning && (
             <div style={{ marginTop: 10 }}>
@@ -408,10 +419,89 @@ export function CallsTab({ lead, form, set, user, calls, settings }) {
   );
 }
 
+// ─── CHECKS ──────────────────────────────────────────────────────────────────
+function CheckItem({ check, index, onApply, busy }) {
+  const [value, setValue] = useState(check.tekst);
+  const done = check.status === "ok" || check.status === "fixed";
+  const changed = value.trim() && value.trim() !== check.tekst.trim();
+  return (
+    <div style={{ padding: "10px 0", borderTop: index ? `1px solid ${C.goldBorder}` : "none", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+        <span style={{ color: done ? C.success : "#7d5710", display: "flex", marginTop: 2 }}>
+          <Icon name={done ? "checkCircle" : "alertCircle"} size={15} />
+        </span>
+        <span style={{ fontSize: 13, color: C.text, lineHeight: 1.5, textDecoration: done ? "none" : "none" }}>
+          {check.punt}
+          {done && (
+            <span style={{ color: C.success, fontWeight: 600 }}>
+              {" "}
+              · {check.status === "fixed" ? `gecorrigeerd naar "${check.correctie}"` : "klopt"}
+            </span>
+          )}
+        </span>
+      </div>
+      {!done && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingLeft: 23 }}>
+          {check.tekst ? (
+            <>
+              <input
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                aria-label={`Juiste tekst voor: ${check.punt}`}
+                style={{ ...inputStyle, flex: "1 1 220px", minHeight: 36, background: C.surface }}
+              />
+              {changed ? (
+                <button type="button" disabled={Boolean(busy)} style={btnStyle("primary", true)} onClick={() => onApply(index, value)}>
+                  <Icon name="edit" size={14} /> Corrigeren
+                </button>
+              ) : (
+                <button type="button" disabled={Boolean(busy)} style={btnStyle("success", true)} onClick={() => onApply(index, "")}>
+                  <Icon name="check" size={14} /> Klopt
+                </button>
+              )}
+            </>
+          ) : (
+            <button type="button" disabled={Boolean(busy)} style={btnStyle("success", true)} onClick={() => onApply(index, "")}>
+              <Icon name="check" size={14} /> Gecontroleerd
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CheckList({ checks, onApply, onAllOk, busy }) {
+  const open = checks.filter((c) => c.status !== "ok" && c.status !== "fixed").length;
+  return (
+    <section style={{ background: C.goldSoft, border: `1px solid ${C.goldBorder}`, borderRadius: 12, padding: "12px 14px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+        <div style={{ fontWeight: 600, fontSize: 13.5, color: "#7d5710" }}>
+          {open ? `Even checken (${open} van ${checks.length} open)` : "Alle checks afgehandeld"}
+        </div>
+        {open > 1 && (
+          <button type="button" disabled={Boolean(busy)} style={btnStyle("neutral")} onClick={onAllOk}>
+            Alles klopt
+          </button>
+        )}
+      </div>
+      <div style={{ fontSize: 12, color: "#7d5710", marginBottom: 6 }}>Klopt het? Klik op Klopt. Klopt het niet? Typ de juiste tekst en klik op Corrigeren; het wordt in alle drie de teksten aangepast.</div>
+      {checks.map((c, i) => (
+        <CheckItem key={`${i}-${c.tekst}`} check={c} index={i} onApply={onApply} busy={busy} />
+      ))}
+    </section>
+  );
+}
+
 // ─── ÉÉN GESPREK ─────────────────────────────────────────────────────────────
 function CallView({ call, lead, form, set, user }) {
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState("");
+  const [pendingPdf, setPendingPdf] = useState(null);
+  const hasText = Boolean(call.result?.uitgebreid);
+  useEffect(() => {
+    if (hasText) preloadPdf();
+  }, [hasText]);
   const st = STATUS[call.status] || STATUS.uploaded;
   const r = call.result || {};
   const approved = call.status === "approved";
@@ -433,17 +523,38 @@ function CallView({ call, lead, form, set, user }) {
   }
 
   const reprocess = () => run("process", () => startProcessing(lead.id, call.id));
-  const download = () =>
+  const audioPaths = callAudioPaths(call);
+  const download = (index = 0) => {
+    // Venster direct openen (anders blokkeert de browser de pop-up), daarna de link invullen.
+    const win = window.open("", "_blank");
     run("audio", async () => {
-      const url = await getCallAudioUrl(call);
-      window.open(url, "_blank", "noopener");
+      try {
+        const url = await getCallAudioUrl(call, index);
+        if (win) win.location.href = url;
+        else window.location.href = url;
+      } catch (e) {
+        if (win) win.close();
+        throw e;
+      }
     });
+  };
   const saveField = (key) => (value) => saveCallResult(lead.id, call.id, { [key]: value });
+  const checks = normalizeChecks(r.checks);
+  const nOpen = openChecks(r);
+  const applyOne = (i, correctie) => run("check", () => saveCallResult(lead.id, call.id, applyCheck(r, i, { correctie })));
+  const allOk = () =>
+    run("check", async () => {
+      let next = { ...r };
+      normalizeChecks(r.checks).forEach((c, i) => {
+        if (c.status !== "ok" && c.status !== "fixed") next = { ...next, ...applyCheck(next, i, {}) };
+      });
+      await saveCallResult(lead.id, call.id, { uitgebreid: next.uitgebreid, kort: next.kort, appje: next.appje, checks: next.checks });
+    });
 
   const menu = (
     <MoreMenu
       items={[
-        call.audioPath && { label: "Audio downloaden", icon: "download", onClick: download },
+        ...audioPaths.map((_, i) => ({ label: audioPaths.length > 1 ? `Audio downloaden (deel ${i + 1})` : "Audio downloaden", icon: "download", onClick: () => download(i) })),
         call.audioPath && call.status !== "processing" && call.status !== "uploading" && { label: "Opnieuw verwerken", icon: "refresh", onClick: () => window.confirm("Opnieuw laten samenvatten? Je eigen aanpassingen in de teksten worden dan overschreven.") && reprocess() },
         approved && { label: "Goedkeuring intrekken", icon: "edit", onClick: () => run("reopen", () => reopenCall(lead.id, call.id)) },
         {
@@ -464,6 +575,7 @@ function CallView({ call, lead, form, set, user }) {
           {formatDateTime(call.createdAt)}
           {call.durationSec ? ` · ${fmtDuration(call.durationSec * 1000)}` : ""}
           {call.size ? ` · ${formatBytes(call.size)}` : ""}
+          {call.parts > 1 ? ` · ${call.parts} delen (onderbroken)` : ""}
           {call.costUsd ? ` · kosten ${formatUsd(call.costUsd)}` : ""}
           {call.createdByName ? ` · ${call.createdByName}` : ""}
         </span>
@@ -500,7 +612,7 @@ function CallView({ call, lead, form, set, user }) {
               </button>
             )}
             {call.audioPath && (
-              <button type="button" style={btnStyle("neutral")} onClick={download}>
+              <button type="button" style={btnStyle("neutral")} onClick={() => download(0)}>
                 <Icon name="download" size={14} /> Audio downloaden
               </button>
             )}
@@ -510,16 +622,7 @@ function CallView({ call, lead, form, set, user }) {
 
       {r.uitgebreid && (
         <>
-          {Array.isArray(r.checks) && r.checks.length > 0 && !approved && (
-            <Notice tone="warn">
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>Even checken ({r.checks.length})</div>
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
-                {r.checks.map((c, i) => (
-                  <li key={i}>{c}</li>
-                ))}
-              </ul>
-            </Notice>
-          )}
+          {checks.length > 0 && !approved && <CheckList checks={checks} onApply={applyOne} onAllOk={allOk} busy={busy} />}
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {r.leadtype && <Badge icon="tag">Type: {r.leadtype}</Badge>}
@@ -533,7 +636,7 @@ function CallView({ call, lead, form, set, user }) {
             rows={5}
             readOnly={approved}
             onSave={saveField("appje")}
-            actions={(text) => <CopyButton text={text} label="Appje kopiëren" tone="primary" solid />}
+            actions={(text) => <CopyButton text={stripChecks(text)} label="Appje kopiëren" tone="primary" solid />}
           />
 
           <TextBlock
@@ -545,10 +648,16 @@ function CallView({ call, lead, form, set, user }) {
             onSave={saveField("uitgebreid")}
             actions={(text) => (
               <>
-                <button type="button" style={btnStyle("primary", true)} onClick={() => run("pdf", async () => openSummaryPdf(text, leadName))}>
-                  <Icon name="file" size={14} /> PDF maken
-                </button>
-                <CopyButton text={toWhatsApp(text)} label="Kopiëren voor WhatsApp" />
+                {pendingPdf ? (
+                  <button type="button" style={btnStyle("primary", true)} onClick={() => run("pdf", async () => setPendingPdf((await deliverFile(pendingPdf)) ? null : pendingPdf))}>
+                    <Icon name="download" size={14} /> PDF delen / opslaan
+                  </button>
+                ) : (
+                  <button type="button" style={btnStyle("primary", true)} disabled={busy === "pdf"} onClick={() => run("pdf", async () => setPendingPdf(await shareSummaryPdf(stripChecks(text), leadName)))}>
+                    <Icon name="file" size={14} /> {busy === "pdf" ? "PDF maken…" : "PDF maken"}
+                  </button>
+                )}
+                <CopyButton text={toWhatsApp(stripChecks(text))} label="Kopiëren voor WhatsApp" />
               </>
             )}
           />
@@ -561,13 +670,14 @@ function CallView({ call, lead, form, set, user }) {
             onSave={saveField("kort")}
             actions={(text) => (
               <>
-                <CopyButton text={text} />
+                <CopyButton text={stripChecks(text)} />
                 <button
                   type="button"
                   style={btnStyle("neutral")}
                   onClick={() => {
-                    if (form.leadSummary && form.leadSummary.trim() && form.leadSummary.trim() !== text.trim() && !window.confirm("De interne samenvatting van deze lead vervangen door deze tekst?")) return;
-                    set("leadSummary", text);
+                    const clean = stripChecks(text);
+                    if (form.leadSummary && form.leadSummary.trim() && form.leadSummary.trim() !== clean.trim() && !window.confirm("De interne samenvatting van deze lead vervangen door deze tekst?")) return;
+                    set("leadSummary", clean);
                     setMsg({ tone: "ok", text: "Gezet in de interne samenvatting van de lead." });
                   }}
                 >
@@ -581,12 +691,13 @@ function CallView({ call, lead, form, set, user }) {
             <Card>
               <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                 <div style={{ fontSize: 12.5, color: C.textMuted, flex: "1 1 260px", lineHeight: 1.5 }}>
+                  {nOpen > 0 ? <strong style={{ color: "#7d5710", fontWeight: 600 }}>Handel eerst de {nOpen === 1 ? "check" : `${nOpen} checks`} bovenaan af. </strong> : null}
                   Alles nagelezen? Na goedkeuren wordt het transcript direct verwijderd en de audio na {AUDIO_DELETE_DAYS} dagen. Er komt een regel in de tijdlijn.
                 </div>
                 <button
                   type="button"
                   style={{ ...btnStyle("success", true), padding: "11px 20px", minHeight: 44, fontSize: 13.5 }}
-                  disabled={Boolean(busy)}
+                  disabled={Boolean(busy) || nOpen > 0}
                   onClick={() => run("approve", () => approveCall({ ...lead, ...form }, call, user), "Goedgekeurd.")}
                 >
                   <Icon name="checkCircle" size={16} /> {busy === "approve" ? "Bezig…" : "Goedkeuren"}

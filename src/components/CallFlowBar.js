@@ -1,5 +1,5 @@
 import { useCallFlow } from "../crm/useCallFlow";
-import { stopRecording } from "../crm/callFlow";
+import { stopRecording, resumeRecording } from "../crm/callFlow";
 import { creditStatus, formatUsd } from "../crm/calls";
 import { formatDateTime } from "../crm/dates";
 import { Notice, Icon, btnStyle, linkBtnStyle, C } from "./ui";
@@ -21,13 +21,18 @@ export function RecordingBar({ user, onOpenLead }) {
       <div style={{ background: C.navyDark, color: "#fff", borderRadius: 14, boxShadow: C.shadowLg, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         {rec ? (
           <>
-            <span className="msk-rec-dot" style={{ width: 11, height: 11, borderRadius: 99, background: "#ef4444", display: "inline-block", flexShrink: 0 }} aria-hidden="true" />
+            <span className={rec.status === "interrupted" ? "" : "msk-rec-dot"} style={{ width: 11, height: 11, borderRadius: 99, background: rec.status === "interrupted" ? "#e5b13a" : "#ef4444", display: "inline-block", flexShrink: 0 }} aria-hidden="true" />
             <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fmt(rec.elapsedMs)}</span>
-            <span style={{ fontSize: 13, opacity: 0.85, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Opname · {rec.leadName || "lead"}</span>
+            <span style={{ fontSize: 13, opacity: 0.85, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rec.status === "interrupted" ? "Onderbroken" : "Opname"} · {rec.leadName || "lead"}</span>
             <button type="button" onClick={() => onOpenLead(rec.leadId)} style={{ ...linkBtnStyle, color: "#fff", textDecoration: "underline" }}>
               Open lead
             </button>
-            <button type="button" disabled={rec.status !== "recording"} onClick={() => stopRecording({ user })} style={btnStyle("danger", true)}>
+            {rec.status === "interrupted" && (
+              <button type="button" onClick={() => resumeRecording().catch(() => {})} style={btnStyle("gold", true)}>
+                <Icon name="mic" size={14} /> Hervatten
+              </button>
+            )}
+            <button type="button" disabled={rec.status !== "recording" && rec.status !== "interrupted"} onClick={() => stopRecording({ user })} style={btnStyle("danger", true)}>
               <Icon name="stop" size={14} /> {rec.status === "stopping" ? "Stoppen…" : "Stop & verwerken"}
             </button>
           </>

@@ -74,9 +74,10 @@ export function patchMeta(id, patch) {
   });
 }
 
-export function addChunk(recId, idx, blob) {
+/** seg = deel van de opname (na een onderbreking, bijv. telefoontje, begint een nieuw deel). */
+export function addChunk(recId, idx, blob, seg = 0) {
   return tx(["chunks", "recs"], "readwrite", (t) => {
-    t.objectStore("chunks").put({ recId, idx, blob });
+    t.objectStore("chunks").put({ recId, idx, blob, seg });
     const recs = t.objectStore("recs");
     const req = recs.get(recId);
     req.onsuccess = () => {
@@ -92,14 +93,26 @@ export function listRecs(leadId) {
   }).catch(() => []);
 }
 
-/** Plakt alle opgeslagen stukjes weer aan elkaar tot één audiobestand. */
-export function getBlob(rec) {
+/**
+ * Plakt de opgeslagen stukjes weer aan elkaar: één bestand per deel van de
+ * opname (een onderbroken opname bestaat uit meerdere delen).
+ * @returns {Promise<Blob[]>}
+ */
+export function getBlobs(rec) {
   return tx(["chunks"], "readonly", (t, done) => {
     const range = IDBKeyRange.bound([rec.id, 0], [rec.id, Number.MAX_SAFE_INTEGER]);
     const req = t.objectStore("chunks").getAll(range);
     req.onsuccess = () => {
-      const parts = (req.result || []).sort((a, b) => a.idx - b.idx).map((c) => c.blob);
-      done(parts.length ? new Blob(parts, { type: rec.mimeType || parts[0].type || "audio/mp4" }) : null);
+      const bySeg = new Map();
+      (req.result || [])
+        .sort((a, b) => a.idx - b.idx)
+        .forEach((c) => {
+          const seg = c.seg || 0;
+          if (!bySeg.has(seg)) bySeg.set(seg, []);
+          bySeg.get(seg).push(c.blob);
+        });
+      const type = rec.mimeType || "audio/mp4";
+      done([...bySeg.keys()].sort((a, b) => a - b).map((k) => new Blob(bySeg.get(k), { type })));
     };
   });
 }

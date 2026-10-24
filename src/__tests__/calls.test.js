@@ -2,7 +2,8 @@
 import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import * as fake from "../testing/fakeFirebase";
 import { markdownToHtml, toWhatsApp, creditStatus, audioMeta, formatUsd } from "../crm/calls";
-import { buildSystemPrompt, buildUserMessage, costUsd, OUTPUT_TOOL } from "../crm/gesprekPrompt";
+import { buildSystemPrompt, buildUserMessage, costUsd, OUTPUT_TOOL, applyCheck, stripChecks, openChecks } from "../crm/gesprekPrompt";
+import { markdownToPdfContent, buildDocDefinition, pdfFileName } from "../crm/summaryPdf";
 import App from "../App";
 
 jest.mock("../firebase", () => ({ db: {}, storage: {}, auth: {}, app: {} }));
@@ -36,6 +37,48 @@ describe("teksthulpen", () => {
     expect(audioMeta("audio/x-m4a", "Opname 12.m4a")).toEqual({ ext: "m4a", contentType: "audio/x-m4a" });
     expect(audioMeta("", "gesprek.mp3")).toEqual({ ext: "mp3", contentType: "audio/mpeg" });
     expect(audioMeta("audio/webm;codecs=opus", "")).toEqual({ ext: "webm", contentType: "audio/webm" });
+  });
+});
+
+describe("checks", () => {
+  const base = {
+    uitgebreid: "Nooit verder dan de Costa Dorada [check]. Overwaarde ruim onder €300.000 [check].",
+    kort: "Regio Costa Dorada, overwaarde €300.000.",
+    appje: "Nieuwe lead: Michael.",
+    checks: [{ punt: "Regio?", tekst: "Costa Dorada" }, { punt: "Overwaarde?", tekst: "€300.000" }],
+  };
+  test("corrigeren vervangt in alle teksten, klopt haalt de markering weg, daarna geen [check] meer", () => {
+    let r = applyCheck(base, 0, { correctie: "Costa Blanca Noord" });
+    expect(r.uitgebreid).toContain("de Costa Blanca Noord. Overwaarde");
+    expect(r.kort).toContain("Regio Costa Blanca Noord");
+    expect(r.uitgebreid).toContain("€300.000 [check]");
+    expect(openChecks(r)).toBe(1);
+    r = applyCheck(r, 1, {});
+    expect(openChecks(r)).toBe(0);
+    expect(r.uitgebreid).toBe("Nooit verder dan de Costa Blanca Noord. Overwaarde ruim onder €300.000.");
+    expect(r.checks.map((c) => c.status)).toEqual(["fixed", "ok"]);
+  });
+  test("oude checks (alleen tekst) blijven werken", () => {
+    const r = applyCheck({ uitgebreid: "a [check]", kort: "", appje: "", checks: ["Budget onduidelijk"] }, 0, {});
+    expect(r.uitgebreid).toBe("a");
+    expect(openChecks(r)).toBe(0);
+  });
+  test("stripChecks", () => {
+    expect(stripChecks("€300.000 [check]. Ja [CHECK]")).toBe("€300.000. Ja");
+  });
+});
+
+describe("pdf", () => {
+  test("markdown wordt koppen, alinea's met vet en bullets; pijlen veilig", () => {
+    const c = markdownToPdfContent("# Titel\n\n## Regio\n**Kern:** a → b\n\n- tuin\n- zwembad");
+    expect(c[0]).toMatchObject({ style: "h1" });
+    expect(c[1]).toMatchObject({ style: "h2" });
+    expect(c[2].text).toEqual([{ text: "Kern:", bold: true }, { text: " a \u203a b" }]);
+    expect(c[3].ul).toHaveLength(2);
+    const doc = buildDocDefinition("# T", {});
+    expect(JSON.stringify(doc.footer(1, 3))).toContain("Pagina 1 van 3");
+    expect(JSON.stringify(doc)).not.toMatch(/vercel|http/i);
+    expect(pdfFileName("Michael de Jeu")).toBe("Leadsamenvatting Michael de Jeu.pdf");
   });
 });
 
@@ -111,22 +154,35 @@ describe("Gesprek-tab", () => {
       transcript: "geheim transcript",
       costUsd: 0.05,
       result: {
-        uitgebreid: "# Uitgebreide samenvatting lead – Maurice van de Werd\n\n## Situatie\nMaurice wil emigreren.",
-        kort: "Maurice wil over 2,5 jaar emigreren.",
+        uitgebreid: "# Uitgebreide samenvatting lead – Maurice van de Werd\n\n## Situatie\nMaurice wil emigreren. Budget €350.000 [check].",
+        kort: "Maurice wil over 2,5 jaar emigreren. Budget €350.000 [check].",
         appje: "Nieuwe lead: Maurice van de Werd. Emigratielead. Uitgebreide samenvatting stuur ik mee.",
-        checks: ["Budget €350.000 of €305.000?"],
+        checks: [{ punt: "Budget €350.000 of €305.000?", tekst: "€350.000" }],
         leadtemperatuur: "warm",
         leadtype: "B&B/bedrijfsmatig",
       },
     });
     const dialog = await openGesprekTab();
     expect(await within(dialog).findByText(/Budget €350.000 of €305.000\?/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/1 van 1 open/)).toBeInTheDocument();
     expect(within(dialog).getByDisplayValue(/Nieuwe lead: Maurice van de Werd/)).toBeInTheDocument();
     expect(within(dialog).getByRole("heading", { name: /Uitgebreide samenvatting lead/ })).toBeInTheDocument();
 
+    // Goedkeuren kan pas als de check is afgehandeld
+    expect(within(dialog).getByRole("button", { name: /Goedkeuren/ })).toBeDisabled();
+    // Kopiëren/overnemen zonder [check]
     fireEvent.click(within(dialog).getByRole("button", { name: /Zet in interne samenvatting/ }));
-    await waitFor(() => expect(fake.__getDoc("leads/maurice").leadSummary).toBe("Maurice wil over 2,5 jaar emigreren."));
+    await waitFor(() => expect(fake.__getDoc("leads/maurice").leadSummary).toBe("Maurice wil over 2,5 jaar emigreren. Budget €350.000."));
 
+    // Corrigeren
+    const input = within(dialog).getByLabelText(/Juiste tekst voor: Budget/);
+    fireEvent.change(input, { target: { value: "€305.000" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Corrigeren/ }));
+    await waitFor(() => expect(fake.__getDoc("leads/maurice/calls/c1").result.kort).toBe("Maurice wil over 2,5 jaar emigreren. Budget €305.000."));
+    expect(fake.__getDoc("leads/maurice/calls/c1").result.uitgebreid).not.toMatch(/\[check\]/);
+    expect(await within(dialog).findByText(/gecorrigeerd naar "€305.000"/)).toBeInTheDocument();
+
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: /Goedkeuren/ })).not.toBeDisabled());
     fireEvent.click(within(dialog).getByRole("button", { name: /Goedkeuren/ }));
     await waitFor(() => expect(fake.__getDoc("leads/maurice/calls/c1").status).toBe("approved"));
     const call = fake.__getDoc("leads/maurice/calls/c1");

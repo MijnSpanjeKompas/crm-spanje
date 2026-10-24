@@ -30,6 +30,7 @@ const {
   buildSystemPrompt,
   buildUserMessage,
   costUsd,
+  normalizeChecks,
 } = require("../../src/crm/gesprekPrompt");
 
 const GROQ_API_KEY = defineSecret("GROQ_API_KEY");
@@ -91,7 +92,9 @@ async function transcribePart(file, hint, apiKey) {
   form.append("model", WHISPER_MODEL);
   form.append("language", "nl");
   form.append("temperature", "0");
-  form.append("response_format", "json");
+  // verbose_json geeft losse zinsdelen; die zetten we elk op een eigen regel,
+  // zodat Claude beter ziet waar de ene spreker stopt en de andere begint.
+  form.append("response_format", "verbose_json");
   if (hint) form.append("prompt", hint.slice(0, 800));
 
   let res;
@@ -107,7 +110,9 @@ async function transcribePart(file, hint, apiKey) {
   const text = await res.text();
   if (res.ok) {
     try {
-      return String(JSON.parse(text).text || "").trim();
+      const data = JSON.parse(text);
+      const segments = Array.isArray(data.segments) ? data.segments.map((sg) => String(sg.text || "").trim()).filter(Boolean) : [];
+      return (segments.length ? segments.join("\n") : String(data.text || "")).trim();
     } catch (e) {
       throw new CallError("groq", "Onverwacht antwoord van de transcriptiedienst. Probeer het opnieuw.", text.slice(0, 500));
     }
@@ -197,7 +202,9 @@ function cleanResult(r) {
     uitgebreid: s(r.uitgebreid),
     kort: s(r.kort),
     appje: s(r.appje),
-    checks: Array.isArray(r.checks) ? r.checks.map(s).filter(Boolean).slice(0, 20) : [],
+    checks: normalizeChecks(r.checks)
+      .slice(0, 12)
+      .map((c) => ({ punt: c.punt, tekst: c.tekst, status: "" })),
     leadtemperatuur: s(r.leadtemperatuur),
     leadtype: s(r.leadtype),
   };
@@ -244,17 +251,28 @@ async function processCallImpl({ leadId, callId }) {
     let transcript = call.transcript || "";
     let audioSeconds = call.audioSeconds || 0;
     if (!transcript) {
-      const input = path.join(workDir, "origineel");
-      await admin.storage().bucket().file(call.audioPath).download({ destination: input });
-      const parts = await splitAudio(input, workDir);
+      audioSeconds = 0;
+      // Een opname kan uit meerdere delen bestaan (onderbroken door bijv. een telefoontje).
+      const sources = Array.isArray(call.audioPaths) && call.audioPaths.length ? call.audioPaths : [call.audioPath];
       const hint = String(settings.whisperHint || DEFAULT_WHISPER_HINT);
-      const texts = [];
-      for (let i = 0; i < parts.length; i += 1) {
-        await callRef.update({ step: parts.length > 1 ? `transcriberen (deel ${i + 1} van ${parts.length})` : "transcriberen" });
-        texts.push(await transcribePart(parts[i], hint, GROQ_API_KEY.value()));
+      const partTexts = [];
+      for (let p = 0; p < sources.length; p += 1) {
+        const dir = path.join(workDir, `bron${p}`);
+        fs.mkdirSync(dir);
+        const input = path.join(dir, "origineel");
+        await admin.storage().bucket().file(sources[p]).download({ destination: input });
+        const parts = await splitAudio(input, dir);
+        const texts = [];
+        for (let i = 0; i < parts.length; i += 1) {
+          const label = [sources.length > 1 ? `opnamedeel ${p + 1} van ${sources.length}` : "", parts.length > 1 ? `stuk ${i + 1} van ${parts.length}` : ""].filter(Boolean).join(", ");
+          await callRef.update({ step: label ? `transcriberen (${label})` : "transcriberen" });
+          texts.push(await transcribePart(parts[i], hint, GROQ_API_KEY.value()));
+        }
+        partTexts.push(texts.filter(Boolean).join("\n"));
+        audioSeconds += parts.length * SEGMENT_SECONDS; // grove schatting, alleen informatief
       }
-      transcript = texts.filter(Boolean).join("\n\n");
-      audioSeconds = parts.length > 1 ? (parts.length - 1) * SEGMENT_SECONDS : 0; // grove schatting, alleen informatief
+      const texts = partTexts.filter(Boolean);
+      transcript = texts.join("\n\n[De opname was hier even onderbroken; een stuk van het gesprek ontbreekt.]\n\n");
       if (!transcript.trim()) throw new CallError("empty", "In de opname is geen spraak gevonden. Controleer de audio (downloaden) en probeer eventueel een ander bestand.");
       await callRef.update({ transcript, transcriptAt: admin.firestore.FieldValue.serverTimestamp(), audioSeconds });
     }
@@ -344,11 +362,13 @@ exports.cleanupCallAudio = onSchedule({ schedule: "every day 04:00", timeZone: "
   let removed = 0;
   for (const d of snap.docs) {
     const call = d.data();
-    if (call.status !== "approved" || !call.audioPath) continue;
+    const paths = Array.isArray(call.audioPaths) && call.audioPaths.length ? call.audioPaths : call.audioPath ? [call.audioPath] : [];
+    if (call.status !== "approved" || !paths.length) continue;
     try {
-      await admin.storage().bucket().file(call.audioPath).delete({ ignoreNotFound: true });
+      for (const p of paths) await admin.storage().bucket().file(p).delete({ ignoreNotFound: true });
       await d.ref.update({
         audioPath: null,
+        audioPaths: admin.firestore.FieldValue.delete(),
         audioDeletedAt: admin.firestore.FieldValue.serverTimestamp(),
         audioDeleteAfter: admin.firestore.FieldValue.delete(),
         transcript: admin.firestore.FieldValue.delete(),
