@@ -13,7 +13,7 @@ export const MODEL_PRICES = {
 };
 
 /** Maximale lengte van het AI-antwoord. Begrenst ook de kosten per gesprek. */
-export const MAX_OUTPUT_TOKENS = 6000;
+export const MAX_OUTPUT_TOKENS = 16000; // ruimte voor denkwerk + antwoord; max ± $0,16 per gesprek
 
 export function costUsd(model, usage) {
   const p = MODEL_PRICES[model] || MODEL_PRICES[DEFAULT_MODEL];
@@ -220,7 +220,7 @@ Voorbeeld van de gewenste stijl:
 
 ---
 
-Lever het resultaat altijd via de tool "lead_teksten".`;
+Lever het resultaat altijd via de tool "lead_teksten", precies één keer, zonder verdere tekst.`;
 }
 
 export function buildUserMessage({ naam, telefoon, zekerWeten, transcript, datum }) {

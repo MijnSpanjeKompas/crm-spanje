@@ -140,8 +140,12 @@ async function callClaude({ model, system, user, apiKey }) {
         model,
         max_tokens: MAX_OUTPUT_TOKENS,
         system,
+        // Sonnet 5.5 ondersteunt geen "geforceerde" tool-keuze; "auto" + duidelijke
+        // instructie werkt, met een JSON-vangnet hieronder. Effort "medium" houdt
+        // het denkwerk (en dus de kosten) beperkt.
+        output_config: { effort: "medium" },
         tools: [OUTPUT_TOOL],
-        tool_choice: { type: "tool", name: OUTPUT_TOOL.name },
+        tool_choice: { type: "auto" },
         messages: [{ role: "user", content: user }],
       }),
     });
@@ -160,18 +164,31 @@ async function callClaude({ model, system, user, apiKey }) {
     if (/credit balance/i.test(msg)) throw new CallError("credit", "Het Claude-tegoed is op. Waardeer op in de Anthropic-console en klik daarna op 'Opnieuw verwerken'. Audio en transcript zijn bewaard.", msg);
     if (res.status === 401 || res.status === 403) throw new CallError("anthropic_key", "De Anthropic API-key klopt niet. Controleer ANTHROPIC_API_KEY.", msg);
     if (res.status === 429 || res.status === 529 || res.status >= 500) throw new CallError("busy", "Claude is even overbelast. Probeer het over een paar minuten opnieuw; het transcript is bewaard.", msg);
-    if (/model/i.test(msg)) throw new CallError("model", `Het gekozen AI-model wordt niet herkend (${model}). Kies een ander model onder Instellingen.`, msg);
-    throw new CallError("anthropic", `Claude gaf een fout (status ${res.status}). Probeer het opnieuw.`, msg);
+    if (res.status === 404 || json?.error?.type === "not_found_error") throw new CallError("model", `Het gekozen AI-model wordt niet herkend (${model}). Kies een ander model onder Instellingen.`, msg);
+    throw new CallError("anthropic", `Claude gaf een fout (status ${res.status}): ${msg.slice(0, 200)}`, msg);
   }
-  const tool = (json?.content || []).find((c) => c.type === "tool_use");
   const usage = json?.usage || {};
-  if (!tool || !tool.input) {
-    throw Object.assign(new CallError("anthropic", "Claude gaf geen bruikbaar antwoord. Probeer het opnieuw.", text.slice(0, 500)), { usage });
-  }
-  if (json.stop_reason === "max_tokens") {
+  if (json?.stop_reason === "max_tokens") {
     throw Object.assign(new CallError("anthropic", "Het antwoord van Claude was te lang en is afgebroken. Probeer het opnieuw.", ""), { usage });
   }
-  return { result: tool.input, usage };
+  const blocks = json?.content || [];
+  const tool = blocks.find((c) => c.type === "tool_use" && c.name === OUTPUT_TOOL.name);
+  let result = tool && tool.input;
+  if (!result) {
+    // Vangnet: antwoord als JSON in gewone tekst.
+    const raw = blocks.filter((c) => c.type === "text").map((c) => c.text).join("\n");
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    try {
+      if (start >= 0 && end > start) result = JSON.parse(raw.slice(start, end + 1));
+    } catch (e) {
+      result = null;
+    }
+  }
+  if (!result || !result.uitgebreid) {
+    throw Object.assign(new CallError("anthropic", "Claude gaf geen bruikbaar antwoord. Probeer het opnieuw.", text.slice(0, 500)), { usage });
+  }
+  return { result, usage };
 }
 
 function cleanResult(r) {
