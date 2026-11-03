@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { CODE_LENGTH, checkProfileCode } from "../crm/profiles";
 import { authErrorMessage } from "../crm/useCrmAuth";
 import { btnStyle, inputStyle, labelStyle, linkBtnStyle, Notice, BrandLogo, C } from "./ui";
 
@@ -150,35 +151,159 @@ export function LoginScreen({ onSignIn, onResetPassword }) {
   );
 }
 
-/** Na het inloggen: kies met welk profiel je werkt (Luke of Indy). */
+const MAX_TRIES = 5;
+const LOCK_SECONDS = 30;
+
+/** Code van 4 cijfers voor het gekozen profiel. Typen of plakken; controleert automatisch. */
+function CodeEntry({ profile, onOk, onBack }) {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [tries, setTries] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState(0);
+  const [, tick] = useState(0);
+  const inputRef = useRef(null);
+  const locked = lockedUntil > Date.now();
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+  useEffect(() => {
+    if (!locked) return undefined;
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [locked]);
+
+  function check(value) {
+    if (checkProfileCode(profile.id, value)) {
+      onOk(profile.id);
+      return;
+    }
+    const n = tries + 1;
+    setTries(n);
+    setCode("");
+    if (n >= MAX_TRIES) {
+      setLockedUntil(Date.now() + LOCK_SECONDS * 1000);
+      setTries(0);
+      setError(`Te vaak een verkeerde code. Wacht ${LOCK_SECONDS} seconden.`);
+    } else {
+      setError("Deze code klopt niet. Probeer het opnieuw.");
+    }
+    inputRef.current?.focus();
+  }
+
+  function onChange(e) {
+    if (locked) return;
+    const v = e.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH);
+    setCode(v);
+    setError("");
+    if (v.length === CODE_LENGTH) check(v);
+  }
+
+  const wait = locked ? Math.ceil((lockedUntil - Date.now()) / 1000) : 0;
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (code.length === CODE_LENGTH && !locked) check(code);
+      }}
+      style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}
+    >
+      <span aria-hidden="true" style={{ width: 56, height: 56, borderRadius: 99, background: C.gold, color: C.navyDark, fontSize: 22, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {profile.displayName[0]}
+      </span>
+      <label htmlFor="profiel-code" style={{ fontSize: 15, fontWeight: 600, color: C.navy }}>
+        Code voor {profile.displayName}
+      </label>
+      <div style={{ position: "relative", width: 232 }} onClick={() => inputRef.current?.focus()}>
+        <div aria-hidden="true" style={{ display: "grid", gridTemplateColumns: `repeat(${CODE_LENGTH}, 1fr)`, gap: 10 }}>
+          {Array.from({ length: CODE_LENGTH }).map((_, i) => (
+            <span
+              key={i}
+              style={{
+                height: 56,
+                borderRadius: 14,
+                border: `1.5px solid ${error ? C.danger : i === code.length ? C.navy : C.border}`,
+                background: C.surface,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 26,
+                color: C.navy,
+              }}
+            >
+              {i < code.length ? "•" : ""}
+            </span>
+          ))}
+        </div>
+        <input
+          id="profiel-code"
+          ref={inputRef}
+          className="msk-bare"
+          type="password"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          autoComplete="off"
+          maxLength={CODE_LENGTH}
+          value={code}
+          onChange={onChange}
+          disabled={locked}
+          aria-invalid={Boolean(error)}
+          aria-describedby="profiel-code-uitleg"
+          style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", fontSize: 16, border: "none", background: "transparent", caretColor: "transparent" }}
+        />
+      </div>
+      <div id="profiel-code-uitleg" role="status" aria-live="polite" style={{ minHeight: 20, fontSize: 13, color: error ? C.danger : C.textMuted, textAlign: "center" }}>
+        {locked ? `Even wachten: nog ${wait} seconden.` : error || `Typ je code van ${CODE_LENGTH} cijfers.`}
+      </div>
+      <button type="button" onClick={onBack} className="msk-link" style={{ ...linkBtnStyle, fontSize: 13, color: C.textMuted }}>
+        Ander profiel kiezen
+      </button>
+    </form>
+  );
+}
+
+/** Na het inloggen: kies met welk profiel je werkt (Luke of Indy) en voer de code in. */
 export function ProfilePicker({ profiles, onPick, onSignOut }) {
+  const [chosen, setChosen] = useState(null);
+  const profile = profiles.find((p) => p.id === chosen);
   return (
     <div style={shell}>
       <div style={box}>
-        <BrandPanel />
-        <div style={{ flex: "1 1 340px", padding: "40px 38px", display: "flex", flexDirection: "column", gap: 16, justifyContent: "center" }}>
-          <div style={{ marginBottom: 4 }}>
-            <h1 style={{ fontFamily: C.fontDisplay, fontSize: 26, fontWeight: 600, color: C.navy, margin: 0, lineHeight: 1.2 }}>Wie werkt er?</h1>
-            <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, lineHeight: 1.5 }}>
-              Kies je profiel. Alles wat je doet komt op jouw naam in de tijdlijn. Jullie zien elkaars wijzigingen direct.
-            </div>
+        <div className="msk-hide-sm" style={{ display: "flex", flex: "1 1 320px" }}>
+          <BrandPanel />
+        </div>
+        <div style={{ flex: "1 1 340px", padding: "36px 32px", display: "flex", flexDirection: "column", gap: 16, justifyContent: "center" }}>
+          <div className="msk-show-sm" style={{ justifyContent: "center", marginBottom: 4 }}>
+            <BrandLogo height={52} />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
-            {profiles.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => onPick(p.id)}
-                className="msk-kpi"
-                style={{ border: `1px solid ${C.border}`, background: C.surface, borderRadius: 16, padding: "22px 14px", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}
-              >
-                <span aria-hidden="true" style={{ width: 56, height: 56, borderRadius: 99, background: C.gold, color: C.navyDark, fontSize: 22, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {p.displayName[0]}
-                </span>
-                <span style={{ fontSize: 16, fontWeight: 600, color: C.navy }}>{p.displayName}</span>
-              </button>
-            ))}
-          </div>
+          {profile ? (
+            <CodeEntry profile={profile} onOk={onPick} onBack={() => setChosen(null)} />
+          ) : (
+            <>
+              <div style={{ marginBottom: 4 }}>
+                <h1 style={{ fontFamily: C.fontDisplay, fontSize: 26, fontWeight: 600, color: C.navy, margin: 0, lineHeight: 1.2 }}>Wie werkt er?</h1>
+                <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, lineHeight: 1.5 }}>
+                  Kies je profiel en voer je code in. Alles wat je doet komt op jouw naam in de tijdlijn.
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                {profiles.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setChosen(p.id)}
+                    className="msk-kpi"
+                    style={{ border: `1px solid ${C.border}`, background: C.surface, borderRadius: 16, padding: "20px 12px", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}
+                  >
+                    <span aria-hidden="true" style={{ width: 52, height: 52, borderRadius: 99, background: C.gold, color: C.navyDark, fontSize: 21, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {p.displayName[0]}
+                    </span>
+                    <span style={{ fontSize: 16, fontWeight: 600, color: C.navy }}>{p.displayName}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           <button type="button" onClick={onSignOut} className="msk-link" style={{ ...linkBtnStyle, fontSize: 12.5, alignSelf: "center", color: C.textMuted }}>
             Uitloggen
           </button>

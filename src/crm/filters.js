@@ -36,6 +36,8 @@ export const DEFAULT_FILTERS = {
   quick: null,
   // Tabblad "Recent toegevoegd": binnengekomen in de laatste RECENT_DAYS dagen, nieuwste eerst.
   recent: false,
+  // Tabblad "Prullenbak"
+  trash: false,
 };
 
 export const RECENT_DAYS = 30;

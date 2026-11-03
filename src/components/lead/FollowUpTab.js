@@ -246,11 +246,15 @@ function NextActionSection({ form, set, setMany, errors, users, user, lead, acti
     try {
       const action = Object.fromEntries(NEXT_ACTION_KEYS.map((k) => [k, form[k]]));
       clearEdits && clearEdits(NEXT_ACTION_KEYS);
-      await completeNextAction(lead, action, { note: doneNote }, user);
+      const res = await completeNextAction(lead, action, { note: doneNote }, user);
       setDoneOpen(false);
       setDoneNote("");
-      setMessage && setMessage({ tone: "ok", text: `Afgevinkt: ${nextActionText(action)}. Plan hieronder meteen de volgende actie.` });
-      setEditing(true);
+      if (res?.nextPlanned) {
+        setMessage && setMessage({ tone: "ok", text: `Afgevinkt: ${nextActionText(action)}. De volgende check staat over 2 weken in de agenda.` });
+      } else {
+        setMessage && setMessage({ tone: "ok", text: `Afgevinkt: ${nextActionText(action)}. Plan hieronder meteen de volgende actie.` });
+        setEditing(true);
+      }
     } catch (e) {
       setMessage && setMessage({ tone: "error", text: `Afvinken mislukt: ${e.message || "onbekende fout"}` });
     } finally {

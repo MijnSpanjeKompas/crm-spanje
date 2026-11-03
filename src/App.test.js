@@ -153,22 +153,35 @@ test("archiveren via kaart vraagt bevestiging en verwijdert niets", async () => 
   expect(archived).toHaveLength(1);
 });
 
-test("verwijderen via kaart: na bevestiging is de lead echt weg, zonder bevestiging niet", async () => {
+test("verwijderen via kaart: naar de prullenbak (niets echt weg), terugzetten kan", async () => {
   render(<App />);
   await cardTitle("Ed en Norma Heerschap");
   window.confirm = jest.fn(() => false);
   fireEvent.click(screen.getAllByRole("button", { name: /Meer acties voor/ })[0]);
   await act(async () => {
-    fireEvent.click(screen.getByRole("menuitem", { name: /Lead verwijderen/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Naar prullenbak/ }));
   });
-  expect(["ewoud", "heerschap"].every((id) => fake.__getDoc(`leads/${id}`))).toBe(true);
+  expect(["ewoud", "heerschap"].every((id) => !fake.__getDoc(`leads/${id}`).deletedAt)).toBe(true);
 
   window.confirm = jest.fn(() => true);
   fireEvent.click(screen.getAllByRole("button", { name: /Meer acties voor/ })[0]);
   await act(async () => {
-    fireEvent.click(screen.getByRole("menuitem", { name: /Lead verwijderen/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Naar prullenbak/ }));
   });
-  await waitFor(() => expect(["ewoud", "heerschap"].filter((id) => fake.__getDoc(`leads/${id}`))).toHaveLength(1));
+  // Document bestaat nog, maar staat in de prullenbak en is uit de lijst verdwenen.
+  await waitFor(() => expect(["ewoud", "heerschap"].filter((id) => fake.__getDoc(`leads/${id}`).deletedAt)).toHaveLength(1));
+  const trashed = ["ewoud", "heerschap"].find((id) => fake.__getDoc(`leads/${id}`).deletedAt);
+  const name = trashed === "ewoud" ? "Ewoud Kremer" : "Ed en Norma Heerschap";
+  await waitFor(() => expect(screen.queryAllByText(name).filter((el) => el.tagName === "DIV")).toHaveLength(0));
+
+  // Prullenbak openen en terugzetten
+  fireEvent.click(screen.getAllByRole("button", { name: /^Meer$/ })[0]);
+  fireEvent.click(screen.getByRole("menuitem", { name: /Prullenbak/ }));
+  expect(await screen.findByText(/wordt over 30 dagen definitief gewist/)).toBeInTheDocument();
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: /Terugzetten/ }));
+  });
+  await waitFor(() => expect(fake.__getDoc(`leads/${trashed}`).deletedAt).toBeNull());
 });
 
 test("Aankoop afgerond: vastleggen en terugzien onder Commissies", async () => {

@@ -388,3 +388,82 @@ select.msk-stage-select:focus {
 .msk-md li { margin: 2px 0; }
 .msk-md mark.check { background: var(--msk-gold-soft); color: #7d5710; padding: 0 3px; border-radius: 3px; }
 .msk-recbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 1200; width: min(640px, calc(100% - 32px)); }
+
+/* ─── Telefoon ──────────────────────────────────────────────────────────── */
+/* Onderbalk-navigatie: alleen op de telefoon (de zijbalk is daar verborgen). */
+.msk-bottomnav {
+  display: none;
+}
+.msk-show-sm {
+  display: none !important;
+}
+
+@media (max-width: 720px) {
+  .msk-show-sm {
+    display: flex !important;
+  }
+  .msk-bottomnav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 950;
+    background: var(--msk-surface-warm);
+    border-top: 1px solid var(--msk-border);
+    padding: 2px 4px env(safe-area-inset-bottom);
+    box-shadow: 0 -4px 18px rgba(16, 42, 67, 0.06);
+  }
+  /* Ruimte onder de pagina zodat niets achter de onderbalk verdwijnt. */
+  .msk-container {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important;
+  }
+  .msk-recbar {
+    bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+  }
+  /* iPhone zoomt in bij tekstvelden kleiner dan 16px: voorkomen. */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+  .msk-header-inner {
+    height: 58px !important;
+    gap: 8px !important;
+  }
+  /* Dashboard: "Recent binnengekomen" als compacte kaartjes. */
+  .msk-recent-row {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    row-gap: 6px !important;
+  }
+  .msk-recent-row > :nth-child(1) { grid-column: 1; grid-row: 1; }
+  .msk-recent-row > :nth-child(2) { grid-column: 1; grid-row: 2; }
+  .msk-recent-row > :nth-child(3) { grid-column: 2; grid-row: 1; justify-self: end; }
+  .msk-recent-row > :nth-child(4) { grid-column: 2; grid-row: 2; }
+  /* Agenda: week onder elkaar in plaats van 7 kolommen naast elkaar. */
+  .msk-week {
+    grid-template-columns: minmax(0, 1fr) !important;
+    overflow: visible !important;
+  }
+  .msk-week > div {
+    min-height: 0 !important;
+  }
+  /* Leaddossier: kleinere titel, knoppen als icoon. */
+  .msk-lead-title {
+    font-size: 21px !important;
+  }
+  .msk-action-link {
+    min-width: 42px;
+    min-height: 42px !important;
+    justify-content: center;
+    padding: 0 !important;
+  }
+  .msk-modal-footer {
+    padding-top: 8px !important;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+  }
+  /* Grotere aanraakvlakken voor tabbladen. */
+  .msk-tab {
+    min-height: 44px;
+  }
+}

@@ -149,7 +149,7 @@ export function DashboardPage({ user, leads, tasks, links, now, onOpenLead, onNe
             const links2 = contactLinks(l);
             const where = (l.regions || []).filter((r) => r !== "unknown").map((r) => labelOf(REGIONS, r))[0] || (l.places || [])[0] || "Regio onbekend";
             return (
-              <div key={l.id} className="msk-row" style={{ display: "grid", gridTemplateColumns: "minmax(150px, 1.2fr) minmax(170px, 1.6fr) 130px 112px", gap: 12, alignItems: "center", padding: "10px 6px", borderBottom: `1px solid ${C.borderSoft}` }}>
+              <div key={l.id} className="msk-row msk-recent-row" style={{ display: "grid", gridTemplateColumns: "minmax(150px, 1.2fr) minmax(170px, 1.6fr) 130px 112px", gap: 12, alignItems: "center", padding: "10px 6px", borderBottom: `1px solid ${C.borderSoft}` }}>
                 <button type="button" onClick={() => onOpenLead(l)} style={{ border: "none", background: "none", padding: 0, textAlign: "left", cursor: "pointer", fontFamily: "inherit", minWidth: 0 }}>
                   <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, color: C.text }}>{l.name || "Naam onbekend"}</span>
                   <span style={{ display: "block", fontSize: 12, color: C.textMuted }}>

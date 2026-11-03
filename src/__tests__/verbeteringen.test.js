@@ -13,14 +13,21 @@ import {
   backfillContactAttempts,
   subscribeNotificationReads,
   saveNotificationReads,
+  moveLeadToTrash,
+  restoreFromTrash,
+  purgeExpiredTrash,
+  saveAdSpendMonth,
+  subscribeAdSpend,
 } from "../crm/services";
+import { adPerformance, adSpendInPeriod, getPeriod } from "../crm/analytics";
+import { buildDigest } from "../crm/digest";
 import { normalizeLead, emptyLead } from "../crm/normalize";
 import { reached, reachedAt, deriveFirstHandling } from "../crm/milestones";
 import { blockingErrors } from "../crm/validation";
 import { buildAgendaItems } from "../crm/agenda";
 import { applyFilters, DEFAULT_FILTERS } from "../crm/filters";
 import { followUpStats, kpiSummary } from "../crm/analytics";
-import { PROFILES, profileUser, profileNameOnly } from "../crm/profiles";
+import { PROFILES, profileUser, profileNameOnly, checkProfileCode } from "../crm/profiles";
 import { todayISO, addDaysISO } from "../crm/dates";
 import { ProfilePicker } from "../components/LoginScreen";
 
@@ -54,11 +61,23 @@ describe("profielen", () => {
     expect(cm).toMatchObject({ createdByName: "Indy", actorId: "indy", actorType: "human" });
   });
 
-  test("profielkeuze toont Luke en Indy", () => {
+  test("profielkeuze vraagt een code: verkeerde code weigert, juiste code laat je erin", () => {
     const pick = jest.fn();
     render(<ProfilePicker profiles={PROFILES} onPick={pick} onSignOut={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /Indy/ }));
+    const input = screen.getByLabelText(/Code voor Indy/);
+    fireEvent.change(input, { target: { value: "3636" } }); // code van Luke
+    expect(pick).not.toHaveBeenCalled();
+    expect(screen.getByText(/klopt niet/)).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "1306" } });
     expect(pick).toHaveBeenCalledWith("indy");
+  });
+
+  test("codes: Luke 3636, Indy 1306", () => {
+    expect(checkProfileCode("luke", "3636")).toBe(true);
+    expect(checkProfileCode("indy", "1306")).toBe(true);
+    expect(checkProfileCode("luke", "1306")).toBe(false);
+    expect(checkProfileCode("indy", "")).toBe(false);
   });
 
   test("oude accountnamen worden niet als persoon getoond", () => {
@@ -126,7 +145,7 @@ describe("volgende actie afvinken", () => {
 });
 
 describe("KPI's: teruggezette fase", () => {
-  test("test op Gereserveerd/Aankoop afgerond die is teruggezet telt niet meer mee", async () => {
+  test("proef op Gereserveerd/Aankoop afgerond die is teruggezet telt niet meer mee", async () => {
     const id = await newLead();
     // Situatie zoals bij de test: mijlpalen staan nog, lead staat weer op een eerdere fase.
     fake.__setDoc(`leads/${id}`, { ...fake.__getDoc(`leads/${id}`), pipelineStage: "partner_connected", firstReservedAt: new Date(2026, 9, 1), purchaseCompletedAt: new Date(2026, 9, 2), firstForwardedAt: new Date(2026, 9, 1) });
@@ -233,5 +252,88 @@ describe("notificaties", () => {
     expect(again[again.length - 1]).toEqual(["late:x", "new:y"]);
     expect(got).toEqual(["late:x", "new:y"]);
     unsub && unsub();
+  });
+});
+
+describe("prullenbak", () => {
+  test("verplaatsen, terugzetten en na 30 dagen definitief wissen", async () => {
+    const id = await newLead();
+    await moveLeadToTrash(read(id), INDY);
+    let raw = fake.__getDoc(`leads/${id}`);
+    expect(raw.deletedAt).toBeInstanceOf(Date);
+    expect(raw.deletedByName).toBe("Indy");
+    expect(Math.round((raw.purgeAfter - Date.now()) / 86400000)).toBe(30);
+    await restoreFromTrash(read(id), LUKE);
+    raw = fake.__getDoc(`leads/${id}`);
+    expect(raw.deletedAt).toBeNull();
+    // Opnieuw verwijderen, 31 dagen later legen
+    await moveLeadToTrash(read(id), LUKE);
+    expect(await purgeExpiredTrash([read(id)], new Date())).toBe(0);
+    expect(await purgeExpiredTrash([read(id)], new Date(Date.now() + 31 * 86400000))).toBe(1);
+    expect(fake.__getDoc(`leads/${id}`)).toBeUndefined();
+  });
+});
+
+describe("automatisch makelaar checken na doorsturen", () => {
+  test("fase naar Doorgestuurd plant 'Contact met makelaar checken' over 14 dagen", async () => {
+    const id = await newLead({ nextActionType: "follow_up_whatsapp", nextActionDate: todayISO(), pipelineStage: "appointment_scheduled", appointmentDate: todayISO(), appointmentStatus: "completed" });
+    const lead = read(id);
+    const res = await updateLead(lead, { ...lead, pipelineStage: "partner_connected" }, LUKE);
+    expect(res.autoFollowUp).toBe(true);
+    const raw = fake.__getDoc(`leads/${id}`);
+    expect(raw).toMatchObject({ pipelineStage: "partner_connected", nextActionType: "check_realtor", nextActionDate: addDaysISO(todayISO(), 14), nextActionAssignedToName: "Luke" });
+  });
+
+  test("zelf in dezelfde handeling een andere actie gekozen → die blijft", async () => {
+    const id = await newLead({ nextActionType: "follow_up_whatsapp", nextActionDate: todayISO() });
+    const lead = read(id);
+    await updateLead(lead, { ...lead, pipelineStage: "partner_connected", nextActionType: "follow_up_spain_visit", nextActionDate: addDaysISO(todayISO(), 30) }, LUKE);
+    expect(fake.__getDoc(`leads/${id}`).nextActionType).toBe("follow_up_spain_visit");
+  });
+
+  test("check afgevinkt terwijl lead nog Doorgestuurd is → volgende check weer over 14 dagen", async () => {
+    const id = await newLead({ pipelineStage: "partner_connected", nextActionType: "check_realtor", nextActionDate: todayISO() });
+    const lead = read(id);
+    const res = await completeNextAction(lead, lead, {}, INDY);
+    expect(res.nextPlanned).toBeTruthy();
+    expect(fake.__getDoc(`leads/${id}`)).toMatchObject({ nextActionType: "check_realtor", nextActionDate: addDaysISO(todayISO(), 14) });
+  });
+});
+
+describe("advertentiekosten", () => {
+  test("kosten per lead en per doorgestuurde lead", async () => {
+    await saveAdSpendMonth("2026-10", { total: 600, campaigns: { najaar: 400, oud: 50 } }, LUKE);
+    await saveAdSpendMonth("2026-10", { total: 600, campaigns: { najaar: 400 } }, LUKE); // "oud" leeggemaakt
+    let months = null;
+    subscribeAdSpend((m) => (months = m));
+    expect(months["2026-10"].campaigns).toEqual({ najaar: 400 });
+    const mk = (id, extra) => normalizeLead({ id, schemaVersion: 2, name: id, leadSource: "meta_ads", utmCampaign: "najaar", sourceSubmittedAt: new Date(2026, 9, 10), pipelineStage: "new_lead", ...extra });
+    const leads = [mk("a"), mk("b"), mk("c", { pipelineStage: "partner_connected" }), normalizeLead({ id: "w", schemaVersion: 2, name: "w", leadSource: "website_questionnaire", sourceSubmittedAt: new Date(2026, 9, 10) })];
+    const period = getPeriod("month", new Date(2026, 9, 15));
+    const perf = adPerformance(leads, months, period);
+    expect(perf).toMatchObject({ spend: 600, leads: 3, forwarded: 1, perLead: 200, perForwarded: 600 });
+    expect(perf.campaigns.find((c) => c.name === "najaar")).toMatchObject({ spend: 400, leads: 3, perForwarded: 400 });
+    // Halve maand → half budget
+    expect(Math.round(adSpendInPeriod(months, { start: new Date(2026, 9, 1), end: new Date(2026, 9, 16, 12) }))).toBe(300);
+  });
+});
+
+describe("dagelijks overzicht", () => {
+  test("bevat vandaag, te laat en nieuw binnen; slaat prullenbak over", () => {
+    const now = new Date();
+    const today = todayISO(now);
+    const leads = [
+      normalizeLead({ id: "a", schemaVersion: 2, name: "Anna", pipelineStage: "appointment_scheduled", appointmentStatus: "scheduled", appointmentDate: today, appointmentTime: "10:00", nextActionType: "none" }),
+      normalizeLead({ id: "b", schemaVersion: 2, name: "Bram", pipelineStage: "partner_connected", nextActionType: "check_realtor", nextActionDate: addDaysISO(today, -3), nextActionAssignedTo: "luke", nextActionAssignedToName: "Luke" }),
+      normalizeLead({ id: "c", schemaVersion: 2, name: "Cees", pipelineStage: "new_lead", sourceSubmittedAt: new Date(now.getTime() - 3600 * 1000), nextActionType: "none", leadSource: "meta_ads" }),
+      normalizeLead({ id: "d", schemaVersion: 2, name: "Weg", pipelineStage: "new_lead", deletedAt: new Date(), nextActionType: "call_back", nextActionDate: today }),
+    ];
+    const mail = buildDigest({ leads, now, profile: PROFILES[0], crmUrl: "https://crm.example.nl" });
+    expect(mail.counts).toEqual({ today: 1, late: 1, fresh: 1 });
+    expect(mail.subject).toMatch(/1 vandaag, 1 te laat, 1 nieuw/);
+    expect(mail.text).toMatch(/Goedemorgen Luke/);
+    expect(mail.text).toMatch(/Bram – Contact met makelaar checken · Luke \(jij\)/);
+    expect(mail.html).toContain("https://crm.example.nl");
+    expect(mail.text).not.toMatch(/Weg/);
   });
 });

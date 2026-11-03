@@ -103,6 +103,71 @@ export function Sidebar({ page, navigate, collapsed, setCollapsed, badges = {} }
   );
 }
 
+// ─── ONDERBALK (TELEFOON) ────────────────────────────────────────────────────
+// Op de telefoon verdwijnt de zijbalk; dan staat de navigatie onderin, binnen
+// bereik van je duim. "Meer" opent de overige pagina's en profiel/uitloggen.
+const MOBILE_MAIN = ["dashboard", "leads", "agenda", "kpis"];
+
+export function BottomNav({ page, navigate, badges = {}, user, onSwitchProfile, onSignOut }) {
+  const [open, setOpen] = useState(false);
+  const all = [...ROUTES, ...BOTTOM_ROUTES];
+  const main = MOBILE_MAIN.map((k) => all.find((r) => r.key === k)).filter(Boolean);
+  const more = all.filter((r) => !MOBILE_MAIN.includes(r.key));
+  const moreActive = more.some((r) => r.key === page);
+  const go = (k) => {
+    setOpen(false);
+    navigate(k);
+  };
+  const item = (r, active, onClick, badge) => (
+    <button
+      key={r.key}
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      style={{ flex: 1, border: "none", background: "none", padding: "8px 2px 6px", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: active ? C.navy : C.textMuted, fontFamily: "inherit", fontSize: 11, fontWeight: active ? 700 : 500, cursor: "pointer", position: "relative", minWidth: 0 }}
+    >
+      <span style={{ display: "flex", padding: "3px 14px", borderRadius: 99, background: active ? C.goldSoft : "transparent" }}>
+        <Icon name={r.icon} size={20} />
+      </span>
+      {r.label === "Help / handleiding" ? "Help" : r.label}
+      {badge > 0 && <span style={{ position: "absolute", top: 4, left: "calc(50% + 8px)", background: C.danger, color: "#fff", borderRadius: 99, fontSize: 10, fontWeight: 700, padding: "0 5px", minWidth: 16, lineHeight: "16px", textAlign: "center" }}>{badge}</span>}
+    </button>
+  );
+  return (
+    <>
+      {open && (
+        <div className="msk-bottom-sheet-overlay" onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(10,34,56,.35)", zIndex: 940 }}>
+          <div
+            role="menu"
+            aria-label="Meer"
+            onClick={(e) => e.stopPropagation()}
+            style={{ position: "absolute", left: 8, right: 8, bottom: "calc(72px + env(safe-area-inset-bottom))", background: C.surface, borderRadius: 18, boxShadow: C.shadowMd, padding: 8 }}
+          >
+            {more.map((r) => (
+              <button key={r.key} type="button" role="menuitem" onClick={() => go(r.key)} className="msk-list-btn" style={{ display: "flex", gap: 12, alignItems: "center", width: "100%", border: "1px solid transparent", background: page === r.key ? C.navySoft : "none", borderRadius: 12, padding: "13px 12px", fontSize: 15, fontFamily: "inherit", color: C.text, cursor: "pointer", fontWeight: page === r.key ? 600 : 500 }}>
+                <Icon name={r.icon} size={18} /> {r.label}
+              </button>
+            ))}
+            <div style={{ height: 1, background: C.borderSoft, margin: "6px 8px" }} />
+            {onSwitchProfile && (
+              <button type="button" role="menuitem" onClick={() => { setOpen(false); onSwitchProfile(); }} className="msk-list-btn" style={{ display: "flex", gap: 12, alignItems: "center", width: "100%", border: "1px solid transparent", background: "none", borderRadius: 12, padding: "13px 12px", fontSize: 15, fontFamily: "inherit", color: C.text, cursor: "pointer" }}>
+                <Icon name="users" size={18} /> Wissel profiel <span style={{ marginLeft: "auto", fontSize: 13, color: C.textMuted }}>nu: {user?.displayName}</span>
+              </button>
+            )}
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); onSignOut(); }} className="msk-list-btn" style={{ display: "flex", gap: 12, alignItems: "center", width: "100%", border: "1px solid transparent", background: "none", borderRadius: 12, padding: "13px 12px", fontSize: 15, fontFamily: "inherit", color: C.danger, cursor: "pointer" }}>
+              <Icon name="logout" size={18} /> Uitloggen
+            </button>
+          </div>
+        </div>
+      )}
+      <nav aria-label="Navigatie telefoon" className="msk-bottomnav">
+        {main.map((r) => item(r, page === r.key, () => go(r.key), badges[r.key]))}
+        {item({ key: "meer", label: "Meer", icon: "menu" }, moreActive || open, () => setOpen((v) => !v))}
+      </nav>
+    </>
+  );
+}
+
 // ─── UNIVERSEEL ZOEKEN ───────────────────────────────────────────────────────
 function searchIndex(leads, partners) {
   const leadRows = leads.map((l) => ({
@@ -328,12 +393,12 @@ export function Topbar({ user, onSignOut, onSwitchProfile, search, bell }) {
             </span>
           </div>
           {onSwitchProfile && (
-            <button type="button" onClick={onSwitchProfile} title="Ander profiel kiezen" aria-label="Ander profiel kiezen" style={{ ...btnStyle("neutral"), minHeight: 40 }}>
+            <button type="button" onClick={onSwitchProfile} title="Ander profiel kiezen" aria-label="Ander profiel kiezen" className="msk-hide-sm" style={{ ...btnStyle("neutral"), minHeight: 40 }}>
               <Icon name="users" size={15} />
               <span className="msk-hide-sm">Wissel profiel</span>
             </button>
           )}
-          <button type="button" onClick={onSignOut} title="Uitloggen" aria-label="Uitloggen" style={{ ...btnStyle("neutral"), minHeight: 40 }}>
+          <button type="button" onClick={onSignOut} title="Uitloggen" aria-label="Uitloggen" className="msk-hide-sm" style={{ ...btnStyle("neutral"), minHeight: 40 }}>
             <Icon name="logout" size={15} />
             <span className="msk-hide-sm">Uitloggen</span>
           </button>

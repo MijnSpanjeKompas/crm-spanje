@@ -33,7 +33,7 @@ function Sel({ value, onChange, allLabel, options }) {
 
 // Pipelinetabs: de dagelijkse fases direct zichtbaar, de rest onder "Meer".
 const PRIMARY_TABS = ["open", "recent", "new_lead", "appointment_scheduled", "partner_connected", "follow_up_later"];
-const MORE_TABS = ["purchase_process", "completed", "unreachable", "stopped", "archived"];
+const MORE_TABS = ["purchase_process", "completed", "unreachable", "stopped", "archived", "trash"];
 
 // Korte namen (volledige fasenaam in de tooltip).
 const SHORT_LABELS = {
@@ -45,6 +45,7 @@ const SHORT_LABELS = {
   follow_up_later: "Later",
   unreachable: "Niet bereikbaar",
   archived: "Archief",
+  trash: "Prullenbak",
 };
 
 function tabLabel(key) {
@@ -55,11 +56,13 @@ function tabTitle(key) {
   if (key === "open") return "Alle leads die nog lopen";
   if (key === "recent") return "Binnengekomen in de laatste 30 dagen, nieuwste bovenaan";
   if (key === "archived") return "Gearchiveerde leads";
+  if (key === "trash") return "Verwijderde leads (30 dagen terug te zetten)";
   return `Fase: ${labelOf(PIPELINE_STAGES, key)}`;
 }
 
 /** Welk tabblad hoort bij de huidige filters (null als een snelfilter actief is). */
 export function activeTabOf(filters) {
+  if (filters.trash) return "trash";
   if (filters.recent) return "recent";
   if (filters.quick) return null;
   if (filters.scope === "archived") return "archived";
@@ -68,10 +71,11 @@ export function activeTabOf(filters) {
 }
 
 export function filtersForTab(key) {
-  if (key === "recent") return { scope: "all", stage: "", quick: null, recent: true };
-  if (key === "open") return { scope: "open", stage: "", quick: null, recent: false };
-  if (key === "archived") return { scope: "archived", stage: "", quick: null, recent: false };
-  return { scope: "open", stage: key, quick: null, recent: false };
+  if (key === "trash") return { scope: "all", stage: "", quick: null, recent: false, trash: true };
+  if (key === "recent") return { scope: "all", stage: "", quick: null, recent: true, trash: false };
+  if (key === "open") return { scope: "open", stage: "", quick: null, recent: false, trash: false };
+  if (key === "archived") return { scope: "archived", stage: "", quick: null, recent: false, trash: false };
+  return { scope: "open", stage: key, quick: null, recent: false, trash: false };
 }
 
 function TabButton({ k, active, count, onChange, inMenu }) {

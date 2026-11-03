@@ -4,9 +4,10 @@ import { backfillMilestones } from "../../crm/services";
 import { Card, InfoRow, Notice, Icon, btnStyle, C } from "../ui";
 import { PageHeader } from "../shell/AppShell";
 import { CallSettingsCard } from "./CallSettingsCard";
+import { DigestSettingsCard } from "./DigestSettingsCard";
 
 /** Instellingen: account, voorkeuren en databeheer. */
-export function SettingsPage({ user, leads, view, setView, onImport, onResetNotifications, callSettings }) {
+export function SettingsPage({ user, leads, tasks = [], links = [], view, setView, onImport, onResetNotifications, callSettings }) {
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
@@ -34,11 +35,11 @@ export function SettingsPage({ user, leads, view, setView, onImport, onResetNoti
     <div>
       <PageHeader title="Instellingen" subtitle="Account, voorkeuren en databeheer." />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))", gap: 16, alignItems: "start" }}>
+        <DigestSettingsCard user={user} leads={leads} tasks={tasks} links={links} />
         <CallSettingsCard settings={callSettings} />
         <Card icon="user" title="Account">
-          <InfoRow label="Naam">{user.displayName}</InfoRow>
-          <InfoRow label="E-mail">{user.email}</InfoRow>
-          <InfoRow label="Rol">{user.isAdmin ? "Beheerder" : "Medewerker"}</InfoRow>
+          <InfoRow label="Profiel">{user.displayName}</InfoRow>
+          <InfoRow label="Ingelogd account">{user.email}</InfoRow>
         </Card>
         <Card icon="cog" title="Voorkeuren">
           <InfoRow

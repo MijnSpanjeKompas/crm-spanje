@@ -487,3 +487,65 @@ export function dataQuality(cohortLeads) {
     impliedLeads: cohortLeads.filter((l) => FUNNEL_ORDER.some((step) => reachedImplicitly(l, step))).length,
   };
 }
+
+// ─── ADVERTENTIEKOSTEN (Meta Ads) ────────────────────────────────────────────
+/** Leads die via betaalde advertenties binnenkwamen. */
+export const PAID_SOURCES = ["meta_ads"];
+
+export function isPaidLead(lead) {
+  return PAID_SOURCES.includes(lead.leadSource);
+}
+
+/** Totaal van een maand: ingevuld totaal, anders de som van de campagnes. */
+export function monthTotal(entry) {
+  if (!entry) return 0;
+  if (typeof entry.total === "number") return entry.total;
+  return Object.values(entry.campaigns || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+}
+
+/** Deel van een maand dat in de periode valt (0–1), op dagbasis. */
+function monthShare(monthKey, period) {
+  const [y, m] = monthKey.split("-").map(Number);
+  const start = new Date(y, m - 1, 1);
+  const end = new Date(y, m, 1);
+  if (!period || period.all) return 1;
+  const from = Math.max(start, period.start);
+  const to = Math.min(end, period.end);
+  if (to <= from) return 0;
+  return (to - from) / (end - start);
+}
+
+/** Uitgaven in een periode (maanden naar rato als de periode een deel van de maand is). */
+export function adSpendInPeriod(months, period, campaign = null) {
+  return Object.entries(months || {}).reduce((sum, [key, entry]) => {
+    const share = monthShare(key, period);
+    if (!share) return sum;
+    const amount = campaign ? Number(entry?.campaigns?.[campaign]) || 0 : monthTotal(entry);
+    return sum + amount * share;
+  }, 0);
+}
+
+/**
+ * Kosten per lead en per doorgestuurde lead voor een cohort.
+ * Alleen leads met bron Meta Ads tellen mee (de kosten horen daarbij).
+ */
+export function adPerformance(cohortLeads, months, period) {
+  const paid = cohortLeads.filter(isPaidLead);
+  const spend = adSpendInPeriod(months, period);
+  const forwarded = paid.filter((l) => reached(l, "forwarded")).length;
+  const purchased = paid.filter((l) => reached(l, "purchased")).length;
+  const per = (n) => (n > 0 && spend > 0 ? spend / n : null);
+  // Per campagne (alleen campagnes met leads of met ingevulde kosten)
+  const names = new Set(paid.map((l) => String(l.utmCampaign || "").trim()).filter(Boolean));
+  Object.values(months || {}).forEach((e) => Object.keys(e?.campaigns || {}).forEach((k) => names.add(k)));
+  const campaigns = Array.from(names)
+    .map((name) => {
+      const list = paid.filter((l) => String(l.utmCampaign || "").trim() === name);
+      const s = adSpendInPeriod(months, period, name);
+      const f = list.filter((l) => reached(l, "forwarded")).length;
+      return { name, spend: s, leads: list.length, forwarded: f, perLead: list.length && s ? s / list.length : null, perForwarded: f && s ? s / f : null };
+    })
+    .filter((c) => c.leads || c.spend)
+    .sort((a, b) => b.spend - a.spend || b.leads - a.leads);
+  return { spend, leads: paid.length, forwarded, purchased, perLead: per(paid.length), perForwarded: per(forwarded), perPurchase: per(purchased), campaigns };
+}

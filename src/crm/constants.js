@@ -459,6 +459,8 @@ export const THRESHOLDS = {
   PARTNER_FOLLOW_UP_DAYS: 7,
   /** "Binnenkort" = binnen zoveel dagen. */
   UPCOMING_DAYS: 7,
+  /** Na doorsturen (en na elke afgevinkte check) automatisch "Contact met makelaar checken" over zoveel dagen. */
+  REALTOR_CHECK_DAYS: 14,
 };
 
 // ─── BEZOEK SPANJE ───────────────────────────────────────────────────────────

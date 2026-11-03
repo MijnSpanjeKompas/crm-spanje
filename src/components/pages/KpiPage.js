@@ -26,6 +26,7 @@ import { formatDate, todayISO } from "../../crm/dates";
 import { Icon, selectStyle, inputStyle, formatEuro, C } from "../ui";
 import { HBarChart, LineChart, InfoTip, NoData, CHART_COLORS } from "../charts";
 import { PageHeader } from "../shell/AppShell";
+import { AdSpendSection } from "./AdSpendSection";
 
 // ─── BOUWSTENEN ──────────────────────────────────────────────────────────────
 function Section({ title, subtitle, info, right, children, style }) {
@@ -193,7 +194,7 @@ function funnelSentence(f) {
  * KPI-dashboard. Alle cijfers komen uit crm/analytics.js; hier alleen weergave.
  * onShowLeads(patch) opent de Leads-pagina met een filter (click-through).
  */
-export function KpiPage({ leads, links, partners, now, navigate, onOpenPartner, onShowLeads }) {
+export function KpiPage({ leads, links, partners, now, navigate, onOpenPartner, onShowLeads, adSpend = {}, user }) {
   const [periodKey, setPeriodKey] = useState("all");
   const [custom, setCustom] = useState({ from: `${todayISO(now).slice(0, 7)}-01`, to: todayISO(now) });
   const [compare, setCompare] = useState(false);
@@ -344,6 +345,9 @@ export function KpiPage({ leads, links, partners, now, navigate, onOpenPartner, 
           )}
         </Section>
       </div>
+
+      {/* ADVERTENTIEKOSTEN */}
+      <AdSpendSection coh={coh} leads={leads} months={adSpend} period={period} isAll={isAll} user={user} onShowLeads={(patch) => showCohort(patch)} Section={Section} />
 
       {/* BRONNEN */}
       <Section

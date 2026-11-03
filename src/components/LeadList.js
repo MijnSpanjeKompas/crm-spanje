@@ -155,7 +155,7 @@ function leadMenuItems(lead, { onTogglePin, onArchive, onDelete, onSold }) {
         }
       },
     },
-    onDelete && { label: "Lead verwijderen", icon: "trash", danger: true, onClick: () => onDelete(lead) },
+    onDelete && { label: "Naar prullenbak", icon: "trash", danger: true, onClick: () => onDelete(lead) },
   ];
 }
 

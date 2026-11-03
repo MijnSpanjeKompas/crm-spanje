@@ -76,6 +76,34 @@ De vaste prompt staat in `src/crm/gesprekPrompt.js`. Na aanpassen: `firebase dep
 - **Notificaties**: gelezen-status per profiel in `settings/notificaties-<profiel>` (valt onder de bestaande `settings`-rule, dus geen nieuwe rules nodig).
 - Er zijn geen velden verwijderd of hernoemd. Deploy: alleen pushen naar GitHub (Vercel). Geen `firebase deploy` nodig.
 
+## Profielcode, prullenbak, makelaar-check, advertentiekosten, dagoverzicht en telefoon (november 2026)
+
+- **Profielcode**: na het kiezen van Luke of Indy vraagt het CRM een code van 4 cijfers (`src/crm/profiles.js`). De codes staan alleen als hash in de code. Na 5 foute pogingen 30 seconden wachten. Let op: dit is een slot op het profiel; de data zelf wordt beveiligd door het Firebase-wachtwoord en de rules.
+- **Prullenbak**: "Naar prullenbak" verbergt een lead overal (lijsten, agenda, KPI's, zoeken). Terugzetten kan 30 dagen via *Leads → Meer → Prullenbak*. Daarna wordt hij definitief gewist: door de dagelijkse functie om 08:00, en anders bij het openen van het CRM.
+- **Makelaar-check**: zet je een lead op *Doorgestuurd*, dan plant het CRM zelf "Contact met makelaar checken" over 14 dagen (`THRESHOLDS.REALTOR_CHECK_DAYS`). Vink je die check af terwijl de lead nog Doorgestuurd is, dan staat de volgende check weer over 14 dagen klaar.
+- **Advertentiekosten**: KPI's → *Wat kost een lead?* → *Budget invullen*. Per maand een totaal en optioneel per campagne. Opslag: `settings/advertentiekosten`. Alleen leads met bron Meta Ads tellen mee.
+- **Telefoon**: onderin staat een menubalk. Tip: open het CRM in Safari en kies *Deel → Zet op beginscherm*, dan werkt het als een app.
+
+### Dagelijks overzicht per mail (08:00) aanzetten
+
+De mail gaat via een Gmail-account met een *app-wachtwoord* (geen gewoon wachtwoord).
+
+1. Ga in het Google-account waarmee je wilt versturen naar **myaccount.google.com → Beveiliging**. Zet **verificatie in 2 stappen** aan als dat nog niet zo is.
+2. Ga naar **myaccount.google.com/apppasswords**, maak een app-wachtwoord aan (naam bijv. "MSK CRM") en kopieer de 16 tekens.
+3. Zet de geheimen in Firebase (vanuit de hoofdmap van het project):
+   ```
+   firebase functions:secrets:set GMAIL_USER
+   firebase functions:secrets:set GMAIL_APP_PASSWORD
+   ```
+4. Deployen:
+   ```
+   cd functions && npm install && cd ..
+   firebase deploy --only functions
+   ```
+5. In het CRM: **Instellingen → Dagelijks overzicht** → vink aan, vul de e-mailadressen van Luke en Indy in, **Opslaan**, en klik op **Test** om meteen een voorbeeldmail te krijgen.
+
+Code: `src/crm/digest.js` (inhoud van de mail), `functions/src/dagoverzicht.js` (versturen + prullenbak legen), `src/components/pages/DigestSettingsCard.js` (instellingen).
+
 ## Oude leads
 
 Leads uit de vorige versie worden bij het uitlezen automatisch vertaald naar de nieuwe velden. Pas bij de eerste keer opslaan worden de nieuwe velden weggeschreven (`schemaVersion: 2`, `legacyInfo`, `legacyTags`). Oude velden worden nooit verwijderd.

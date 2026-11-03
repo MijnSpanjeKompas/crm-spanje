@@ -960,12 +960,13 @@ export function ActionLink({ href, icon, label, compact = false, title }) {
       target={href.startsWith("http") ? "_blank" : undefined}
       rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
       title={title || label}
-      aria-label={compact ? label : undefined}
+      aria-label={label}
       onClick={(e) => e.stopPropagation()}
+      className={compact ? undefined : "msk-action-link"}
       style={{ ...btnStyle("primary"), textDecoration: "none", ...(compact ? { width: 32, minHeight: 32, padding: 0 } : null) }}
     >
       <Icon name={icon} size={14} />
-      {!compact && label}
+      {!compact && <span className="msk-hide-sm">{label}</span>}
     </a>
   );
 }

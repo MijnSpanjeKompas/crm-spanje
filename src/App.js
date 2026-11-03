@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCrmAuth } from "./crm/useCrmAuth";
-import { subscribeLeads, subscribePartners, subscribeAllSub, setPinned, archiveLead, updateLead, deleteLeadPermanently, subscribeNotificationReads, saveNotificationReads, backfillContactAttempts } from "./crm/services";
+import { subscribeLeads, subscribePartners, subscribeAllSub, setPinned, archiveLead, updateLead, deleteLeadPermanently, moveLeadToTrash, restoreFromTrash, purgeExpiredTrash, TRASH_DAYS, subscribeNotificationReads, saveNotificationReads, backfillContactAttempts, subscribeAdSpend } from "./crm/services";
 import { normalizeLead } from "./crm/normalize";
 import { validateLead, blockingErrors, FIELD_TABS } from "./crm/validation";
 import { buildNotifications } from "./crm/agenda";
@@ -17,7 +17,7 @@ import { isRecentlyAdded } from "./crm/filters";
 import { LeadDetailModal } from "./components/lead/LeadDetailModal";
 import { SaleDialog } from "./components/SaleDialog";
 import { ImportModal } from "./components/ImportModal";
-import { Sidebar, Topbar, GlobalSearch, NotificationBell } from "./components/shell/AppShell";
+import { Sidebar, Topbar, GlobalSearch, NotificationBell, BottomNav } from "./components/shell/AppShell";
 import { useHashRoute, usePref } from "./components/shell/useHashRoute";
 import { DashboardPage } from "./components/pages/DashboardPage";
 import { LeadsPage } from "./components/pages/LeadsPage";
@@ -67,6 +67,7 @@ export function Crm({ user, onSignOut, onSwitchProfile }) {
   const [collapsed, setCollapsed] = usePref(user.id, "sidebarCollapsed", typeof window !== "undefined" && window.innerWidth < 1180);
   const [readIds, setReadIdsState] = useState([]);
   const [subError, setSubError] = useState(null);
+  const [adSpend, setAdSpend] = useState({});
   const route = useHashRoute();
   const [modal, setModal] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -103,6 +104,7 @@ export function Crm({ user, onSignOut, onSwitchProfile }) {
       }),
       // Gelezen notificaties per profiel, in Firestore: blijft bewaard na herstarten en op elk apparaat.
       subscribeNotificationReads(userId, setReadIdsState, (e) => console.error("notificaties", e)),
+      subscribeAdSpend(setAdSpend, (e) => console.error("advertentiekosten", e)),
     ];
     return () => unsubs.forEach((u) => u && u());
   }, [userId]);
@@ -115,7 +117,10 @@ export function Crm({ user, onSignOut, onSwitchProfile }) {
 
   // Teamleden = de profielen (Luke en Indy).
   const activeUsers = PROFILES;
-  const leads = useMemo(() => rawLeads.map((r) => normalizeLead(r, { users: PROFILES })), [rawLeads]);
+  const allLeads = useMemo(() => rawLeads.map((r) => normalizeLead(r, { users: PROFILES })), [rawLeads]);
+  // Leads in de prullenbak tellen nergens mee (lijsten, agenda, KPI's, zoeken).
+  const leads = useMemo(() => allLeads.filter((l) => !l.deletedAt), [allLeads]);
+  const trash = useMemo(() => allLeads.filter((l) => l.deletedAt), [allLeads]);
 
   // Eenmalig per sessie: "eerste benadering" afleiden voor leads die dat nog missen
   // (uit de tijdlijn). Vult alleen lege velden, verzint niets.
@@ -124,7 +129,9 @@ export function Crm({ user, onSignOut, onSwitchProfile }) {
     if (loading || backfilled.current || !rawLeads.length) return;
     backfilled.current = true;
     backfillContactAttempts(leads, user).catch((e) => console.error("backfill benadering", e));
-  }, [loading, rawLeads.length, leads, user]);
+    // Prullenbak: leads ouder dan 30 dagen definitief wissen.
+    purgeExpiredTrash(trash).catch((e) => console.error("prullenbak legen", e));
+  }, [loading, rawLeads.length, leads, trash, user]);
 
   const places = useMemo(
     () => Array.from(new Set(leads.flatMap((l) => l.places || []))).sort((a, b) => a.localeCompare(b, "nl")),
@@ -132,7 +139,7 @@ export function Crm({ user, onSignOut, onSwitchProfile }) {
   );
   // Aantallen per tabblad (fase), los van de andere filters.
   const tabCounts = useMemo(() => {
-    const c = { open: 0, archived: 0, recent: 0 };
+    const c = { open: 0, archived: 0, recent: 0, trash: trash.length };
     leads.forEach((l) => {
       if (!l.archived && isRecentlyAdded(l, now)) c.recent += 1;
       if (l.archived) {
@@ -143,7 +150,7 @@ export function Crm({ user, onSignOut, onSwitchProfile }) {
       if (!isClosedStage(l.pipelineStage)) c.open += 1;
     });
     return c;
-  }, [leads, now]);
+  }, [leads, trash, now]);
 
   const notifications = useMemo(() => buildNotifications({ leads, tasks, links, now }), [leads, tasks, links, now]);
   // Gelezen-status opslaan in Firestore (per profiel). Niet meer "opschonen" bij het
@@ -236,10 +243,10 @@ export function Crm({ user, onSignOut, onSwitchProfile }) {
 
   async function handleDelete(lead) {
     const name = lead.name || "deze lead";
-    if (!window.confirm(`${name} definitief verwijderen?\n\nDit verwijdert ook alle activiteiten, taken, partnerkoppelingen en bestanden. Dit kan niet ongedaan worden gemaakt.\n\nWil je de lead alleen uit beeld halen? Kies dan Archiveren.`)) return;
+    if (!window.confirm(`${name} naar de prullenbak verplaatsen?\n\nJe kunt de lead ${TRASH_DAYS} dagen lang terugzetten via Leads → Meer → Prullenbak. Daarna wordt hij definitief gewist.`)) return;
     try {
-      await deleteLeadPermanently(lead);
-      setNotice({ tone: "ok", text: `${lead.name || "Lead"} is verwijderd.` });
+      await moveLeadToTrash(lead, user);
+      setNotice({ tone: "ok", text: `${lead.name || "Lead"} staat in de prullenbak. Terugzetten kan ${TRASH_DAYS} dagen via Leads → Meer → Prullenbak.` });
     } catch (e) {
       console.error(e);
       setNotice({ tone: "error", text: e?.code === "permission-denied" ? "Verwijderen mislukt: geen rechten." : `Verwijderen mislukt: ${e.message || "onbekende fout"}` });
@@ -328,22 +335,41 @@ export function Crm({ user, onSignOut, onSwitchProfile }) {
               view={view}
               setView={setView}
               tabCounts={tabCounts}
+              trash={trash}
+              onRestore={async (l) => {
+                try {
+                  await restoreFromTrash(l, user);
+                  setNotice({ tone: "ok", text: `${l.name || "Lead"} is teruggezet.` });
+                } catch (e) {
+                  setNotice({ tone: "error", text: `Terugzetten mislukt: ${e.message || "onbekende fout"}` });
+                }
+              }}
+              onPurge={async (l) => {
+                if (!window.confirm(`${l.name || "Deze lead"} nu definitief verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
+                try {
+                  await deleteLeadPermanently(l);
+                  setNotice({ tone: "ok", text: `${l.name || "Lead"} is definitief verwijderd.` });
+                } catch (e) {
+                  setNotice({ tone: "error", text: `Verwijderen mislukt: ${e.message || "onbekende fout"}` });
+                }
+              }}
               actions={actions}
               onImport={() => setImportOpen(true)}
               onNewLead={openNew}
             />
           )}
           {page === "agenda" && <AgendaPage leads={leads} tasks={tasks} links={links} users={activeUsers} now={now} initialView={route.param} onOpenLead={(l, tab) => l && openLead(l, tab)} />}
-          {page === "kpis" && <KpiPage leads={leads} links={links} partners={partners} now={now} navigate={route.navigate} onOpenPartner={openPartner} onShowLeads={showLeads} />}
+          {page === "kpis" && <KpiPage leads={leads} links={links} partners={partners} adSpend={adSpend} user={user} now={now} navigate={route.navigate} onOpenPartner={openPartner} onShowLeads={showLeads} />}
           {page === "partners" && (
             <PartnersPage partners={partners} links={links} leads={leads} user={user} now={now} onOpenLead={(l, tab) => l && openLead(l, tab)} openPartnerId={route.param || null} setOpenPartnerId={(id) => route.navigate("partners", id || "")} />
           )}
           {page === "commissies" && <CommissionsPage leads={leads} partners={partners} users={activeUsers} user={user} now={now} onOpenLead={(l) => openLead(l)} onOpenPartner={openPartner} />}
-          {page === "instellingen" && <SettingsPage user={user} leads={leads} view={view} setView={setView} onImport={() => setImportOpen(true)} onResetNotifications={() => setReadIds([])} callSettings={callSettings} />}
+          {page === "instellingen" && <SettingsPage user={user} leads={leads} tasks={tasks} links={links} view={view} setView={setView} onImport={() => setImportOpen(true)} onResetNotifications={() => setReadIds([])} callSettings={callSettings} />}
           {page === "help" && <HelpPage />}
         </main>
       </div>
 
+      <BottomNav page={page} navigate={route.navigate} badges={badges} user={user} onSwitchProfile={onSwitchProfile} onSignOut={onSignOut} />
       <RecordingBar user={user} onOpenLead={(id) => openLeadById(id, "calls")} />
 
       {modal && (

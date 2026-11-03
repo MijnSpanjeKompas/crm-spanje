@@ -4,7 +4,7 @@ import { formatDate } from "../../crm/dates";
 import { emptyLead, findDuplicateLeads } from "../../crm/normalize";
 import { validateLead, blockingErrors, FIELD_TABS } from "../../crm/validation";
 import { getLeadSignals, SEVERITY_STYLE } from "../../crm/signals";
-import { createLead, updateLead, setPinned, subscribeLeadSub, archiveLead, restoreLead, deleteLeadPermanently, dismissPossibleDuplicate } from "../../crm/services";
+import { createLead, updateLead, setPinned, subscribeLeadSub, archiveLead, restoreLead, moveLeadToTrash, TRASH_DAYS, dismissPossibleDuplicate } from "../../crm/services";
 import {
   Modal,
   Tabs,
@@ -452,7 +452,7 @@ export function LeadDetailModal({ lead, isNew, initialEdits, initialTab, initial
               >
                 <Icon name="star" size={20} />
               </button>
-              <h2 style={{ fontFamily: C.fontDisplay, fontSize: 26, fontWeight: 600, color: C.navy, lineHeight: 1.15, letterSpacing: "-0.01em", minWidth: 0, overflowWrap: "anywhere", margin: 0 }}>
+              <h2 className="msk-lead-title" style={{ fontFamily: C.fontDisplay, fontSize: 26, fontWeight: 600, color: C.navy, lineHeight: 1.15, letterSpacing: "-0.01em", minWidth: 0, overflowWrap: "anywhere", margin: 0 }}>
                 {isNew ? "Nieuwe lead toevoegen" : base.name || "Lead"}
               </h2>
             </div>
@@ -481,13 +481,13 @@ export function LeadDetailModal({ lead, isNew, initialEdits, initialTab, initial
                       ? { label: "Terugzetten uit archief", icon: "archive", onClick: () => runAndClose(() => restoreLead(base, user)) }
                       : { label: "Archiveren", icon: "archive", onClick: () => runAndClose(() => archiveLead(base, user), `${base.name || "Deze lead"} archiveren? Je vindt de lead terug onder Archief.`) },
                     {
-                      label: "Lead verwijderen",
+                      label: "Naar prullenbak",
                       icon: "trash",
                       danger: true,
                       onClick: () =>
                         runAndClose(
-                          () => deleteLeadPermanently(base),
-                          `${base.name || "Deze lead"} definitief verwijderen?\n\nDit verwijdert ook alle activiteiten, taken, partnerkoppelingen en bestanden. Dit kan niet ongedaan worden gemaakt.`
+                          () => moveLeadToTrash(base, user),
+                          `${base.name || "Deze lead"} naar de prullenbak verplaatsen?\n\nJe kunt de lead ${TRASH_DAYS} dagen lang terugzetten via Leads → Meer → Prullenbak.`
                         ),
                     },
                   ]}

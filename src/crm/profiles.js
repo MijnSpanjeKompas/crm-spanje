@@ -9,9 +9,31 @@
 // opgeslagen (createdByUserId, ownerId, ...); namen mogen vrij wijzigen.
 
 export const PROFILES = [
-  { id: "luke", displayName: "Luke", fullName: "Luke van Spronsen", active: true },
-  { id: "indy", displayName: "Indy", fullName: "Indy", active: true },
+  { id: "luke", displayName: "Luke", fullName: "Luke van Spronsen", active: true, codeHash: "9ec88b2e" },
+  { id: "indy", displayName: "Indy", fullName: "Indy", active: true, codeHash: "dcfdc2f9" },
 ];
+
+// ─── TOEGANGSCODE PER PROFIEL ────────────────────────────────────────────────
+// Na het kiezen van een profiel vraagt het CRM een code van 4 cijfers.
+// De codes staan niet leesbaar in de code, alleen als hash. Let op: dit is een
+// slot tegen per ongeluk of ongevraagd een ander profiel gebruiken; de echte
+// beveiliging van de data blijft het Firebase-wachtwoord + de security rules.
+// Code wijzigen: node -e "<codeHash-functie>" en codeHash hierboven vervangen.
+export const CODE_LENGTH = 4;
+
+export function codeHash(profileId, code) {
+  let x = 0x811c9dc5;
+  for (const c of `msk-crm|${profileId}|${String(code || "")}`) {
+    x ^= c.charCodeAt(0);
+    x = Math.imul(x, 0x01000193) >>> 0;
+  }
+  return x.toString(16).padStart(8, "0");
+}
+
+export function checkProfileCode(profileId, code) {
+  const p = profileById(profileId);
+  return Boolean(p) && codeHash(profileId, code) === p.codeHash;
+}
 
 const STORAGE_KEY = "msk:profiel";
 

@@ -34,12 +34,14 @@ import {
   activityIsCustomerContact,
   nextActionText,
   CONTACT_ATTEMPT_ACTIONS,
+  FORWARDED_OR_LATER,
+  THRESHOLDS,
   SCHEMA_VERSION,
   SOLD_STAGE,
 } from "./constants";
 import { buildLeadPayload, buildMigrationFields } from "./normalize";
 import { changedKeys, describeLeadChanges, saleSummary } from "./changes";
-import { toDate, toMillis } from "./dates";
+import { toDate, toMillis, todayISO, addDaysISO } from "./dates";
 import { importActivity, sheetLeadId } from "./sheetImport";
 import { milestonePatch, contactMilestonePatch, attemptMilestonePatch, deriveMilestones, rollbackPatch, deriveFirstHandling } from "./milestones";
 
@@ -264,8 +266,39 @@ const HANDLING_KEYS = new Set([
   "closureReason",
 ]);
 
+const NEXT_ACTION_FIELDS = ["nextActionType", "nextActionDate", "nextActionLabel", "nextActionMonthOnly", "nextActionAssignedTo", "nextActionAssignedToName", "nextActionNotes"];
+
+/** Volgende actie "Contact met makelaar checken" over REALTOR_CHECK_DAYS dagen. */
+export function realtorCheckAction(user, from = new Date()) {
+  const u = userFields(user);
+  return {
+    nextActionType: "check_realtor",
+    nextActionDate: addDaysISO(todayISO(from), THRESHOLDS.REALTOR_CHECK_DAYS),
+    nextActionMonthOnly: false,
+    nextActionLabel: "",
+    nextActionNotes: "",
+    nextActionAssignedTo: u.id,
+    nextActionAssignedToName: user?.displayName || "",
+  };
+}
+
+/**
+ * Lead wordt doorgestuurd (fase → Doorgestuurd vanuit een eerdere fase)?
+ * Dan plant het CRM zelf "Contact met makelaar checken" over 2 weken, tenzij
+ * je in dezelfde handeling zelf al een andere volgende actie koos.
+ */
+export function autoFollowUpPatch(before, after, user) {
+  const entering = after.pipelineStage === "partner_connected" && !FORWARDED_OR_LATER.includes(before?.pipelineStage);
+  if (!entering) return null;
+  const changedByUser = NEXT_ACTION_FIELDS.some((k) => JSON.stringify(before?.[k] ?? null) !== JSON.stringify(after?.[k] ?? null));
+  if (changedByUser && after.nextActionType && after.nextActionType !== "none") return null;
+  return realtorCheckAction(user);
+}
+
 export async function updateLead(before, after, user, opts = {}) {
   const u = userFields(user);
+  const auto = opts.skipAutoFollowUp ? null : autoFollowUpPatch(before, after, user);
+  if (auto) after = { ...after, ...auto };
   const beforePayload = buildLeadPayload(before);
   const afterPayload = buildLeadPayload(after);
   const keys = changedKeys(beforePayload, afterPayload);
@@ -314,7 +347,7 @@ export async function updateLead(before, after, user, opts = {}) {
     clean({ ...patch, ...actPatch, schemaVersion: SCHEMA_VERSION, updatedAt: serverTimestamp(), updatedBy: u.id })
   );
   await batch.commit();
-  return { changed: true, activities: activities.length };
+  return { changed: true, activities: activities.length, autoFollowUp: Boolean(auto) };
 }
 
 /**
@@ -971,7 +1004,13 @@ export async function completeNextAction(lead, action, { note = "" } = {}, user)
       contactAttempt: CONTACT_ATTEMPT_ACTIONS.includes(type),
     },
   };
-  return updateLead(lead, { ...lead, ...EMPTY_NEXT_ACTION }, user, { extraActivities: [activity], suppressFields: ["nextAction"] });
+  // Makelaar gecheckt terwijl de lead nog bij de partner loopt? Dan staat de
+  // volgende check meteen weer over 2 weken in de agenda.
+  const again = type === "check_realtor" && lead.pipelineStage === "partner_connected";
+  const next = again ? realtorCheckAction(user) : EMPTY_NEXT_ACTION;
+  if (again) activity.description = [activity.description, `Volgende check automatisch gepland over ${THRESHOLDS.REALTOR_CHECK_DAYS} dagen.`].filter(Boolean).join("\n");
+  await updateLead(lead, { ...lead, ...next }, user, { extraActivities: [activity], suppressFields: ["nextAction"], skipAutoFollowUp: true });
+  return { nextPlanned: again ? next : null };
 }
 
 // ─── NOTIFICATIES: GELEZEN-STATUS PER PROFIEL ────────────────────────────────
@@ -1032,4 +1071,83 @@ export async function backfillContactAttempts(leads, user, { dryRun = false } = 
     await batch.commit();
   }
   return summary;
+}
+
+// ─── PRULLENBAK ──────────────────────────────────────────────────────────────
+/** Zoveel dagen blijft een verwijderde lead terug te zetten. */
+export const TRASH_DAYS = 30;
+
+export function isInTrash(lead) {
+  return Boolean(lead?.deletedAt);
+}
+
+/** Wanneer wordt deze lead definitief gewist? */
+export function purgeDate(lead) {
+  return toDate(lead?.purgeAfter) || (toDate(lead?.deletedAt) ? new Date(toDate(lead.deletedAt).getTime() + TRASH_DAYS * 86400000) : null);
+}
+
+/**
+ * "Verwijderen" = naar de prullenbak. De lead verdwijnt overal uit beeld
+ * (lijsten, agenda, KPI's, zoeken), maar alles blijft bewaard en is 30 dagen
+ * terug te zetten. Daarna wordt hij definitief gewist.
+ */
+export async function moveLeadToTrash(lead, user) {
+  const u = userFields(user);
+  const batch = writeBatch(db);
+  queueActivities(batch, lead.id, lead, [{ type: "system", title: "Lead naar de prullenbak verplaatst", description: `Wordt na ${TRASH_DAYS} dagen definitief gewist, tenzij teruggezet.`, metadata: { event: "trashed" } }], user);
+  batch.update(
+    leadRef(lead.id),
+    clean({ deletedAt: serverTimestamp(), deletedBy: u.id, deletedByName: u.name, purgeAfter: new Date(Date.now() + TRASH_DAYS * 86400000), updatedAt: serverTimestamp(), updatedBy: u.id })
+  );
+  await batch.commit();
+}
+
+export async function restoreFromTrash(lead, user) {
+  const u = userFields(user);
+  const batch = writeBatch(db);
+  queueActivities(batch, lead.id, lead, [{ type: "system", title: "Lead teruggezet uit de prullenbak", metadata: { event: "untrashed" } }], user);
+  batch.update(leadRef(lead.id), { deletedAt: null, deletedBy: "", deletedByName: "", purgeAfter: null, restoredFromTrashAt: serverTimestamp(), updatedAt: serverTimestamp(), updatedBy: u.id });
+  await batch.commit();
+}
+
+/** Leads die langer dan 30 dagen in de prullenbak liggen definitief wissen. */
+export async function purgeExpiredTrash(leads, now = new Date()) {
+  let removed = 0;
+  for (const lead of leads) {
+    const due = purgeDate(lead);
+    if (isInTrash(lead) && due && due <= now) {
+      await deleteLeadPermanently(lead);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
+// ─── ADVERTENTIEKOSTEN ───────────────────────────────────────────────────────
+/** settings/advertentiekosten = { months: { "2026-10": { total: 500, campaigns: { "najaar": 300 } } } } */
+function adSpendDoc() {
+  return doc(db, "settings", "advertentiekosten");
+}
+
+export function subscribeAdSpend(onData, onError) {
+  return onSnapshot(
+    adSpendDoc(),
+    (snap) => onData(snap && snap.exists && snap.exists() ? snap.data()?.months || {} : {}),
+    onError
+  );
+}
+
+/** Eén maand opslaan. total/campagnebedragen: getal in euro of null (leeg). */
+export async function saveAdSpendMonth(month, { total, campaigns }, user) {
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("Ongeldige maand.");
+  const num = (v) => (v === "" || v === null || v === undefined || !Number.isFinite(Number(v)) ? null : Math.max(0, Number(v)));
+  const cleanCampaigns = {};
+  Object.entries(campaigns || {}).forEach(([k, v]) => {
+    const n = num(v);
+    if (k && n !== null) cleanCampaigns[k] = n;
+  });
+  // Eerst zorgen dat het document bestaat, dan de hele maand vervangen
+  // (zodat een leeggemaakte campagne ook echt verdwijnt).
+  await setDoc(adSpendDoc(), { updatedAt: serverTimestamp() }, { merge: true });
+  await updateDoc(adSpendDoc(), { [`months.${month}`]: { total: num(total), campaigns: cleanCampaigns, updatedAt: new Date(), updatedByName: userFields(user).name } });
 }

@@ -148,3 +148,10 @@ const gesprek = require("./gesprek");
 
 exports.processCall = gesprek.processCall;
 exports.cleanupCallAudio = gesprek.cleanupCallAudio;
+
+// ─── DAGELIJKS OVERZICHT (08:00) + PRULLENBAK LEGEN ──────────────────────────
+// Zie functions/src/dagoverzicht.js. Secrets: GMAIL_USER en GMAIL_APP_PASSWORD.
+const dagoverzicht = require("./dagoverzicht");
+
+exports.dagoverzicht = dagoverzicht.dagoverzicht;
+exports.dagoverzichtTest = dagoverzicht.dagoverzichtTest;
