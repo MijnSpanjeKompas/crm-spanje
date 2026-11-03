@@ -4,10 +4,10 @@
   "description": "Cloud Functions voor het MSK CRM (lead-import uit Google Sheets, gesprekken verwerken, dagelijks overzicht).",
   "main": "lib/index.js",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "scripts": {
-    "build": "esbuild src/index.js --bundle --platform=node --target=node20 --format=cjs --outfile=lib/index.js --external:firebase-admin --external:firebase-functions --external:ffmpeg-static --external:nodemailer",
+    "build": "esbuild src/index.js --bundle --platform=node --target=node22 --format=cjs --outfile=lib/index.js --external:firebase-admin --external:firebase-functions --external:ffmpeg-static --external:nodemailer",
     "deploy": "npm run build && firebase deploy --only functions"
   },
   "dependencies": {
