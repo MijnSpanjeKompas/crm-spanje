@@ -216,11 +216,6 @@ export function LeadCard({ lead, onOpen, onArchive, onDelete, onSold, onStageCha
         {onStageChange ? <StageSelect lead={lead} onStageChange={onStageChange} /> : <OptionBadge options={PIPELINE_STAGES} value={lead.pipelineStage} />}
         <OptionBadge options={PURCHASE_INTENTS} value={lead.purchaseIntent} />
         <OptionBadge options={PRIORITIES} value={lead.priority} prefix="Prio: " />
-        {lead.ownerName && (
-          <Badge color="#334a5e" bg="#ffffff" icon="user">
-            {lead.ownerName}
-          </Badge>
-        )}
         {lead.archived && <Badge icon="archive">Gearchiveerd</Badge>}
       </div>
 
@@ -349,7 +344,7 @@ const thStyle = {
 };
 
 export function LeadTable({ leads, onOpen, onArchive, onDelete, onSold, onTogglePin, onStageChange }) {
-  const headers = ["", "Naam", "Fase", "Koopintentie", "Prio", "Regio / plaats", "Budget", "Verantwoordelijke", "Volgende actie", "Laatste contact", ""];
+  const headers = ["", "Naam", "Fase", "Koopintentie", "Prio", "Regio / plaats", "Budget", "Volgende actie", "Laatste contact", ""];
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "auto", boxShadow: C.shadowSm }}>
       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1320 }}>
@@ -389,7 +384,6 @@ export function LeadTable({ leads, onOpen, onArchive, onDelete, onSold, onToggle
                 </td>
                 <td style={{ ...cell, minWidth: 150 }}>{whereText(lead)}</td>
                 <td style={{ ...cell, whiteSpace: "nowrap" }}>{formatBudget(lead) || "–"}</td>
-                <td style={{ ...cell, whiteSpace: "nowrap" }}>{lead.ownerName || "–"}</td>
                 <td style={{ ...cell, minWidth: 210, maxWidth: 280 }}>
                   {isSold(lead) ? (
                     <>

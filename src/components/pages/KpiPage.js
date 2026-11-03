@@ -15,8 +15,6 @@ import {
   groupStats,
   distribution,
   partnerStats,
-  teamStats,
-  distinctOwners,
   commissionSummary,
   dataQuality,
   change,
@@ -195,7 +193,7 @@ function funnelSentence(f) {
  * KPI-dashboard. Alle cijfers komen uit crm/analytics.js; hier alleen weergave.
  * onShowLeads(patch) opent de Leads-pagina met een filter (click-through).
  */
-export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPartner, onShowLeads }) {
+export function KpiPage({ leads, links, partners, now, navigate, onOpenPartner, onShowLeads }) {
   const [periodKey, setPeriodKey] = useState("all");
   const [custom, setCustom] = useState({ from: `${todayISO(now).slice(0, 7)}-01`, to: todayISO(now) });
   const [compare, setCompare] = useState(false);
@@ -218,8 +216,6 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
   const regionLeads = useMemo(() => (regionScope === "all" ? coh : coh.filter((l) => reached(l, regionScope))), [coh, regionScope]);
   const partnerRows = useMemo(() => partnerStats(partners, links, leads, now).filter((r) => r.forwarded > 0).sort((a, b) => b.forwarded - a.forwarded), [partners, links, leads, now]);
   const fin = useMemo(() => commissionSummary(leads, isAll ? null : period), [leads, isAll, period]);
-  const showTeam = useMemo(() => distinctOwners(leads) > 1, [leads]);
-  const team = useMemo(() => (showTeam ? teamStats(leads, period, users.filter((u) => u.active !== false), now) : []), [showTeam, leads, period, users, now]);
   const dq = useMemo(() => dataQuality(coh), [coh]);
 
   const knownTerm = coh.filter((l) => l.purchaseTimeline && l.purchaseTimeline !== "unknown");
@@ -320,21 +316,25 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
           <LineChart labels={tr.labels} series={trendSeries} />
         </Section>
 
-        <Section title="Hoe snel reageren we?" subtitle="Benaderen = bellen, appen of mailen, ook als er niet wordt opgenomen.">
+        <Section
+          title="Hoe snel reageren we?"
+          subtitle="Opgepakt = eerste contactmoment, afgevinkte contactactie of eerste handeling in het CRM (fase, actie, gesprek)."
+          info="Gemeten van binnenkomst van de lead tot het eerste moment dat Luke of Indy hem oppakte. Voor oudere leads haalt het CRM dat moment automatisch uit de tijdlijn. Het plannen van 'Eerste contact opnemen' telt niet als oppakken."
+        >
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
             <Tile
               label="Reactietijd"
               value={formatDuration(follow.medianFirstAttemptMs)}
-              sub={follow.sample ? `Typische tijd tot we een nieuwe lead benaderen (${follow.sample} leads)` : "Nog geen contactpogingen vastgelegd"}
+              sub={follow.sample ? `Typische tijd tot we een nieuwe lead oppakken (${follow.sample} leads)` : "Nog niets vastgelegd"}
               info="De mediaan: de helft van de leads benaderen we sneller dan dit, de andere helft langzamer. Minder gevoelig voor één uitschieter dan een gemiddelde."
             />
             <Tile
-              label="Binnen 24 uur benaderd"
+              label="Binnen 24 uur opgepakt"
               value={pct(follow.within24h.pct)}
               sub={follow.within24h.total ? `${follow.within24h.count} van ${follow.within24h.total} leads` : "–"}
               tone={follow.within24h.pct !== null && follow.within24h.pct < 0.8 ? "warn" : undefined}
             />
-            <Tile label="Nooit benaderd" value={follow.noAttempt} tone={follow.noAttempt ? "danger" : undefined} sub="Al langer dan 24 uur binnen, nog geen enkele poging" />
+            <Tile label="Nog niet opgepakt" value={follow.noAttempt} tone={follow.noAttempt ? "danger" : undefined} sub="Langer dan 24 uur binnen, nog niets mee gedaan in het CRM" />
             <Tile label="Achterstallige acties" value={follow.overdue} tone={follow.overdue ? "danger" : undefined} sub="Open leads waarvan de geplande actie over datum is" />
           </div>
           {follow.overdue > 0 && (
@@ -471,37 +471,6 @@ export function KpiPage({ leads, links, partners, users, now, navigate, onOpenPa
           <Tile label="Aankopen afgerond" value={fin.purchasesInPeriod} sub={isAll ? "totaal" : "in deze periode (op aankoopdatum)"} />
         </div>
       </Section>
-
-      {/* TEAM (alleen bij meerdere verantwoordelijken) */}
-      {showTeam && team.length > 0 && (
-        <Section title="Team" subtitle="Per verantwoordelijke. Geen score of ranking." style={{ marginBottom: 16 }}>
-          <div style={{ overflowX: "auto", border: `1px solid ${C.border}`, borderRadius: 12 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
-              <thead>
-                <tr>
-                  {["Verantwoordelijke", "Nieuwe leads", "Contact gehad", "Doorgestuurd", "Open follow-ups", "Achterstallig"].map((h, i) => (
-                    <th key={h} style={{ ...th, textAlign: i === 0 ? "left" : "right" }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {team.map((r) => (
-                  <tr key={r.id}>
-                    <td style={{ ...td, textAlign: "left", fontWeight: 600, color: C.text }}>{r.name}</td>
-                    <td style={td}>{r.newLeads}</td>
-                    <td style={td}>{r.contact}</td>
-                    <td style={td}>{r.forwarded}</td>
-                    <td style={td}>{r.openFollowUps}</td>
-                    <td style={{ ...td, color: r.overdue ? C.danger : C.textBody, fontWeight: r.overdue ? 600 : 400 }}>{r.overdue}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Section>
-      )}
 
       {(dq.unknownSource > 0 || dq.unknownTimeline > 0 || dq.noBudget > 0) && dq.total > 0 && (
         <div style={{ fontSize: 12, color: C.textSubtle, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>

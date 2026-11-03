@@ -9,8 +9,8 @@ import {
   nextActionText,
 } from "../../crm/constants";
 import { getNextActionInfo } from "../../crm/signals";
-import { todayISO, formatDate, diffInDays, formatActionDate } from "../../crm/dates";
-import { addTask, setTaskStatus } from "../../crm/services";
+import { todayISO, formatDate, diffInDays, formatActionDate, formatDateTime, toMillis } from "../../crm/dates";
+import { addTask, setTaskStatus, completeNextAction } from "../../crm/services";
 import { NextActionDateField } from "./NextActionDateField";
 import {
   Card,
@@ -193,13 +193,70 @@ function TasksSection({ lead, user, users, tasks, isNew }) {
 }
 
 // ─── VOLGENDE ACTIE ──────────────────────────────────────────────────────────
-function NextActionSection({ form, set, setMany, errors, users, user }) {
+const NEXT_ACTION_KEYS = ["nextActionType", "nextActionLabel", "nextActionDate", "nextActionMonthOnly", "nextActionAssignedTo", "nextActionAssignedToName", "nextActionNotes"];
+
+/** Afgevinkte acties uit de tijdlijn (nieuwste eerst). */
+function DoneActions({ activities }) {
+  const [all, setAll] = useState(false);
+  const done = (activities?.items || [])
+    .filter((a) => a.type === "action_done")
+    .sort((a, b) => (toMillis(b.occurredAt || b.createdAt) || 0) - (toMillis(a.occurredAt || a.createdAt) || 0));
+  if (!done.length) return null;
+  const shown = all ? done : done.slice(0, 3);
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.borderSoft}` }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, marginBottom: 6 }}>Uitgevoerde acties ({done.length})</div>
+      {shown.map((a) => (
+        <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "5px 0", fontSize: 12.5 }}>
+          <span style={{ color: C.success, display: "flex", marginTop: 1 }}>
+            <Icon name="checkCircle" size={14} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ color: C.text, fontWeight: 500 }}>{a.metadata?.label || String(a.title || "").replace(/^Gedaan: /, "")}</div>
+            <div style={{ color: C.textSubtle, fontSize: 11.5 }}>
+              {formatDateTime(a.occurredAt || a.createdAt)}
+              {a.performedByName || a.createdByName ? ` · ${a.performedByName || a.createdByName}` : ""}
+            </div>
+            {a.description && <div style={{ color: C.textBody, whiteSpace: "pre-wrap", marginTop: 2 }}>{a.description}</div>}
+          </div>
+        </div>
+      ))}
+      {done.length > 3 && (
+        <button type="button" onClick={() => setAll((v) => !v)} className="msk-link" style={{ ...linkBtnStyle, color: C.textMuted, fontSize: 12 }}>
+          {all ? "Minder tonen" : `Alle ${done.length} tonen`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function NextActionSection({ form, set, setMany, errors, users, user, lead, activities, clearEdits, setMessage, isNew }) {
   const na = getNextActionInfo(form);
   const planned = form.nextActionType && form.nextActionType !== "none";
   const hasError = Boolean(errors.nextActionDate || errors.nextActionLabel);
   const [editing, setEditing] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
+  const [doneNote, setDoneNote] = useState("");
+  const [busy, setBusy] = useState(false);
   const open = editing || hasError;
   const today = todayISO();
+
+  async function markDone() {
+    setBusy(true);
+    try {
+      const action = Object.fromEntries(NEXT_ACTION_KEYS.map((k) => [k, form[k]]));
+      clearEdits && clearEdits(NEXT_ACTION_KEYS);
+      await completeNextAction(lead, action, { note: doneNote }, user);
+      setDoneOpen(false);
+      setDoneNote("");
+      setMessage && setMessage({ tone: "ok", text: `Afgevinkt: ${nextActionText(action)}. Plan hieronder meteen de volgende actie.` });
+      setEditing(true);
+    } catch (e) {
+      setMessage && setMessage({ tone: "error", text: `Afvinken mislukt: ${e.message || "onbekende fout"}` });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function setActionType(v) {
     if (v === "none") {
@@ -226,6 +283,11 @@ function NextActionSection({ form, set, setMany, errors, users, user }) {
       right={
         <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {planned && <Badge color={na.color} bg={na.bg}>{na.label}</Badge>}
+          {planned && !open && !isNew && (
+            <button type="button" onClick={() => setDoneOpen((v) => !v)} disabled={busy} title="Actie is uitgevoerd" style={{ ...btnStyle("success", doneOpen), minHeight: 30, padding: "4px 12px", fontSize: 12 }}>
+              <Icon name="check" size={13} /> Gedaan
+            </button>
+          )}
           <button type="button" onClick={() => setEditing((v) => !v)} style={{ ...btnStyle(open ? "primary" : "neutral", open), minHeight: 30, padding: "4px 12px", fontSize: 12 }}>
             {open ? "Klaar" : planned ? "Wijzigen" : "Plannen"}
           </button>
@@ -245,6 +307,20 @@ function NextActionSection({ form, set, setMany, errors, users, user }) {
               {form.nextActionAssignedToName || "Niemand"}
             </InfoRow>
             {form.nextActionNotes && <InfoRow label="Toelichting">{form.nextActionNotes}</InfoRow>}
+            {doneOpen && (
+              <div style={{ marginTop: 10, background: C.successBg, border: `1px solid ${C.successBorder}`, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>"{nextActionText(form)}" afvinken</div>
+                <TextAreaField value={doneNote} onChange={setDoneNote} rows={2} placeholder="Korte notitie (optioneel), bijv. 'App gestuurd, reageert morgen'" />
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <button type="button" onClick={() => setDoneOpen(false)} style={btnStyle("neutral")}>
+                    Annuleren
+                  </button>
+                  <button type="button" onClick={markDone} disabled={busy} style={btnStyle("success", true)}>
+                    <Icon name="check" size={13} /> {busy ? "Bezig…" : "Afvinken"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <EmptyState text="Geen actie gepland" actionLabel="Actie plannen" onAction={() => setEditing(true)} />
@@ -272,6 +348,7 @@ function NextActionSection({ form, set, setMany, errors, users, user }) {
           )}
         </div>
       )}
+      {!isNew && <DoneActions activities={activities} />}
     </Card>
   );
 }

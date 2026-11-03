@@ -150,6 +150,44 @@ export function LoginScreen({ onSignIn, onResetPassword }) {
   );
 }
 
+/** Na het inloggen: kies met welk profiel je werkt (Luke of Indy). */
+export function ProfilePicker({ profiles, onPick, onSignOut }) {
+  return (
+    <div style={shell}>
+      <div style={box}>
+        <BrandPanel />
+        <div style={{ flex: "1 1 340px", padding: "40px 38px", display: "flex", flexDirection: "column", gap: 16, justifyContent: "center" }}>
+          <div style={{ marginBottom: 4 }}>
+            <h1 style={{ fontFamily: C.fontDisplay, fontSize: 26, fontWeight: 600, color: C.navy, margin: 0, lineHeight: 1.2 }}>Wie werkt er?</h1>
+            <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, lineHeight: 1.5 }}>
+              Kies je profiel. Alles wat je doet komt op jouw naam in de tijdlijn. Jullie zien elkaars wijzigingen direct.
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+            {profiles.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => onPick(p.id)}
+                className="msk-kpi"
+                style={{ border: `1px solid ${C.border}`, background: C.surface, borderRadius: 16, padding: "22px 14px", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}
+              >
+                <span aria-hidden="true" style={{ width: 56, height: 56, borderRadius: 99, background: C.gold, color: C.navyDark, fontSize: 22, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {p.displayName[0]}
+                </span>
+                <span style={{ fontSize: 16, fontWeight: 600, color: C.navy }}>{p.displayName}</span>
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={onSignOut} className="msk-link" style={{ ...linkBtnStyle, fontSize: 12.5, alignSelf: "center", color: C.textMuted }}>
+            Uitloggen
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LoadingScreen({ text = "Laden..." }) {
   return (
     <div style={shell}>

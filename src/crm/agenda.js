@@ -5,7 +5,9 @@
 // Er wordt niets extra opgeslagen.
 
 import { APPOINTMENT_TYPES, PARTNER_WAITING_STATUSES, hasNextAction, isClosedStage, labelOf, nextActionText } from "./constants";
-import { todayISO, monthStartISO } from "./dates";
+import { todayISO, monthStartISO, toDate } from "./dates";
+import { leadArrivedAt } from "./milestones";
+import { profileNameOnly } from "./profiles";
 
 export const AGENDA_TYPES = [
   { value: "all", label: "Alles" },
@@ -63,13 +65,16 @@ export function buildAgendaItems({ leads, tasks = [], links = [] }) {
         leadId: l.id,
         leadName: l.name,
         ownerId: l.appointmentAssignedTo || l.ownerId || "",
-        ownerName: l.appointmentAssignedToName || l.ownerName || "",
+        ownerName: profileNameOnly(l.appointmentAssignedToName),
         status: l.appointmentStatus,
         done: l.appointmentStatus !== "scheduled",
         tab: "followup",
       });
     }
-    if (!isClosedStage(l.pipelineStage) && hasNextAction(l) && l.nextActionDate && l.nextActionType !== "conduct_appointment") {
+    // "Gesprek voeren" alleen overslaan als hetzelfde gesprek al als afspraak in de agenda staat;
+    // anders zou die actie nergens verschijnen.
+    const meetingShown = l.appointmentStatus === "scheduled" && l.appointmentDate && l.appointmentDate === l.nextActionDate;
+    if (!isClosedStage(l.pipelineStage) && hasNextAction(l) && l.nextActionDate && !(l.nextActionType === "conduct_appointment" && meetingShown)) {
       items.push({
         id: `followup-${l.id}`,
         type: "followup",
@@ -80,7 +85,7 @@ export function buildAgendaItems({ leads, tasks = [], links = [] }) {
         leadId: l.id,
         leadName: l.name,
         ownerId: l.nextActionAssignedTo || l.ownerId || "",
-        ownerName: l.nextActionAssignedToName || l.ownerName || "",
+        ownerName: profileNameOnly(l.nextActionAssignedToName),
         status: "open",
         done: false,
         tab: "followup",
@@ -100,7 +105,7 @@ export function buildAgendaItems({ leads, tasks = [], links = [] }) {
       leadId: l.id,
       leadName: l.name,
       ownerId: t.assignedToUserId || "",
-      ownerName: t.assignedToName || "",
+      ownerName: profileNameOnly(t.assignedToName),
       status: "open",
       done: false,
       tab: "followup",
@@ -122,7 +127,7 @@ export function buildAgendaItems({ leads, tasks = [], links = [] }) {
       leadName: l.name,
       partnerId: k.partnerId,
       ownerId: l.ownerId || "",
-      ownerName: l.ownerName || "",
+      ownerName: "",
       status: k.status,
       done: false,
       tab: "partners",
@@ -149,10 +154,34 @@ export function filterAgenda(items, { type = "all", ownerId = "" } = {}) {
   return items.filter((it) => (type === "all" || it.type === type) && (!ownerId || it.ownerId === ownerId));
 }
 
+function daysBetween(fromISO, toISO) {
+  const [a, b] = [fromISO, toISO].map((x) => {
+    const [y, m, d] = String(x).slice(0, 10).split("-").map(Number);
+    return Date.UTC(y, m - 1, d);
+  });
+  return Math.round((b - a) / 86400000);
+}
+
+function monthEndOf(iso) {
+  const [y, m] = String(iso).split("-").map(Number);
+  const d = new Date(Date.UTC(y, m, 0));
+  return d.toISOString().slice(0, 10);
+}
+
 // ─── NOTIFICATIES ────────────────────────────────────────────────────────────
+/** Een nieuwe lead geeft maximaal zo lang een melding (daarna staat hij gewoon in de lijst). */
+const NEW_LEAD_NOTIFY_DAYS = 3;
+/** Verlopen items ouder dan dit tellen niet meer als melding (wel in de Agenda onder "Te laat"). */
+const OVERDUE_NOTIFY_DAYS = 14;
+
 /**
  * Meldingen worden afgeleid uit de data (geen aparte opslag). Elk heeft een
- * stabiele id, zodat "gelezen" per gebruiker bijgehouden kan worden.
+ * stabiele id, zodat "gelezen" per profiel bijgehouden kan worden.
+ * Bewust beperkt tot wat nu aandacht vraagt:
+ *  - nieuwe lead (max. 3 dagen oud) die nog niet is opgepakt;
+ *  - mogelijke dubbele lead, importfout;
+ *  - gesprek vandaag;
+ *  - actie/taak/partneropvolging vandaag of de afgelopen 14 dagen verlopen.
  * `external` = meldingen van buitenaf (bijv. toekomstige AI-agents) met dezelfde vorm.
  */
 export function buildNotifications({ leads, tasks = [], links = [], now = new Date(), external = [] }) {
@@ -163,7 +192,10 @@ export function buildNotifications({ leads, tasks = [], links = [], now = new Da
 
   leads.forEach((l) => {
     if (l.archived) return;
-    if (l.pipelineStage === "new_lead" && !l.lastContactAt) {
+    const arrived = leadArrivedAt(l);
+    const fresh = arrived && now - arrived <= NEW_LEAD_NOTIFY_DAYS * 24 * 3600 * 1000;
+    const handled = Boolean(l.lastContactAt || toDate(l.firstContactAttemptAt) || toDate(l.firstContactAt));
+    if (l.pipelineStage === "new_lead" && fresh && !handled) {
       out.push({ id: `new:${l.id}`, kind: "new_lead", severity: "info", title: "Nieuwe lead ontvangen", text: l.name || "Naam onbekend", leadId: l.id, tab: "overview" });
     }
     if ((l.possibleDuplicateOf || []).length) {
@@ -185,6 +217,9 @@ export function buildNotifications({ leads, tasks = [], links = [], now = new Da
       return;
     }
     const late = it.monthOnly ? it.date.slice(0, 7) < today.slice(0, 7) : it.date < today;
+    const lateSince = it.monthOnly ? monthEndOf(it.date) : it.date;
+    const tooOld = late && daysBetween(lateSince, today) > OVERDUE_NOTIFY_DAYS;
+    if (late && tooOld) return;
     if (late) {
       const title = { followup: "Opvolgactie verlopen", task: "Taak over deadline", partner: "Partneropvolging verlopen", meeting: "Gesprek nog niet afgerond" }[it.type];
       out.push({ ...base, id: `late:${it.id}:${it.date}`, kind: `${it.type}_overdue`, severity: "high", title, text: `${it.leadName} · ${it.title}` });

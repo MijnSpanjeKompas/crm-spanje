@@ -266,7 +266,7 @@ export function followUpStats(cohortLeads, allLeads, now = new Date()) {
     medianFirstAttemptMs: sorted.length ? sorted[Math.floor(sorted.length / 2)] : null,
     sample: durations.length,
     within24h: ratio(within24.length, due.length),
-    noAttempt: withTimes.filter((x) => !x.attempt && x.arrived <= dueBefore).length,
+    noAttempt: withTimes.filter((x) => !x.attempt && x.arrived <= dueBefore && !x.l.archived).length,
     // Wel geprobeerd, (nog) nooit bereikt
     notReached: cohortLeads.filter((l) => reachedAt(l, "attempt") && !reached(l, "contact")).length,
     withoutNextAction: open.filter((l) => STAGES_REQUIRING_NEXT_ACTION.includes(l.pipelineStage) && !hasNextAction(l)).length,

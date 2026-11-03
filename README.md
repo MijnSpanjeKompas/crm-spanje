@@ -67,6 +67,15 @@ Per lead staat een tab **Gesprek**. Daar neem je het gesprek op (tweede telefoon
 
 De vaste prompt staat in `src/crm/gesprekPrompt.js`. Na aanpassen: `firebase deploy --only functions`. De eigen woordenlijst en de transcriptiehint pas je zonder deploy aan onder Instellingen.
 
+## Profielen, contactmomenten en afvinken (november 2026)
+
+- **Profielen**: na het inloggen kies je altijd *Luke* of *Indy* (`src/crm/profiles.js`). Alles wat je doet staat op die naam in de tijdlijn; nieuwe leads krijgen dat profiel als verantwoordelijke. Wisselen kan via *Wissel profiel* rechtsboven. Data blijft gedeeld en realtime.
+- **Contactmomenten**: tab in het leaddossier (`src/components/lead/ContactMomentsTab.js`). Onderwerp + tekst; datum/tijd worden vastgezet zodra je begint te typen. Opgeslagen als activiteit `contact_moment` in de tijdlijn.
+- **Volgende actie afvinken**: knop *Gedaan* onder Opvolging; legt een activiteit `action_done` vast en toont de historie onder *Uitgevoerde acties*.
+- **KPI's**: een teruggezette fase (bijv. test op Gereserveerd) telt niet meer mee. "Hoe snel reageren we?" meet de eerste keer dat het team de lead oppakt; voor bestaande leads wordt dat eenmalig automatisch uit de tijdlijn afgeleid.
+- **Notificaties**: gelezen-status per profiel in `settings/notificaties-<profiel>` (valt onder de bestaande `settings`-rule, dus geen nieuwe rules nodig).
+- Er zijn geen velden verwijderd of hernoemd. Deploy: alleen pushen naar GitHub (Vercel). Geen `firebase deploy` nodig.
+
 ## Oude leads
 
 Leads uit de vorige versie worden bij het uitlezen automatisch vertaald naar de nieuwe velden. Pas bij de eerste keer opslaan worden de nieuwe velden weggeschreven (`schemaVersion: 2`, `legacyInfo`, `legacyTags`). Oude velden worden nooit verwijderd.

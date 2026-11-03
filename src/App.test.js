@@ -67,7 +67,7 @@ test("leaddossier: nieuwe tabs, tijdlijn en autosave (migratie)", async () => {
   expect(within(dialog).getByText(/oude CRM-versie/i)).toBeInTheDocument();
 
   // Exact deze tabs, geen Details meer, geen Opslaan-knop
-  expect(within(dialog).getAllByRole("tab").map((t) => t.textContent.replace(/\d+$/, ""))).toEqual(["Overzicht", "Gesprek", "Zoekprofiel", "Opvolging", "Tijdlijn", "Partners", "Bestanden"]);
+  expect(within(dialog).getAllByRole("tab").map((t) => t.textContent.replace(/\d+$/, ""))).toEqual(["Overzicht", "Contactmomenten", "Gesprek", "Zoekprofiel", "Opvolging", "Tijdlijn", "Partners", "Bestanden"]);
   expect(within(dialog).queryByRole("button", { name: /^Opslaan$/ })).not.toBeInTheDocument();
   for (const tab of ["Gesprek", "Zoekprofiel", "Opvolging", "Partners", "Bestanden", "Tijdlijn"]) {
     fireEvent.click(within(dialog).getByRole("tab", { name: new RegExp(tab) }));
@@ -85,18 +85,20 @@ test("leaddossier: nieuwe tabs, tijdlijn en autosave (migratie)", async () => {
   await waitFor(() => expect(within(dialog).getByText("Gebeld over bezoek")).toBeInTheDocument());
   expect(fake.__getDoc("leads/ewoud").lastContactAt).toBeInstanceOf(Date);
 
-  // Autosave: samenvatting typen. De volgende actie mist nog een datum → niet opgeslagen, met uitleg.
+  // Autosave: samenvatting typen. De volgende actie mist nog een datum (oud probleem),
+  // maar dat blokkeert het opslaan van een ander veld niet meer.
   fireEvent.click(within(dialog).getByRole("tab", { name: /Overzicht/ }));
   fireEvent.change(within(dialog).getByPlaceholderText(/Wil samen met partner/), { target: { value: "Wil emigreren, woning moet eerst verkocht." } });
-  await waitFor(() => expect(within(dialog).getByText(/Nog niet opgeslagen/)).toBeInTheDocument(), { timeout: 3000 });
-  expect(fake.__getDoc("leads/ewoud").schemaVersion).toBeUndefined();
+  await waitFor(() => expect(fake.__getDoc("leads/ewoud").schemaVersion).toBe(2), { timeout: 3000 });
+  expect(within(dialog).queryByText(/Nog niet opgeslagen/)).not.toBeInTheDocument();
 
-  // Datum kiezen via Opvolging → wordt direct opgeslagen, samen met de samenvatting
-  fireEvent.click(within(dialog).getByRole("button", { name: /naar Opvolging/ }));
+  // Datum kiezen via Opvolging → wordt direct opgeslagen
+  fireEvent.click(within(dialog).getByRole("tab", { name: /Opvolging/ }));
+  if (!within(dialog).queryByRole("button", { name: "Morgen" })) fireEvent.click(within(dialog).getByRole("button", { name: /^Wijzigen$/ }));
   await act(async () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Morgen" }));
   });
-  await waitFor(() => expect(fake.__getDoc("leads/ewoud").schemaVersion).toBe(2), { timeout: 3000 });
+  await waitFor(() => expect(fake.__getDoc("leads/ewoud").nextActionDate).toBeTruthy(), { timeout: 3000 });
   const raw = fake.__getDoc("leads/ewoud");
   expect(raw.leadSummary).toBe("Wil emigreren, woning moet eerst verkocht.");
   expect(raw.pipelineStage).toBe("partner_connected");
@@ -106,7 +108,7 @@ test("leaddossier: nieuwe tabs, tijdlijn en autosave (migratie)", async () => {
   // Systeemactiviteiten zijn traceerbaar: wie (actorType/actorId) en wat (actionType)
   const acts = Array.from(fake.__dump().docs.entries()).filter(([p]) => p.startsWith("leads/ewoud/activities/")).map(([, d]) => d);
   expect(acts.length).toBeGreaterThan(0);
-  acts.forEach((a) => expect(a).toMatchObject({ actorType: "human", actorId: "uLuke" }));
+  acts.forEach((a) => expect(a).toMatchObject({ actorType: "human", actorId: "luke", createdByName: "Luke" }));
   expect(acts.every((a) => a.actionType)).toBe(true);
 });
 
@@ -136,7 +138,7 @@ test("nieuwe lead met duplicaatwaarschuwing", async () => {
   await waitFor(() => expect(screen.getByText(/Wijzigingen worden vanaf nu automatisch opgeslagen/)).toBeInTheDocument());
   const created = Array.from(fake.__dump().docs.entries()).find(([p, d]) => /^leads\/[^/]+$/.test(p) && d.name === "E. Kremer");
   expect(created).toBeTruthy();
-  expect(created[1]).toMatchObject({ ownerId: "uLuke", pipelineStage: "new_lead", emailNormalized: "ewoud@example.nl", schemaVersion: 2 });
+  expect(created[1]).toMatchObject({ ownerId: "luke", pipelineStage: "new_lead", emailNormalized: "ewoud@example.nl", schemaVersion: 2 });
 });
 
 test("archiveren via kaart vraagt bevestiging en verwijdert niets", async () => {

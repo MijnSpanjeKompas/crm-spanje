@@ -4,14 +4,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCrmAuth } from "./crm/useCrmAuth";
-import { subscribeLeads, subscribeUsers, subscribePartners, subscribeAllSub, setPinned, archiveLead, updateLead, deleteLeadPermanently } from "./crm/services";
+import { subscribeLeads, subscribePartners, subscribeAllSub, setPinned, archiveLead, updateLead, deleteLeadPermanently, subscribeNotificationReads, saveNotificationReads, backfillContactAttempts } from "./crm/services";
 import { normalizeLead } from "./crm/normalize";
-import { validateLead, FIELD_TABS } from "./crm/validation";
+import { validateLead, blockingErrors, FIELD_TABS } from "./crm/validation";
 import { buildNotifications } from "./crm/agenda";
 import { DEFAULT_FILTERS, applyFilters } from "./crm/filters";
 import { labelOf, PIPELINE_STAGES, isClosedStage } from "./crm/constants";
 import { baseTextSelection, Notice, C, iconBtnStyle, Icon } from "./components/ui";
-import { LoginScreen, LoadingScreen } from "./components/LoginScreen";
+import { LoginScreen, LoadingScreen, ProfilePicker } from "./components/LoginScreen";
+import { PROFILES, getStoredProfileId, storeProfileId, profileUser } from "./crm/profiles";
+import { isRecentlyAdded } from "./crm/filters";
 import { LeadDetailModal } from "./components/lead/LeadDetailModal";
 import { SaleDialog } from "./components/SaleDialog";
 import { ImportModal } from "./components/ImportModal";
@@ -36,14 +38,25 @@ function subscriptionError(e) {
 
 export default function App() {
   const auth = useCrmAuth();
+  const [profileId, setProfileId] = useState(getStoredProfileId);
+  const pickProfile = (id) => {
+    storeProfileId(id);
+    setProfileId(id);
+  };
   if (auth.status === "loading") return <LoadingScreen />;
   if (auth.status === "signed_out") return <LoginScreen onSignIn={auth.signIn} onResetPassword={auth.resetPassword} />;
-  return <Crm user={auth.user} onSignOut={auth.signOut} />;
+  // Na het inloggen altijd eerst een profiel kiezen (Luke of Indy).
+  const user = profileUser(auth.user, profileId);
+  const signOut = () => {
+    pickProfile(null);
+    auth.signOut();
+  };
+  if (!user) return <ProfilePicker profiles={PROFILES} onPick={pickProfile} onSignOut={signOut} />;
+  return <Crm key={user.id} user={user} onSignOut={signOut} onSwitchProfile={() => pickProfile(null)} />;
 }
 
-export function Crm({ user, onSignOut }) {
+export function Crm({ user, onSignOut, onSwitchProfile }) {
   const [rawLeads, setRawLeads] = useState([]);
-  const [users, setUsers] = useState([]);
   const [partners, setPartners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -52,7 +65,8 @@ export function Crm({ user, onSignOut }) {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [view, setView] = usePref(user.id, "leadView", "kaarten");
   const [collapsed, setCollapsed] = usePref(user.id, "sidebarCollapsed", typeof window !== "undefined" && window.innerWidth < 1180);
-  const [readIds, setReadIds] = usePref(user.id, "notificationsRead", []);
+  const [readIds, setReadIdsState] = useState([]);
+  const [subError, setSubError] = useState(null);
   const route = useHashRoute();
   const [modal, setModal] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -76,11 +90,19 @@ export function Crm({ user, onSignOut }) {
           setLoading(false);
         }
       ),
-      subscribeUsers(setUsers, (e) => console.error("users", e)),
       subscribePartners(setPartners, (e) => console.error("partners", e)),
       // Taken en partnerkoppelingen van alle leads (Agenda, notificaties, KPI's, Partners).
-      subscribeAllSub("tasks", setTasks, (e) => console.error("tasks", e)),
-      subscribeAllSub("partnerLinks", setLinks, (e) => console.error("partnerLinks", e)),
+      // Lukt dit niet, dan tonen we dat: anders mist de Agenda stilletjes items.
+      subscribeAllSub("tasks", setTasks, (e) => {
+        console.error("tasks", e);
+        setSubError("Taken konden niet worden geladen, dus de Agenda is mogelijk niet compleet. Publiceer de Firestore rules (zie README).");
+      }),
+      subscribeAllSub("partnerLinks", setLinks, (e) => {
+        console.error("partnerLinks", e);
+        setSubError("Partneropvolgingen konden niet worden geladen, dus de Agenda is mogelijk niet compleet. Publiceer de Firestore rules (zie README).");
+      }),
+      // Gelezen notificaties per profiel, in Firestore: blijft bewaard na herstarten en op elk apparaat.
+      subscribeNotificationReads(userId, setReadIdsState, (e) => console.error("notificaties", e)),
     ];
     return () => unsubs.forEach((u) => u && u());
   }, [userId]);
@@ -91,8 +113,18 @@ export function Crm({ user, onSignOut }) {
     return () => clearInterval(t);
   }, []);
 
-  const activeUsers = useMemo(() => users.filter((u) => u.active !== false), [users]);
-  const leads = useMemo(() => rawLeads.map((r) => normalizeLead(r, { users })), [rawLeads, users]);
+  // Teamleden = de profielen (Luke en Indy).
+  const activeUsers = PROFILES;
+  const leads = useMemo(() => rawLeads.map((r) => normalizeLead(r, { users: PROFILES })), [rawLeads]);
+
+  // Eenmalig per sessie: "eerste benadering" afleiden voor leads die dat nog missen
+  // (uit de tijdlijn). Vult alleen lege velden, verzint niets.
+  const backfilled = useRef(false);
+  useEffect(() => {
+    if (loading || backfilled.current || !rawLeads.length) return;
+    backfilled.current = true;
+    backfillContactAttempts(leads, user).catch((e) => console.error("backfill benadering", e));
+  }, [loading, rawLeads.length, leads, user]);
 
   const places = useMemo(
     () => Array.from(new Set(leads.flatMap((l) => l.places || []))).sort((a, b) => a.localeCompare(b, "nl")),
@@ -100,8 +132,9 @@ export function Crm({ user, onSignOut }) {
   );
   // Aantallen per tabblad (fase), los van de andere filters.
   const tabCounts = useMemo(() => {
-    const c = { open: 0, archived: 0 };
+    const c = { open: 0, archived: 0, recent: 0 };
     leads.forEach((l) => {
+      if (!l.archived && isRecentlyAdded(l, now)) c.recent += 1;
       if (l.archived) {
         c.archived += 1;
         return;
@@ -110,15 +143,18 @@ export function Crm({ user, onSignOut }) {
       if (!isClosedStage(l.pipelineStage)) c.open += 1;
     });
     return c;
-  }, [leads]);
+  }, [leads, now]);
 
   const notifications = useMemo(() => buildNotifications({ leads, tasks, links, now }), [leads, tasks, links, now]);
-  const allIds = notifications.map((n) => n.id).join("|");
-  // Gelezen-lijst opschonen: alleen ids die nog bestaan bewaren.
-  useEffect(() => {
-    const ids = new Set(allIds.split("|"));
-    setReadIds((r) => (r.some((id) => !ids.has(id)) ? r.filter((id) => ids.has(id)) : r));
-  }, [allIds, setReadIds]);
+  // Gelezen-status opslaan in Firestore (per profiel). Niet meer "opschonen" bij het
+  // opstarten: toen waren de leads nog niet geladen en ging alles verloren.
+  function setReadIds(updater) {
+    setReadIdsState((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveNotificationReads(userId, next).catch((e) => console.error("notificaties opslaan", e));
+      return next;
+    });
+  }
 
   const filtered = useMemo(() => applyFilters(leads, filters, { currentUserId: user.id, now }), [leads, filters, user.id, now]);
 
@@ -160,7 +196,10 @@ export function Crm({ user, onSignOut }) {
   async function handleStageChange(lead, stage) {
     if (stage === lead.pipelineStage) return;
     const after = { ...lead, pipelineStage: stage };
-    const v = validateLead(after, { partnerCount: lead.partnerSummary?.count || 0, previousStage: lead.pipelineStage });
+    const ctx = { partnerCount: lead.partnerSummary?.count || 0, previousStage: lead.pipelineStage };
+    const v = validateLead(after, ctx);
+    v.errors = blockingErrors(lead, after, ctx);
+    v.valid = Object.keys(v.errors).length === 0;
     if (!v.valid) {
       const firstKey = Object.keys(v.errors)[0];
       openLead(lead, FIELD_TABS[firstKey] || "overview", {
@@ -234,6 +273,7 @@ export function Crm({ user, onSignOut }) {
         <Topbar
           user={user}
           onSignOut={onSignOut}
+          onSwitchProfile={onSwitchProfile}
           search={<GlobalSearch leads={leads} partners={partners} onOpenLead={(l) => openLead(l)} onOpenPartner={openPartner} />}
           bell={
             <NotificationBell
@@ -253,6 +293,11 @@ export function Crm({ user, onSignOut }) {
           {error && (
             <div style={{ marginBottom: 16 }}>
               <Notice tone="error">{error}</Notice>
+            </div>
+          )}
+          {subError && (
+            <div style={{ marginBottom: 16 }}>
+              <Notice tone="warn">{subError}</Notice>
             </div>
           )}
           <CallFlowNotices settings={callSettings} leads={leads} onOpenLead={(id) => openLeadById(id, "calls")} />
@@ -289,7 +334,7 @@ export function Crm({ user, onSignOut }) {
             />
           )}
           {page === "agenda" && <AgendaPage leads={leads} tasks={tasks} links={links} users={activeUsers} now={now} initialView={route.param} onOpenLead={(l, tab) => l && openLead(l, tab)} />}
-          {page === "kpis" && <KpiPage leads={leads} links={links} partners={partners} users={users} now={now} navigate={route.navigate} onOpenPartner={openPartner} onShowLeads={showLeads} />}
+          {page === "kpis" && <KpiPage leads={leads} links={links} partners={partners} now={now} navigate={route.navigate} onOpenPartner={openPartner} onShowLeads={showLeads} />}
           {page === "partners" && (
             <PartnersPage partners={partners} links={links} leads={leads} user={user} now={now} onOpenLead={(l, tab) => l && openLead(l, tab)} openPartnerId={route.param || null} setOpenPartnerId={(id) => route.navigate("partners", id || "")} />
           )}

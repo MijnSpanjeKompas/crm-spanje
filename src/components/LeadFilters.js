@@ -32,12 +32,13 @@ function Sel({ value, onChange, allLabel, options }) {
 }
 
 // Pipelinetabs: de dagelijkse fases direct zichtbaar, de rest onder "Meer".
-const PRIMARY_TABS = ["open", "new_lead", "appointment_scheduled", "partner_connected", "follow_up_later"];
+const PRIMARY_TABS = ["open", "recent", "new_lead", "appointment_scheduled", "partner_connected", "follow_up_later"];
 const MORE_TABS = ["purchase_process", "completed", "unreachable", "stopped", "archived"];
 
 // Korte namen (volledige fasenaam in de tooltip).
 const SHORT_LABELS = {
   open: "Alle open",
+  recent: "Recent toegevoegd",
   new_lead: "Nieuw",
   appointment_scheduled: "Gesprek",
   partner_connected: "Doorgestuurd",
@@ -52,12 +53,14 @@ function tabLabel(key) {
 
 function tabTitle(key) {
   if (key === "open") return "Alle leads die nog lopen";
+  if (key === "recent") return "Binnengekomen in de laatste 30 dagen, nieuwste bovenaan";
   if (key === "archived") return "Gearchiveerde leads";
   return `Fase: ${labelOf(PIPELINE_STAGES, key)}`;
 }
 
 /** Welk tabblad hoort bij de huidige filters (null als een snelfilter actief is). */
 export function activeTabOf(filters) {
+  if (filters.recent) return "recent";
   if (filters.quick) return null;
   if (filters.scope === "archived") return "archived";
   if (filters.stage) return filters.stage;
@@ -65,9 +68,10 @@ export function activeTabOf(filters) {
 }
 
 export function filtersForTab(key) {
-  if (key === "open") return { scope: "open", stage: "", quick: null };
-  if (key === "archived") return { scope: "archived", stage: "", quick: null };
-  return { scope: "open", stage: key, quick: null };
+  if (key === "recent") return { scope: "all", stage: "", quick: null, recent: true };
+  if (key === "open") return { scope: "open", stage: "", quick: null, recent: false };
+  if (key === "archived") return { scope: "archived", stage: "", quick: null, recent: false };
+  return { scope: "open", stage: key, quick: null, recent: false };
 }
 
 function TabButton({ k, active, count, onChange, inMenu }) {
@@ -179,17 +183,6 @@ export function LeadFilters({ filters, setFilters, users, partners, places, curr
           />
         </div>
 
-        <select value={filters.owner} onChange={(e) => set("owner")(e.target.value)} style={selectStyle} aria-label="Verantwoordelijke">
-          <option value="all">Iedereen</option>
-          <option value="me">Mijn leads</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.displayName}
-            </option>
-          ))}
-          <option value="none">Geen verantwoordelijke</option>
-        </select>
-
         <select value={filters.followUp} onChange={(e) => set("followUp")(e.target.value)} style={selectStyle} aria-label="Opvolgdatum">
           <option value="">Alle opvolgdata</option>
           <option value="overdue">Te laat</option>
@@ -269,7 +262,6 @@ export function LeadFilters({ filters, setFilters, users, partners, places, curr
               </button>
             </span>
           )}
-          {filters.owner === "me" && currentUser && <Badge color="#33506b" bg="#edf1f5">Alleen leads van {currentUser.displayName}</Badge>}
           {(filters.arrivedFrom || filters.reached || filters.campaign || filters.content) && (
             <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
               <Badge color="#8c6010" bg="#fcf7e8">

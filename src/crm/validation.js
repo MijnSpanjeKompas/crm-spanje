@@ -111,6 +111,48 @@ export function validateLead(lead, ctx = {}) {
   return { errors, warnings, valid: Object.keys(errors).length === 0 };
 }
 
+/** Bij welke velden hoort een fout? Wijzig je één daarvan, dan moet de fout opgelost zijn. */
+const ERROR_FIELDS = {
+  name: ["name"],
+  email: ["email", "phone"],
+  phone: ["phone"],
+  appointmentDate: ["appointmentDate", "appointmentStatus", "pipelineStage"],
+  nextActionDate: ["nextActionType", "nextActionDate", "nextActionMonthOnly", "pipelineStage"],
+  nextActionLabel: ["nextActionType", "nextActionLabel"],
+  closureReason: ["closureReason", "pipelineStage"],
+  closureNotes: ["closureReason", "closureNotes", "pipelineStage"],
+  budgetMax: ["budgetMin", "budgetMax"],
+  forwarding: ["pipelineStage"],
+  leadSource: ["leadSource"],
+  consentStatus: ["consentStatus"],
+};
+
+function sameValue(a, b) {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+/**
+ * Alleen fouten die door DEZE wijziging ontstaan blokkeren het opslaan.
+ * Een oud probleem in een ander veld (bijv. een kort telefoonnummer uit de
+ * import, of een oude actie zonder datum) mag niet tegenhouden dat je
+ * bijvoorbeeld een gesprek inplant. Anders "verdwijnen" wijzigingen.
+ */
+export function blockingErrors(before, after, ctx = {}) {
+  const now = validateLead(after, ctx).errors;
+  const was = validateLead(before, { ...ctx, previousStage: before.pipelineStage }).errors;
+  const out = {};
+  Object.entries(now).forEach(([key, msg]) => {
+    const fields = ERROR_FIELDS[key] || [key];
+    const sameProblem = was[key] === msg;
+    // Een fasewissel (bijv. door een gesprek in te plannen) maakt een oud,
+    // ongewijzigd probleem niet ineens blokkerend.
+    const touched = fields.filter((f) => !(sameProblem && f === "pipelineStage")).some((f) => !sameValue(before[f], after[f]));
+    if (sameProblem && !touched) return; // bestond al en je raakt het niet aan
+    out[key] = msg;
+  });
+  return out;
+}
+
 /** Welke tab hoort bij een foutveld (om de gebruiker er direct heen te sturen). */
 export const FIELD_TABS = {
   name: "overview",

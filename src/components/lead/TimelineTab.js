@@ -48,6 +48,8 @@ const TYPE_TONE = {
   document: { color: C.info, bg: C.infoBg },
   viewing: { color: C.success, bg: C.successBg },
   other: { color: C.textMuted, bg: C.surfaceSunken },
+  contact_moment: { color: C.navy, bg: C.navySoft },
+  action_done: { color: C.success, bg: C.successBg },
   system: { color: C.textSubtle, bg: C.surfaceSoft },
 };
 
@@ -151,6 +153,9 @@ const KEY_EVENTS = new Set([
   "lead_closed",
   "lead_reopened",
   "notes_moved_to_timeline",
+  "call_approved",
+  "milestones_rolled_back",
+  "contact_moment_deleted",
 ]);
 const KEY_FIELDS = new Set(["pipelineStage", "nextAction"]);
 

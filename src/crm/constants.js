@@ -143,11 +143,28 @@ export const ACTIVITY_TYPES = [
   { value: "document", label: "Document", icon: "file" },
   { value: "viewing", label: "Bezichtiging", icon: "home" },
   { value: "other", label: "Anders", icon: "dot" },
+  // Contactmoment: vrije titel + tekst. Telt als klantcontact, tenzij bij het
+  // vastleggen "met de klant" is uitgezet (metadata.customerContact = false).
+  { value: "contact_moment", label: "Contactmoment", customerContact: true, auto: true, icon: "chat" },
+  // Afgevinkte volgende actie ("Gedaan").
+  { value: "action_done", label: "Actie uitgevoerd", auto: true, icon: "checkCircle" },
   { value: "system", label: "Systeem", system: true, icon: "cog" },
 ];
 
-/** Typen die een gebruiker handmatig kan kiezen (systeem niet). */
-export const MANUAL_ACTIVITY_TYPES = ACTIVITY_TYPES.filter((t) => !t.system);
+/** Typen die een gebruiker handmatig kan kiezen (systeem en eigen blokken niet). */
+export const MANUAL_ACTIVITY_TYPES = ACTIVITY_TYPES.filter((t) => !t.system && !t.auto);
+
+/**
+ * Telt deze activiteit als klantcontact? Een contactmoment met
+ * customerContact = false (bijv. "Controle makelaar") telt niet.
+ */
+export function activityIsCustomerContact(type, metadata) {
+  if (!isCustomerContactType(type)) return false;
+  return !(metadata && metadata.customerContact === false);
+}
+
+/** Volgende acties die, als ze zijn afgevinkt, gelden als benadering van de lead. */
+export const CONTACT_ATTEMPT_ACTIONS = ["first_contact", "call_back", "send_whatsapp", "send_email", "follow_up_whatsapp", "conduct_appointment"];
 
 export function isCustomerContactType(type) {
   return Boolean(optionOf(ACTIVITY_TYPES, type)?.customerContact);
@@ -505,6 +522,13 @@ export const MILESTONES = [
   { key: "purchaseCompletedAt", label: "Aankoop afgerond" },
   { key: "stoppedAt", label: "Gestopt" },
 ];
+
+/**
+ * Fases waarin "gereserveerd" (nog) geldt. Staat een lead weer op een eerdere
+ * fase (bijv. na een test of correctie), dan telt de reservering niet meer mee.
+ * "Gestopt" houdt de historie: een reservering die afketst blijft zichtbaar.
+ */
+export const RESERVATION_VALID_STAGES = ["purchase_process", "completed", "stopped"];
 
 /** Fases die "doorgestuurd" of verder betekenen. */
 export const FORWARDED_OR_LATER = ["partner_connected", "purchase_process", "completed"];

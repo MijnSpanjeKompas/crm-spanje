@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PIPELINE_STAGES, PRIORITIES, REGIONS, PURCHASE_TIMELINES, isSold, labelOf } from "../../crm/constants";
 import { formatDate } from "../../crm/dates";
 import { emptyLead, findDuplicateLeads } from "../../crm/normalize";
-import { validateLead, FIELD_TABS } from "../../crm/validation";
+import { validateLead, blockingErrors, FIELD_TABS } from "../../crm/validation";
 import { getLeadSignals, SEVERITY_STYLE } from "../../crm/signals";
 import { createLead, updateLead, setPinned, subscribeLeadSub, archiveLead, restoreLead, deleteLeadPermanently, dismissPossibleDuplicate } from "../../crm/services";
 import {
@@ -33,6 +33,7 @@ import { TimelineTab } from "./TimelineTab";
 import { PartnersTab } from "./PartnersTab";
 import { FilesTab } from "./FilesTab";
 import { CallsTab } from "./CallsTab";
+import { ContactMomentsTab, isContactEntry } from "./ContactMomentsTab";
 import { useCallSettings } from "../../crm/useCallFlow";
 
 /** Wachttijd na de laatste toetsaanslag voordat een tekstveld wordt opgeslagen. */
@@ -93,7 +94,7 @@ function dirtyKeys(edits, base) {
   return Object.keys(edits).filter((k) => !same(edits[k], base?.[k]));
 }
 
-const TAB_LABEL = { overview: "Overzicht", calls: "Gesprek", profile: "Zoekprofiel", followup: "Opvolging", timeline: "Tijdlijn" };
+const TAB_LABEL = { overview: "Overzicht", contacts: "Contactmomenten", calls: "Gesprek", profile: "Zoekprofiel", followup: "Opvolging", timeline: "Tijdlijn" };
 
 // ─── HEADER ──────────────────────────────────────────────────────────────────
 function HeaderChips({ lead }) {
@@ -258,11 +259,11 @@ export function LeadDetailModal({ lead, isNew, initialEdits, initialTab, initial
       return true;
     }
     const after = { ...current, ...snapshot };
-    const v = validateLead(after, { partnerCount: partnerCountRef.current, previousStage: current.pipelineStage });
-    if (!v.valid) {
-      setErrors(v.errors);
-      const firstKey = Object.keys(v.errors)[0];
-      setSaveState({ status: "invalid", text: v.errors[firstKey], tab: FIELD_TABS[firstKey] });
+    const blocking = blockingErrors(current, after, { partnerCount: partnerCountRef.current, previousStage: current.pipelineStage });
+    if (Object.keys(blocking).length) {
+      setErrors(blocking);
+      const firstKey = Object.keys(blocking)[0];
+      setSaveState({ status: "invalid", text: blocking[firstKey], tab: FIELD_TABS[firstKey] });
       return false;
     }
     setErrors({});
@@ -414,6 +415,7 @@ export function LeadDetailModal({ lead, isNew, initialEdits, initialTab, initial
   const dupLeads = dupIds.map((id) => allLeads.find((l) => l.id === id)).filter(Boolean);
   const tabs = [
     { key: "overview", label: "Overzicht", alert: ["name", "email", "phone", "closureReason", "closureNotes", "forwarding", "consentStatus", "leadSource"].some((k) => errors[k]) },
+    { key: "contacts", label: "Contactmomenten", count: activities.items.filter(isContactEntry).length },
     { key: "calls", label: "Gesprek", count: calls.items.length, alert: calls.items.some((c) => c.status === "done" || c.status === "error") },
     { key: "profile", label: "Zoekprofiel", alert: Boolean(errors.budgetMax) },
     { key: "followup", label: "Opvolging", count: base.openTaskCount || 0, alert: ["nextActionDate", "nextActionLabel", "appointmentDate"].some((k) => errors[k]) },
@@ -460,11 +462,6 @@ export function LeadDetailModal({ lead, isNew, initialEdits, initialTab, initial
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
                 <OptionBadge options={PIPELINE_STAGES} value={base.pipelineStage} />
                 <OptionBadge options={PRIORITIES} value={base.priority} prefix="Prio: " />
-                {base.ownerName && (
-                  <Badge color="#334a5e" bg="#ffffff" icon="user">
-                    {base.ownerName}
-                  </Badge>
-                )}
                 {base.archived && <Badge icon="archive">Gearchiveerd</Badge>}
                 <span style={{ width: 1, height: 16, background: C.border, margin: "0 2px" }} aria-hidden="true" />
                 <HeaderChips lead={base} />
@@ -588,9 +585,10 @@ export function LeadDetailModal({ lead, isNew, initialEdits, initialTab, initial
         ) : (
           <>
             {tab === "overview" && <OverviewTab {...ctx} stats={{ activities: activities.items, partnerLinks: partnerLinks.items }} onGoTab={setTab} />}
+            {tab === "contacts" && <ContactMomentsTab {...ctx} activities={activities} />}
             {tab === "calls" && <CallsTab {...ctx} calls={calls} settings={callSettings} />}
             {tab === "profile" && <ProfileTab {...ctx} />}
-            {tab === "followup" && <FollowUpTab {...ctx} tasks={tasks} />}
+            {tab === "followup" && <FollowUpTab {...ctx} tasks={tasks} activities={activities} clearEdits={clearEdits} />}
             {tab === "timeline" && <TimelineTab {...ctx} activities={activities} clearEdits={clearEdits} />}
             {tab === "partners" && <PartnersTab {...ctx} links={partnerLinks} />}
             {tab === "files" && <FilesTab {...ctx} files={files} />}

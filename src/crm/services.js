@@ -30,8 +30,10 @@ import {
   optionOf,
   labelOf,
   isClosedStage,
-  isCustomerContactType,
   isSuccessfulContact,
+  activityIsCustomerContact,
+  nextActionText,
+  CONTACT_ATTEMPT_ACTIONS,
   SCHEMA_VERSION,
   SOLD_STAGE,
 } from "./constants";
@@ -39,7 +41,7 @@ import { buildLeadPayload, buildMigrationFields } from "./normalize";
 import { changedKeys, describeLeadChanges, saleSummary } from "./changes";
 import { toDate, toMillis } from "./dates";
 import { importActivity, sheetLeadId } from "./sheetImport";
-import { milestonePatch, contactMilestonePatch, attemptMilestonePatch, deriveMilestones } from "./milestones";
+import { milestonePatch, contactMilestonePatch, attemptMilestonePatch, deriveMilestones, rollbackPatch, deriveFirstHandling } from "./milestones";
 
 const SUBCOLLECTIONS = ["activities", "files", "partnerLinks", "tasks"];
 const CONTACT_METHOD_BY_ACTIVITY = { phone_call: "phone", whatsapp: "whatsapp", email: "email", appointment: "appointment" };
@@ -83,13 +85,18 @@ function maxDate(a, b) {
  * (lastActivityAt, lastContactAt, lastContactAttemptAt). Gaat nooit terug in de tijd.
  * @param {Object} current  huidige (gedeeltelijke) leadwaarden
  */
-export function activityLeadPatch(current, { type, outcome, occurredAt }) {
+export function activityLeadPatch(current, { type, outcome, occurredAt, metadata }) {
   const when = toDate(occurredAt) || new Date();
   const patch = {
     lastActivityAt: maxDate(current.lastActivityAt, when),
     lastActivityType: type,
   };
-  if (isCustomerContactType(type)) {
+  // Afgevinkte contactactie (bijv. "WhatsApp sturen" → Gedaan) = benadering.
+  if (metadata?.contactAttempt) {
+    patch.lastContactAttemptAt = maxDate(current.lastContactAttemptAt, when);
+    Object.assign(patch, attemptMilestonePatch(current, when));
+  }
+  if (activityIsCustomerContact(type, metadata)) {
     patch.lastContactAttemptAt = maxDate(current.lastContactAttemptAt, when);
     Object.assign(patch, attemptMilestonePatch(current, when));
     if (isSuccessfulContact(type, outcome)) {
@@ -139,7 +146,7 @@ function queueActivities(batch, leadId, currentLead, activities, user) {
     const occurredAt = toDate(a.occurredAt) || new Date();
     const aDoc = buildActivityDoc({ ...a, occurredAt }, user);
     batch.set(doc(subCol(leadId, "activities")), aDoc);
-    const p = activityLeadPatch(running, { type: aDoc.type, outcome: aDoc.outcome, occurredAt });
+    const p = activityLeadPatch(running, { type: aDoc.type, outcome: aDoc.outcome, occurredAt, metadata: aDoc.metadata });
     running = { ...running, ...p };
     patch = { ...patch, ...p };
   });
@@ -244,6 +251,19 @@ export async function createLead(form, user, opts = {}) {
  * @param {Object} user
  * @param {{extraActivities?: Array}} [opts]
  */
+/** Velden waarvan een wijziging betekent dat iemand de lead echt heeft opgepakt. */
+const HANDLING_KEYS = new Set([
+  "pipelineStage",
+  "nextActionType",
+  "nextActionDate",
+  "appointmentStatus",
+  "appointmentDate",
+  "qualificationStatus",
+  "purchaseIntent",
+  "leadSummary",
+  "closureReason",
+]);
+
 export async function updateLead(before, after, user, opts = {}) {
   const u = userFields(user);
   const beforePayload = buildLeadPayload(before);
@@ -266,9 +286,24 @@ export async function updateLead(before, after, user, opts = {}) {
   if (wasClosed && !nowClosed) patch.reopenedAt = serverTimestamp();
   // Mijlpalen: eerste keer doorgestuurd/gereserveerd/afgerond/... (nooit overschreven).
   Object.assign(patch, milestonePatch(before, afterPayload, new Date()));
+  // Fase teruggezet (bijv. test op Gereserveerd)? Dan telt die mijlpaal niet meer.
+  const rollback = rollbackPatch(before, afterPayload);
+  Object.assign(patch, rollback);
+  // Eerste keer dat een teamlid de lead inhoudelijk oppakt = eerste benadering
+  // (voor "Hoe snel reageren we?"), als er nog niets is vastgelegd.
+  if (!before.firstContactAttemptAt && !before.firstContactAt && user?.id && keys.some((k) => HANDLING_KEYS.has(k))) {
+    const onlyPlannedFirstContact = keys.every((k) => k.startsWith("nextAction")) && afterPayload.nextActionType === "first_contact";
+    if (!onlyPlannedFirstContact) patch.firstContactAttemptAt = new Date();
+  }
 
+  const suppress = new Set(opts.suppressFields || []);
   const activities = [
-    ...describeLeadChanges(beforePayload, afterPayload).map((a) => ({ type: "system", ...a })),
+    ...describeLeadChanges(beforePayload, afterPayload)
+      .filter((a) => !suppress.has(a.metadata?.field))
+      .map((a) => ({ type: "system", ...a })),
+    ...(rollback.firstReservedAt === null || rollback.purchaseCompletedAt === null
+      ? [{ type: "system", title: "Fase teruggezet: reservering/aankoop telt niet meer mee in de KPI's", metadata: { event: "milestones_rolled_back", fields: Object.keys(rollback) } }]
+      : []),
     ...(opts.extraActivities || []),
   ];
 
@@ -855,6 +890,146 @@ export async function backfillMilestones(leads, user, { dryRun = false } = {}) {
       batch.update(leadRef(lead.id), clean({ ...patch, milestonesBackfilledAt: serverTimestamp() }));
       await batch.commit();
     }
+  }
+  return summary;
+}
+
+// ─── CONTACTMOMENTEN ─────────────────────────────────────────────────────────
+/**
+ * Contactmoment vastleggen: vrije titel (onderwerp) + tekst + tijdstip.
+ * Staat in de tijdlijn als type "contact_moment" en telt als klantcontact,
+ * behalve als customerContact = false (bijv. "Controle makelaar").
+ */
+export async function addContactMoment(lead, { title, description, occurredAt, customerContact = true }, user) {
+  const t = String(title || "").trim();
+  const d = String(description || "").trim();
+  if (!t && !d) throw new Error("Vul een onderwerp of tekst in.");
+  return addActivity(
+    lead,
+    {
+      type: "contact_moment",
+      title: t || "Contactmoment",
+      description: d,
+      occurredAt: toDate(occurredAt) || new Date(),
+      metadata: { event: "contact_moment", customerContact: Boolean(customerContact) },
+    },
+    user
+  );
+}
+
+export async function updateContactMoment(lead, activity, patch, user) {
+  const u = userFields(user);
+  const data = {};
+  if (patch.title !== undefined) data.title = String(patch.title || "").trim() || "Contactmoment";
+  if (patch.description !== undefined) data.description = String(patch.description || "").trim();
+  if (patch.occurredAt !== undefined) data.occurredAt = toDate(patch.occurredAt) || toDate(activity.occurredAt) || new Date();
+  if (patch.customerContact !== undefined) data["metadata.customerContact"] = Boolean(patch.customerContact);
+  data.editedAt = serverTimestamp();
+  data.editedByName = u.name;
+  const batch = writeBatch(db);
+  batch.update(doc(subCol(lead.id, "activities"), activity.id), data);
+  const customer = patch.customerContact !== undefined ? Boolean(patch.customerContact) : activity.metadata?.customerContact !== false;
+  if (data.occurredAt && customer) {
+    const p = activityLeadPatch(lead, { type: "contact_moment", outcome: "", occurredAt: data.occurredAt, metadata: { customerContact: true } });
+    delete p.lastActivityType;
+    batch.update(leadRef(lead.id), clean(p));
+  }
+  await batch.commit();
+}
+
+export async function deleteContactMoment(lead, activity, user) {
+  const batch = writeBatch(db);
+  batch.delete(doc(subCol(lead.id, "activities"), activity.id));
+  queueActivities(batch, lead.id, lead, [{ type: "system", title: `Contactmoment verwijderd: ${activity.title || "zonder titel"}`, description: activity.description || "", metadata: { event: "contact_moment_deleted" } }], user);
+  await batch.commit();
+}
+
+// ─── VOLGENDE ACTIE AFVINKEN ─────────────────────────────────────────────────
+export const EMPTY_NEXT_ACTION = { nextActionType: "none", nextActionDate: "", nextActionLabel: "", nextActionMonthOnly: false, nextActionNotes: "" };
+
+/**
+ * Volgende actie als "Gedaan" markeren: legt in de tijdlijn vast WAT er is
+ * uitgevoerd (en door wie), en maakt ruimte voor een nieuwe actie.
+ * Contactacties (appen, bellen, mailen) tellen als benadering voor de KPI's.
+ * @param {Object} lead   lead zoals opgeslagen
+ * @param {Object} action velden van de actie die is uitgevoerd (form)
+ */
+export async function completeNextAction(lead, action, { note = "" } = {}, user) {
+  const type = action.nextActionType;
+  if (!type || type === "none") throw new Error("Er staat geen actie gepland.");
+  const label = nextActionText(action);
+  const activity = {
+    type: "action_done",
+    title: `Gedaan: ${label}`,
+    description: [String(note || "").trim(), action.nextActionNotes ? `Toelichting bij de actie: ${action.nextActionNotes}` : ""].filter(Boolean).join("\n"),
+    metadata: {
+      event: "next_action_done",
+      action: type,
+      label,
+      plannedDate: action.nextActionDate || null,
+      monthOnly: Boolean(action.nextActionMonthOnly),
+      contactAttempt: CONTACT_ATTEMPT_ACTIONS.includes(type),
+    },
+  };
+  return updateLead(lead, { ...lead, ...EMPTY_NEXT_ACTION }, user, { extraActivities: [activity], suppressFields: ["nextAction"] });
+}
+
+// ─── NOTIFICATIES: GELEZEN-STATUS PER PROFIEL ────────────────────────────────
+/** settings/notificaties-<profiel> = { readIds: [...] }. Werkt realtime en op elk apparaat. */
+const MAX_READ_IDS = 600;
+
+function notificationDoc(profileId) {
+  return doc(db, "settings", `notificaties-${profileId}`);
+}
+
+export function subscribeNotificationReads(profileId, onData, onError) {
+  return onSnapshot(
+    notificationDoc(profileId),
+    (snap) => {
+      const data = snap && snap.exists && snap.exists() ? snap.data() : {};
+      onData(Array.isArray(data.readIds) ? data.readIds : []);
+    },
+    onError
+  );
+}
+
+export async function saveNotificationReads(profileId, ids) {
+  const list = Array.from(new Set(ids || [])).slice(-MAX_READ_IDS);
+  await setDoc(notificationDoc(profileId), { readIds: list, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+// ─── EERSTE BENADERING AFLEIDEN (bestaande leads) ───────────────────────────
+/**
+ * Voor leads zonder vastgelegde eerste benadering: zoek in de tijdlijn het
+ * eerste moment dat een teamlid de lead oppakte (zie milestones.isHandlingActivity).
+ * Vult alleen lege velden. Elke lead wordt één keer bekeken (contactAttemptCheckedAt).
+ */
+export async function backfillContactAttempts(leads, user, { dryRun = false } = {}) {
+  const todo = leads.filter((l) => !l.firstContactAttemptAt && !l.firstContactAt && !l.contactAttemptCheckedAt);
+  const summary = { checked: 0, updated: 0 };
+  for (const lead of todo) {
+    summary.checked += 1;
+    const snap = await getDocs(subCol(lead.id, "activities"));
+    const at = deriveFirstHandling(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    if (dryRun) {
+      if (at) summary.updated += 1;
+      continue;
+    }
+    const batch = writeBatch(db);
+    if (at) {
+      summary.updated += 1;
+      queueActivities(
+        batch,
+        lead.id,
+        {},
+        [{ type: "system", title: "Eerste benadering afgeleid uit de tijdlijn", description: `Eerste handeling door het team op ${at.toLocaleString("nl-NL")}`, actorType: "system", actorId: "milestone_backfill", occurredAt: at, metadata: { event: "contact_attempt_backfilled" } }],
+        user
+      );
+      batch.update(leadRef(lead.id), clean({ firstContactAttemptAt: at, contactAttemptCheckedAt: serverTimestamp() }));
+    } else {
+      batch.update(leadRef(lead.id), { contactAttemptCheckedAt: serverTimestamp() });
+    }
+    await batch.commit();
   }
   return summary;
 }

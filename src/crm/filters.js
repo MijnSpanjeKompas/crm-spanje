@@ -34,7 +34,17 @@ export const DEFAULT_FILTERS = {
   lastActivity: "",
   sort: "followup",
   quick: null,
+  // Tabblad "Recent toegevoegd": binnengekomen in de laatste RECENT_DAYS dagen, nieuwste eerst.
+  recent: false,
 };
+
+export const RECENT_DAYS = 30;
+
+/** Binnengekomen (formuliertijd, anders aanmaakmoment) in de laatste RECENT_DAYS dagen? */
+export function isRecentlyAdded(lead, now = new Date()) {
+  const d = leadArrivedAt(lead);
+  return Boolean(d) && now - d <= RECENT_DAYS * 24 * 3600 * 1000;
+}
 
 function simplify(s) {
   return String(s || "")
@@ -106,7 +116,9 @@ function matchesLastActivity(lead, value, now) {
 export function applyFilters(leads, f, { currentUserId, now = new Date() } = {}) {
   const quick = f.quick ? QUICK_FILTERS[f.quick] : null;
   const res = leads.filter((l) => {
-    if (quick) {
+    if (f.recent) {
+      if (l.archived || !isRecentlyAdded(l, now)) return false;
+    } else if (quick) {
       if (l.archived && f.scope !== "archived") return false;
       if (!quick.test(l, now)) return false;
     } else if (!matchesScope(l, f.scope, Boolean(f.stage))) return false;
@@ -114,9 +126,6 @@ export function applyFilters(leads, f, { currentUserId, now = new Date() } = {})
     if (f.stage && l.pipelineStage !== f.stage) return false;
     if (f.intent && l.purchaseIntent !== f.intent) return false;
     if (f.priority && l.priority !== f.priority) return false;
-    if (f.owner === "me" && l.ownerId !== currentUserId) return false;
-    if (f.owner === "none" && l.ownerId) return false;
-    if (f.owner && !["all", "me", "none"].includes(f.owner) && l.ownerId !== f.owner) return false;
     if (f.region && !(l.regions || []).includes(f.region)) return false;
     if (f.place && !(l.places || []).some((p) => simplify(p) === simplify(f.place))) return false;
     if (f.goal && l.purchaseGoal !== f.goal) return false;
@@ -139,7 +148,13 @@ export function applyFilters(leads, f, { currentUserId, now = new Date() } = {})
     if (!matchesLastActivity(l, f.lastActivity, now)) return false;
     return true;
   });
+  if (f.recent) return sortByArrival(res);
   return sortLeads(res, f.sort, now);
+}
+
+/** Nieuwste binnenkomst bovenaan (zonder vastgepinde leads voorrang te geven). */
+export function sortByArrival(leads) {
+  return [...leads].sort((a, b) => (toMillis(leadArrivedAt(b)) || 0) - (toMillis(leadArrivedAt(a)) || 0));
 }
 
 const priorityRank = (l) => PRIORITIES.find((p) => p.value === l.priority)?.rank ?? 1;
@@ -147,7 +162,7 @@ const priorityRank = (l) => PRIORITIES.find((p) => p.value === l.priority)?.rank
 export function sortLeads(leads, sort, now = new Date()) {
   return [...leads].sort((a, b) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-    if (sort === "newest") return (toMillis(getCreatedDate(b)) || 0) - (toMillis(getCreatedDate(a)) || 0);
+    if (sort === "newest") return (toMillis(leadArrivedAt(b) || getCreatedDate(b)) || 0) - (toMillis(leadArrivedAt(a) || getCreatedDate(a)) || 0);
     if (sort === "priority") return priorityRank(b) - priorityRank(a) || getNextActionInfo(a, now).sort - getNextActionInfo(b, now).sort;
     if (sort === "last_activity") return (toMillis(b.lastActivityAt) || 0) - (toMillis(a.lastActivityAt) || 0);
     if (sort === "name") return String(a.name).localeCompare(String(b.name), "nl");

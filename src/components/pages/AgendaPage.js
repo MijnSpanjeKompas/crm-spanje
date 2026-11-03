@@ -112,10 +112,9 @@ export function AgendaPage({ leads, tasks, links, users, now, initialView, onOpe
   const [view, setView] = useState(initialView === "today" ? "today" : "week");
   const [anchor, setAnchor] = useState(today);
   const [type, setType] = useState("all");
-  const [ownerId, setOwnerId] = useState("");
   const [picker, setPicker] = useState(null);
   const byId = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads]);
-  const all = useMemo(() => filterAgenda(buildAgendaItems({ leads, tasks, links }), { type, ownerId }), [leads, tasks, links, type, ownerId]);
+  const all = useMemo(() => filterAgenda(buildAgendaItems({ leads, tasks, links }), { type }), [leads, tasks, links, type]);
   const overdue = useMemo(() => overdueItems(all, today), [all, today]);
   const todays = useMemo(() => itemsInRange(all, today, today).filter((it) => !it.monthOnly), [all, today]);
 
@@ -180,14 +179,6 @@ export function AgendaPage({ leads, tasks, links, users, now, initialView, onOpe
             {AGENDA_TYPES.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
-              </option>
-            ))}
-          </select>
-          <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} style={selectStyle} aria-label="Verantwoordelijke">
-            <option value="">Iedereen</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.displayName}
               </option>
             ))}
           </select>

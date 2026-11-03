@@ -97,14 +97,12 @@ export function CommissionsPage({ leads, partners, users, user, now, onOpenLead,
   const [year, setYear] = useState("");
   const [status, setStatus] = useState("");
   const [partnerId, setPartnerId] = useState("");
-  const [ownerId, setOwnerId] = useState("");
   const [editing, setEditing] = useState(null);
 
   const rows = sold
     .filter((l) => !year || saleYear(l) === year)
     .filter((l) => !status || l.commissionStatus === status)
     .filter((l) => !partnerId || l.commissionPartnerId === partnerId || (!l.commissionPartnerId && (l.partnerIds || []).includes(partnerId)))
-    .filter((l) => !ownerId || l.ownerId === ownerId)
     .sort((a, b) => String(b.saleDate || "").localeCompare(String(a.saleDate || "")));
 
   const expected = sold.filter((l) => l.commissionStatus === "expected").reduce((s, l) => s + commissionAmountExpected(l), 0);
@@ -156,14 +154,6 @@ export function CommissionsPage({ leads, partners, users, user, now, onOpenLead,
           {partners.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
-            </option>
-          ))}
-        </select>
-        <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} style={selectStyle} aria-label="Verantwoordelijke">
-          <option value="">Iedereen</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.displayName}
             </option>
           ))}
         </select>

@@ -134,17 +134,20 @@ describe("agenda en notificaties", () => {
     const today = todayISO();
     const leads = [
       normalizeLead({ id: "a", schemaVersion: 2, name: "Rory", appointmentStatus: "scheduled", appointmentDate: today, appointmentTime: "11:00", appointmentType: "video", nextActionType: "follow_up_whatsapp", nextActionDate: addDaysISO(today, -2) }),
-      normalizeLead({ id: "b", schemaVersion: 2, name: "Marije", nextActionType: "call_back", nextActionDate: today }),
+      normalizeLead({ id: "b", schemaVersion: 2, name: "Marije", createdAt: new Date(), nextActionType: "call_back", nextActionDate: today }),
+      // Oude lead zonder contact en een actie die al maanden verlopen is: géén melding meer.
+      normalizeLead({ id: "c", schemaVersion: 2, name: "Oud", createdAt: new Date(2025, 0, 1), nextActionType: "call_back", nextActionDate: "2025-01-10" }),
     ];
     const tasks = [{ id: "t1", leadId: "b", status: "open", dueDate: today, title: "Bewijs opvragen" }];
     const links = [{ id: "k1", leadId: "a", partnerId: "p1", partnerName: "Costa Homes", status: "sent", nextFollowUpAt: addDaysISO(today, -1) }];
     const items = buildAgendaItems({ leads, tasks, links });
-    expect(items.map((i) => i.type).sort()).toEqual(["followup", "followup", "meeting", "partner", "task"]);
+    expect(items.map((i) => i.type).sort()).toEqual(["followup", "followup", "followup", "meeting", "partner", "task"]);
     expect(itemsInRange(items, today, today).map((i) => i.leadName).sort()).toEqual(["Marije", "Marije", "Rory"]);
-    expect(overdueItems(items, today).map((i) => i.type).sort()).toEqual(["followup", "partner"]);
+    expect(overdueItems(items, today).map((i) => i.type).sort()).toEqual(["followup", "followup", "partner"]);
     const notes = buildNotifications({ leads, tasks, links });
     expect(notes[0].severity).toBe("high");
     expect(notes.map((n) => n.kind)).toEqual(expect.arrayContaining(["followup_overdue", "partner_overdue", "task_today", "meeting", "new_lead"]));
+    expect(notes.filter((n) => n.leadId === "c")).toEqual([]);
   });
 
   test("collection group levert taken en koppelingen van alle leads", async () => {
@@ -173,7 +176,7 @@ describe("Command Center UI", () => {
 
   test("navigatie, universeel zoeken, notificaties, agenda, KPI's en partners", async () => {
     window.location.hash = "#/dashboard";
-    window.localStorage.setItem("msk:uLuke:sidebarCollapsed", "false");
+    window.localStorage.setItem("msk:luke:sidebarCollapsed", "false");
     render(<App />);
     const nav = screen.getByRole("navigation", { name: "Hoofdnavigatie" });
     expect(within(nav).getAllByRole("button").map((b) => b.textContent.replace(/\d+$/, ""))).toEqual(

@@ -305,7 +305,7 @@ export function NotificationBell({ notifications, readIds, markRead, markAllRead
 }
 
 // ─── TOPBALK ─────────────────────────────────────────────────────────────────
-export function Topbar({ user, onSignOut, search, bell }) {
+export function Topbar({ user, onSignOut, onSwitchProfile, search, bell }) {
   const initials = (user.displayName || user.email || "?")
     .split(/[\s@.]+/)
     .filter(Boolean)
@@ -324,9 +324,15 @@ export function Topbar({ user, onSignOut, search, bell }) {
             </span>
             <span className="msk-hide-sm" style={{ lineHeight: 1.2 }}>
               <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: C.text }}>{user.displayName}</span>
-              <span style={{ display: "block", fontSize: 11, color: C.textMuted }}>{user.isAdmin ? "Beheerder" : "Medewerker"}</span>
+              <span style={{ display: "block", fontSize: 11, color: C.textMuted }}>Profiel</span>
             </span>
           </div>
+          {onSwitchProfile && (
+            <button type="button" onClick={onSwitchProfile} title="Ander profiel kiezen" aria-label="Ander profiel kiezen" style={{ ...btnStyle("neutral"), minHeight: 40 }}>
+              <Icon name="users" size={15} />
+              <span className="msk-hide-sm">Wissel profiel</span>
+            </button>
+          )}
           <button type="button" onClick={onSignOut} title="Uitloggen" aria-label="Uitloggen" style={{ ...btnStyle("neutral"), minHeight: 40 }}>
             <Icon name="logout" size={15} />
             <span className="msk-hide-sm">Uitloggen</span>

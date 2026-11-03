@@ -188,7 +188,7 @@ describe("Gesprek-tab", () => {
     const call = fake.__getDoc("leads/maurice/calls/c1");
     expect(call.transcript).toBeUndefined();
     expect(call.audioDeleteAfter).toBeTruthy();
-    expect(await within(dialog).findByText(/Goedgekeurd door Luke van Spronsen/)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/Goedgekeurd door Luke/)).toBeInTheDocument();
   });
 
   test("fout: toont uitleg en verwerkt opnieuw via de server", async () => {

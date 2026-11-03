@@ -336,7 +336,6 @@ describe("signalen, KPI's en filters", () => {
     expect(applyFilters(all, DEFAULT_FILTERS, { currentUserId: "uLuke" })).toEqual([a]);
     expect(applyFilters(all, { ...DEFAULT_FILTERS, scope: "archived" }, {})).toEqual([b]);
     expect(applyFilters(all, { ...DEFAULT_FILTERS, scope: "closed" }, {})).toEqual([c]);
-    expect(applyFilters(all, { ...DEFAULT_FILTERS, owner: "me" }, { currentUserId: "uIndy" })).toEqual([]);
     expect(applyFilters(all, { ...DEFAULT_FILTERS, search: "torrev" }, {})).toEqual([a]);
     expect(applyFilters(all, { ...DEFAULT_FILTERS, search: "casa sol" }, {})).toEqual([a]);
     expect(applyFilters(all, { ...DEFAULT_FILTERS, partner: "p1" }, {})).toEqual([a]);

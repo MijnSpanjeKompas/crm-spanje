@@ -5,7 +5,7 @@
 // - nooit een datum verzinnen: onbekend = null;
 // - de tijdlijn (activities) blijft de volledige audittrail.
 
-import { MILESTONES, FORWARDED_OR_LATER, isCustomerContactType } from "./constants";
+import { MILESTONES, FORWARDED_OR_LATER, RESERVATION_VALID_STAGES, activityIsCustomerContact } from "./constants";
 import { toDate } from "./dates";
 import { getCreatedDate } from "./normalize";
 
@@ -67,6 +67,27 @@ export function milestonePatch(before, after, now = new Date()) {
   return patch;
 }
 
+/**
+ * Fase teruggezet (bijv. een test op "Gereserveerd" die weer ongedaan is gemaakt)?
+ * Dan vervallen de mijlpalen die bij de latere fase horen, zodat KPI's kloppen.
+ * De tijdlijn houdt wel vast dat het gebeurd is.
+ */
+export function rollbackPatch(before, after) {
+  const patch = {};
+  if ((before?.pipelineStage || "") === after.pipelineStage) return patch;
+  if (!RESERVATION_VALID_STAGES.includes(after.pipelineStage) && !isEmpty(before?.firstReservedAt)) patch.firstReservedAt = null;
+  if (after.pipelineStage !== "completed" && !isEmpty(before?.purchaseCompletedAt)) patch.purchaseCompletedAt = null;
+  return patch;
+}
+
+/** Telt een opgeslagen reservering/aankoop nog mee bij de huidige fase? */
+function reservationCounts(lead) {
+  return RESERVATION_VALID_STAGES.includes(lead?.pipelineStage);
+}
+function purchaseCounts(lead) {
+  return lead?.pipelineStage === "completed";
+}
+
 /** Eerste geslaagde contact (vanuit activiteiten). Contact is ook altijd een poging. */
 export function contactMilestonePatch(current, when) {
   const patch = {};
@@ -101,8 +122,10 @@ export function deriveMilestones(lead, activities, isSuccessfulContact) {
     if (!found[key]) found[key] = at;
   };
   sorted.forEach((a) => {
-    if (isCustomerContactType(a.type)) first("firstContactAttemptAt", a.at);
-    if (isSuccessfulContact && isSuccessfulContact(a.type, a.outcome)) first("firstContactAt", a.at);
+    const contact = activityIsCustomerContact(a.type, a.metadata);
+    if (contact) first("firstContactAttemptAt", a.at);
+    if (contact && isSuccessfulContact && isSuccessfulContact(a.type, a.outcome)) first("firstContactAt", a.at);
+    if (a.metadata?.contactAttempt) first("firstContactAttemptAt", a.at);
     if (a.metadata?.field === "qualificationStatus" && a.metadata.to === "qualified") first("qualifiedAt", a.at);
     const to = a.metadata?.field === "pipelineStage" ? a.metadata.to : null;
     if (to) {
@@ -120,11 +143,45 @@ export function deriveMilestones(lead, activities, isSuccessfulContact) {
   // Aankoopdatum is door een mens ingevuld → betrouwbaarder dan het logmoment.
   if (lead.pipelineStage === "completed" && dateFromISO(lead.saleDate)) found.purchaseCompletedAt = dateFromISO(lead.saleDate);
 
+  // Teruggezette fases: reservering/aankoop niet opnieuw afleiden.
+  if (!reservationCounts(lead)) delete found.firstReservedAt;
+  if (!purchaseCounts(lead)) delete found.purchaseCompletedAt;
+
   const patch = {};
   MILESTONE_KEYS.forEach((k) => {
     if (isEmpty(lead[k]) && found[k]) patch[k] = found[k];
   });
   return patch;
+}
+
+/**
+ * Wanneer is de lead voor het eerst door ons opgepakt? Voor "Hoe snel reageren we?".
+ * Telt: klantcontact, contactmomenten, afgevinkte contactacties, verwerkte
+ * gesprekken én de eerste inhoudelijke handeling door een teamlid (fase,
+ * volgende actie, gesprek, kwalificatie, partner koppelen, ...).
+ * Niet: het aanmaken/importeren zelf en het plannen van "Eerste contact opnemen".
+ */
+const NOT_HANDLING_EVENTS = new Set(["lead_created", "lead_imported", "milestones_backfilled", "contact_attempt_backfilled", "archived", "unarchived", "duplicate_dismissed"]);
+const IMPORT_ACTORS = new Set(["", "system", "sheets_import", "milestone_backfill"]);
+
+export function isHandlingActivity(a) {
+  if (activityIsCustomerContact(a.type, a.metadata) || a.metadata?.contactAttempt) return true;
+  if (a.metadata?.event === "call_approved") return true;
+  if (a.type === "contact_moment") return true;
+  if (a.actorType === "system") return false;
+  if (IMPORT_ACTORS.has(String(a.createdByUserId || ""))) return false;
+  if (NOT_HANDLING_EVENTS.has(a.metadata?.event)) return false;
+  if (a.metadata?.field === "nextAction" && a.metadata?.to === "first_contact") return false;
+  return true;
+}
+
+export function deriveFirstHandling(activities) {
+  const times = (activities || [])
+    .filter(isHandlingActivity)
+    .map((a) => toDate(a.occurredAt) || toDate(a.createdAt))
+    .filter(Boolean)
+    .sort((x, y) => x - y);
+  return times[0] || null;
 }
 
 // ─── FUNNEL ──────────────────────────────────────────────────────────────────
@@ -148,9 +205,9 @@ export function hasDirectEvidence(lead, step) {
     case "forwarded":
       return Boolean(lead.firstForwardedAt || FORWARDED_OR_LATER.includes(lead.pipelineStage) || (lead.partnerSummary?.count || 0) > 0);
     case "reserved":
-      return Boolean(lead.firstReservedAt || lead.pipelineStage === "purchase_process" || lead.pipelineStage === "completed");
+      return reservationCounts(lead) && Boolean(lead.firstReservedAt || lead.pipelineStage === "purchase_process" || lead.pipelineStage === "completed");
     case "purchased":
-      return Boolean(lead.purchaseCompletedAt || lead.pipelineStage === "completed");
+      return purchaseCounts(lead);
     default:
       return false;
   }
@@ -188,9 +245,9 @@ export function reachedAt(lead, step) {
     case "forwarded":
       return toDate(lead.firstForwardedAt);
     case "reserved":
-      return toDate(lead.firstReservedAt) || dateFromISO(lead.reservedAt);
+      return reservationCounts(lead) ? toDate(lead.firstReservedAt) || dateFromISO(lead.reservedAt) : null;
     case "purchased":
-      return toDate(lead.purchaseCompletedAt) || (lead.pipelineStage === "completed" ? dateFromISO(lead.saleDate) : null);
+      return purchaseCounts(lead) ? toDate(lead.purchaseCompletedAt) || dateFromISO(lead.saleDate) : null;
     default:
       return null;
   }

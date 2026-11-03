@@ -38,7 +38,6 @@ import {
   contactLinks,
   TextField,
   SelectField,
-  UserSelectField,
   TextAreaField,
   Notice,
   Badge,
@@ -138,7 +137,6 @@ export function StatusSection({ form, set, setMany, errors, users, lead }) {
         options={selectableStages(lead?.pipelineStage || form.pipelineStage)}
         allowEmpty={false}
       />
-      <UserSelectField label="Verantwoordelijke" value={form.ownerId} users={users} onChange={(id, name) => setMany({ ownerId: id, ownerName: name })} />
       {errors.forwarding && (
         <div style={full}>
           <Notice tone="warn">{errors.forwarding}</Notice>
@@ -160,9 +158,6 @@ export function StatusSection({ form, set, setMany, errors, users, lead }) {
           <SelectField label={needsReason ? "Afsluitreden *" : "Afsluitreden"} value={form.closureReason} onChange={(v) => set("closureReason", v)} options={CLOSURE_REASONS} error={errors.closureReason} />
           <TextField label="Toelichting" value={form.closureNotes} onChange={(v) => set("closureNotes", v)} error={errors.closureNotes} />
         </>
-      )}
-      {form.ownerName && !form.ownerId && (
-        <div style={{ ...full, fontSize: 11.5, color: C.goldText }}>Oude verantwoordelijke "{form.ownerName}" is niet gekoppeld aan een gebruiker. Kies de juiste persoon.</div>
       )}
     </div>
   );
