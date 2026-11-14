@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { REGIONS, labelOf, LEAD_SOURCES } from "../crm/constants";
-import { parseCsv, planImport, SHEET_COLUMNS } from "../crm/sheetImport";
+import { parseCsv, planImport, missingColumns as findMissing } from "../crm/sheetImport";
 import { importPlannedLeads } from "../crm/services";
 import { Modal, ModalTitle, CloseButton, Notice, Badge, Icon, btnStyle, inputStyle, formatBudget, C } from "./ui";
 
@@ -33,8 +33,7 @@ export function ImportModal({ leads, user, onClose, onOpenLead }) {
   const plan = useMemo(() => planImport(rows, leads), [rows, leads]);
   const counts = plan.reduce((acc, p) => ({ ...acc, [p.status]: (acc[p.status] || 0) + 1 }), {});
   const toImport = (counts.new || 0) + (counts.possible_duplicate || 0);
-  const missingColumns = rows.length ? SHEET_COLUMNS.filter((c) => !Object.keys(rows[0]).some((k) => k.trim().toLowerCase().replace(/[\s_]/g, "") === c.toLowerCase().replace(/[\s_]/g, ""))) : [];
-  const criticalMissing = missingColumns.filter((c) => ["Submission ID", "name"].includes(c));
+  const { missing: missingColumns, critical: criticalMissing } = useMemo(() => findMissing(rows), [rows]);
 
   async function readFile(file) {
     setError("");
@@ -82,8 +81,8 @@ export function ImportModal({ leads, user, onClose, onOpenLead }) {
       {!rows.length && (
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ fontSize: 13.5, color: C.textBody, lineHeight: 1.6 }}>
-            In Google Sheets: <strong>Bestand → Downloaden → Door komma's gescheiden waarden (.csv)</strong>. Kies dat bestand hieronder, of kopieer de rijen
-            (inclusief de kopregel) en plak ze in het tekstvak.
+            Klik in de Sheet op het <strong>rijnummer</strong> van de lead (links), kopieer (Ctrl+C) en plak hieronder. De kopregel hoeft niet mee. Meerdere rijen
+            tegelijk mag ook. Of kies een CSV-export (<strong>Bestand → Downloaden → .csv</strong>).
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <input ref={fileRef} type="file" accept=".csv,.tsv,text/csv,text/plain" style={{ display: "none" }} onChange={(e) => readFile(e.target.files?.[0])} />
@@ -98,7 +97,7 @@ export function ImportModal({ leads, user, onClose, onOpenLead }) {
               setText(e.target.value);
             }}
             rows={6}
-            placeholder={"Of plak hier de rijen uit de Sheet, inclusief de kopregel:\nSubmission ID\tSubmission time\tproperty_type\t..."}
+            placeholder={"Plak hier de rij van de lead uit de Sheet (zonder kopregel)"}
             aria-label="Rijen uit de Sheet"
             style={{ ...inputStyle, resize: "vertical", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12 }}
           />
@@ -127,7 +126,7 @@ export function ImportModal({ leads, user, onClose, onOpenLead }) {
             </button>
           </div>
 
-          {criticalMissing.length > 0 && <Notice tone="error">Kolom(men) ontbreken: {criticalMissing.join(", ")}. Controleer of de kopregel is meegekopieerd.</Notice>}
+          {criticalMissing.length > 0 && <Notice tone="error">Kolom(men) ontbreken: {criticalMissing.join(", ")}. Kopieer de hele rij (klik op het rijnummer), of plak alleen de rij zonder kopregel.</Notice>}
           {!criticalMissing.length && missingColumns.length > 0 && (
             <div style={{ fontSize: 12, color: C.textMuted }}>Niet gevonden (wordt leeg gelaten): {missingColumns.join(", ")}</div>
           )}

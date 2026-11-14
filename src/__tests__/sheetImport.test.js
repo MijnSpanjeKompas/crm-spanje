@@ -10,6 +10,9 @@ import {
   mapContactMoment,
   displayPhone,
   parseSheetDate,
+  SHEET_COLUMNS,
+  LEGACY_SHEET_COLUMNS,
+  missingColumns,
 } from "../crm/sheetImport";
 import { normalizePhone, buildLeadPayload } from "../crm/normalize";
 
@@ -136,4 +139,64 @@ test("importplan: Submission ID is harde controle, e-mail/telefoon zachte contro
 test("CSV met quotes en puntkomma's", () => {
   const csv = 'Submission ID;name;email;utm_campaign\n"a1";"Jan; de Vos";jan@x.nl;"MSK | ""NL"""\n';
   expect(parseCsv(csv)).toEqual([{ "Submission ID": "a1", name: "Jan; de Vos", email: "jan@x.nl", utm_campaign: 'MSK | "NL"' }]);
+});
+
+// ─── NIEUWE SHEET-INDELING (nov 2026) + PLAKKEN ZONDER KOPREGEL ──────────────
+const NEW_VALUES = [
+  "nieuw", "sub-900", "14-11-2026 17:20:11", "Villa", "Nieuwbouw", "Costa Blanca Zuid", "300.000 - 400.000",
+  "Vakantiewoning", "Binnen 3-6 maanden", "Sanne Jansen", "31612345678", "Sanne@Example.nl", "Ja",
+  "fb", "paid_social", "MSK | Leads", "AD 02", "gratis_zoekprofiel", "Website", "sent",
+  "2026-11-14 17:21", "", "https://drive.google.com/file/d/x/view", "x", "2026-11-14 17:21", "TRUE",
+  "ok", "", "", "verstuurd",
+];
+
+test("alleen de rij plakken (zonder kopregel) werkt met de nieuwe kolommen", () => {
+  const rows = parseCsv(NEW_VALUES.join("\t"));
+  expect(rows).toHaveLength(1);
+  const m = mapSheetRow(rows[0]);
+  expect(m.valid).toBe(true);
+  expect(m.submissionId).toBe("sub-900");
+  expect(m.form).toMatchObject({
+    name: "Sanne Jansen",
+    email: "sanne@example.nl",
+    phone: "+31 6 12345678",
+    propertyTypes: ["villa"],
+    buildPreference: "new_build",
+    budgetMin: 300000,
+    budgetMax: 400000,
+    purchaseTimeline: "3_to_6_months",
+    purchaseGoal: "holiday_home",
+    consentContact: true,
+    leadSource: "meta_ads",
+  });
+  expect(m.extra.sourceSubmittedAt.getDate()).toBe(14);
+  expect(m.extra.syncInfo.sheetLeadStatus).toBe("nieuw");
+  expect(m.extra.syncInfo.internMail).toBe("verstuurd");
+  expect(m.extra.importRaw.Naam).toBe("Sanne Jansen");
+});
+
+test("meerdere rijen zonder kopregel en met kopregel geven hetzelfde", () => {
+  const header = SHEET_COLUMNS.join("\t");
+  const row2 = [...NEW_VALUES];
+  row2[1] = "sub-901";
+  row2[9] = "Piet";
+  const without = parseCsv(`${NEW_VALUES.join("\t")}\n${row2.join("\t")}`);
+  const withHeader = parseCsv(`${header}\n${NEW_VALUES.join("\t")}\n${row2.join("\t")}`);
+  expect(without.map((r) => mapSheetRow(r).form.name)).toEqual(["Sanne Jansen", "Piet"]);
+  expect(withHeader.map((r) => mapSheetRow(r).form.name)).toEqual(["Sanne Jansen", "Piet"]);
+  expect(missingColumns(withHeader)).toEqual({ missing: [], critical: [] });
+});
+
+test("oude rij zonder kopregel wordt herkend aan het e-mailadres", () => {
+  const old = LEGACY_SHEET_COLUMNS.map((c) => ROW[c] ?? "");
+  const [row] = parseCsv(old.join("\t"));
+  const m = mapSheetRow(row);
+  expect(m.valid).toBe(true);
+  expect(m.form.name).toBe("Rory de Leon");
+  expect(m.form.email).toBe("rory@example.com");
+});
+
+test("kopregel zonder Naam geeft een kritieke melding", () => {
+  const rows = parseCsv("Submission ID\tSubmission time\tTelefoonnummer\tEmail-adres\na1\t\t0612345678\ta@b.nl");
+  expect(missingColumns(rows).critical).toEqual(["Naam"]);
 });

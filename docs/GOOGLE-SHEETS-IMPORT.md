@@ -61,24 +61,28 @@ function sendAllRowsToCrm() {
 
 ## Mapping in het kort
 
+Indeling sinds november 2026 (oude kolomnamen tussen haakjes werken nog steeds).
+**Plakken in het CRM:** alleen de rij van de lead is genoeg; zonder kopregel worden
+de cellen op deze volgorde gelezen (zie `SHEET_COLUMNS` in `src/crm/sheetImport.js`).
+
 | Sheet | CRM-veld | Opmerking |
 |---|---|---|
+| lead_status | `syncInfo.sheetLeadStatus` | alleen bewaard, verandert de fase niet |
 | Submission ID | `sourceSubmissionId` + document-id `sheet-<id>` | harde duplicaatcontrole |
 | Submission time | `sourceSubmittedAt` | "Binnengekomen op" |
-| property_type | `propertyTypes[]` | villa, appartement, … |
-| listing_type | `buildPreference` | nieuwbouw / bestaande bouw / beide |
-| bedrooms | `bedroomsMin` | "3+" → 3 |
-| region | `regions[]` + `places[]` | onbekende plaatsnamen → plaatsen |
-| max_budget | `budgetMin` / `budgetMax` | "0 - 200.000" → max 200000 |
-| aankooptijd | `purchaseTimeline` | "Binnen 3-6 maanden" → `3_to_6_months` |
-| doeleinde | `purchaseGoal` | |
-| financiering | `financingType` | |
-| bezoek spanje | `visitSpainStatus` / `visitSpainDate` / `visitSpainNotes` | |
-| name, Telefoonnummer, email | `name`, `phone`, `email` | telefoon leesbaar, `phoneNormalized` voor duplicaten |
-| contact | `preferredContactMethod` + `contactPreferenceText` | vrije tekst blijft bewaard |
-| bereikbaar | `preferredContactMoment` + `contactMomentText` | |
-| toestemming | `consentContact` | true / false / null |
+| Type woning (property_type) | `propertyTypes[]` | villa, appartement, … |
+| Bouwtype (listing_type) | `buildPreference` | nieuwbouw / bestaande bouw / beide |
+| Regio (region) | `regions[]` + `places[]` | onbekende plaatsnamen → plaatsen |
+| Budget (max_budget) | `budgetMin` / `budgetMax` | "0 - 200.000" → max 200000 |
+| Doeleinde (doeleinde) | `purchaseGoal` | |
+| Termijn (aankooptijd) | `purchaseTimeline` | "Binnen 3-6 maanden" → `3_to_6_months` |
+| Naam, Telefoonnummer, Email-adres | `name`, `phone`, `email` | telefoon leesbaar, `phoneNormalized` voor duplicaten |
+| Algemene voorwaarde (toestemming) | `consentContact` | true / false / null |
 | utm_*, landingPage, form_source | `utmSource` … `landingPage`, `formSource` | bron → `leadSource` (fb + paid_social = Meta Ads) |
+| mail_status, mail_processing_at, mail_error, intern_mail | `syncInfo` | |
 | pdf_url, pdf_file_id, pdf_created_at, pdf_sent | `searchProfilePdf` | zichtbaar onder Bestanden |
-| mail_status, growth_sync_* | `syncInfo` | alleen zichtbaar bij een fout |
+| growth_sync_* | `syncInfo` | alleen zichtbaar bij een fout |
 | (hele rij) | `importRaw` | originele waarden, voor audit |
+
+Vervallen in de nieuwe Sheet (blijven leeg bij nieuwe leads): bedrooms, financiering,
+bezoek spanje, contact, bereikbaar.

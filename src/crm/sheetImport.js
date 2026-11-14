@@ -11,8 +11,46 @@
 
 import { emptyLead, normalizePhone, normalizeEmail, parseLegacyBudget, mapLegacyRegion, findDuplicateLeads } from "./normalize";
 
-/** Kolomnamen zoals ze in de Sheet staan. */
+/**
+ * Kolomnamen zoals ze nu in de Sheet staan, in deze volgorde.
+ * Plak je alleen een rij (zonder kopregel), dan worden de cellen in deze
+ * volgorde gelezen. Kolom erbij of volgorde gewijzigd? Pas alleen deze lijst aan.
+ */
 export const SHEET_COLUMNS = [
+  "lead_status",
+  "Submission ID",
+  "Submission time",
+  "Type woning",
+  "Bouwtype",
+  "Regio",
+  "Budget",
+  "Doeleinde",
+  "Termijn",
+  "Naam",
+  "Telefoonnummer",
+  "Email-adres",
+  "Algemene voorwaarde",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+  "landingPage",
+  "form_source",
+  "mail_status",
+  "mail_processing_at",
+  "mail_error",
+  "pdf_url",
+  "pdf_file_id",
+  "pdf_created_at",
+  "pdf_sent",
+  "growth_sync_status",
+  "growth_synced_at",
+  "growth_sync_error",
+  "intern_mail",
+];
+
+/** De vorige Sheet-indeling (tot november 2026). Oude CSV's en rijen blijven importeerbaar. */
+export const LEGACY_SHEET_COLUMNS = [
   "Submission ID",
   "Submission time",
   "property_type",
@@ -46,6 +84,25 @@ export const SHEET_COLUMNS = [
   "growth_sync_error",
 ];
 
+/** Veld → mogelijke kolomnamen (nieuw eerst, daarna de oude naam). */
+const FIELD_COLUMNS = {
+  name: ["Naam", "name"],
+  email: ["Email-adres", "E-mailadres", "email"],
+  propertyType: ["Type woning", "property_type"],
+  listingType: ["Bouwtype", "listing_type"],
+  region: ["Regio", "region"],
+  budget: ["Budget", "max_budget"],
+  goal: ["Doeleinde", "doeleinde"],
+  timeline: ["Termijn", "aankooptijd"],
+  consent: ["toestemming", "Algemene voorwaarde"],
+};
+
+/** Kolommen zonder welke een import niet kan. */
+export const REQUIRED_FIELDS = [
+  ["Submission ID", ["Submission ID"]],
+  ["Naam", FIELD_COLUMNS.name],
+];
+
 // ─── HULPEN ──────────────────────────────────────────────────────────────────
 function s(v) {
   return v === undefined || v === null ? "" : String(v).trim();
@@ -69,6 +126,15 @@ export function getCell(row, column) {
   const want = simplifyText(column).replace(/[\s_]/g, "");
   const key = Object.keys(row).find((k) => simplifyText(k).replace(/[\s_]/g, "") === want);
   return key ? s(row[key]) : "";
+}
+
+/** Eerste gevulde waarde uit een van de kolomnamen van een veld. */
+export function getField(row, field) {
+  for (const c of FIELD_COLUMNS[field] || [field]) {
+    const v = getCell(row, c);
+    if (v) return v;
+  }
+  return "";
 }
 
 function splitMulti(v) {
@@ -284,6 +350,16 @@ export function mapLeadSource({ utmSource, utmMedium, formSource }) {
   return "website_questionnaire";
 }
 
+/** Alle kolommen van de rij, als tekst (lege kolomnamen overgeslagen). */
+function rawRow(row) {
+  const out = {};
+  Object.keys(row || {}).forEach((k) => {
+    const key = String(k).trim();
+    if (key) out[key] = s(row[k]);
+  });
+  return out;
+}
+
 // ─── RIJ → LEAD ──────────────────────────────────────────────────────────────
 /**
  * Zet één Sheet-rij om naar { form, extra, submissionId, problems }.
@@ -296,9 +372,9 @@ export function mapSheetRow(row) {
 
   const submissionId = get("Submission ID");
   const submittedAt = parseSheetDate(get("Submission time"));
-  const name = get("name");
+  const name = getField(row, "name");
   const phone = get("Telefoonnummer");
-  const email = get("email");
+  const email = getField(row, "email");
   if (!submissionId) problems.push("Submission ID ontbreekt");
   if (!name) problems.push("Naam ontbreekt");
   if (!phone && !email) problems.push("Geen telefoon en geen e-mail");
@@ -310,8 +386,8 @@ export function mapSheetRow(row) {
     utmContent: get("utm_content"),
   };
   const formSource = get("form_source");
-  const budget = mapBudget(get("max_budget"));
-  const loc = mapRegions(get("region"));
+  const budget = mapBudget(getField(row, "budget"));
+  const loc = mapRegions(getField(row, "region"));
   const contact = mapContactPreference(get("contact"));
   const moment = mapContactMoment(get("bereikbaar"));
   const visit = mapSpainVisit(get("bezoek spanje"));
@@ -337,16 +413,16 @@ export function mapSheetRow(row) {
     budgetMax: budget.budgetMax,
     regions: loc.regions,
     places: loc.places,
-    propertyTypes: mapPropertyTypes(get("property_type")),
-    buildPreference: mapListingType(get("listing_type")),
+    propertyTypes: mapPropertyTypes(getField(row, "propertyType")),
+    buildPreference: mapListingType(getField(row, "listingType")),
     bedroomsMin: mapBedrooms(get("bedrooms")),
-    purchaseTimeline: mapTimeline(get("aankooptijd")),
-    purchaseGoal: mapGoal(get("doeleinde")),
+    purchaseTimeline: mapTimeline(getField(row, "timeline")),
+    purchaseGoal: mapGoal(getField(row, "goal")),
     financingType: mapFinancing(get("financiering")),
     visitSpainStatus: visit.visitSpainStatus,
     visitSpainDate: visit.visitSpainDate,
     visitSpainNotes: visit.visitSpainNotes,
-    consentContact: toBool(get("toestemming")),
+    consentContact: toBool(getField(row, "consent")),
     leadSource: mapLeadSource({ ...utm, formSource }),
     formSource,
     landingPage: get("landingPage"),
@@ -359,7 +435,7 @@ export function mapSheetRow(row) {
     sourceSubmittedAt: submittedAt,
     importSource: "google_sheet",
     // Originele rij: niets gaat verloren (audit/debugging, latere herberekening).
-    importRaw: Object.fromEntries(SHEET_COLUMNS.map((c) => [c, get(c)])),
+    importRaw: rawRow(row),
     searchProfilePdf: pdfUrl
       ? {
           url: pdfUrl,
@@ -373,6 +449,10 @@ export function mapSheetRow(row) {
       growthSyncStatus: get("growth_sync_status"),
       growthSyncedAt: parseSheetDate(get("growth_synced_at")),
       growthSyncError: get("growth_sync_error"),
+      mailError: get("mail_error"),
+      mailProcessingAt: parseSheetDate(get("mail_processing_at")),
+      sheetLeadStatus: get("lead_status"),
+      internMail: get("intern_mail"),
     },
   };
 
@@ -423,9 +503,9 @@ export function planImport(rows, existingLeads = []) {
   });
 }
 
-// ─── CSV ─────────────────────────────────────────────────────────────────────
-/** Simpele CSV/TSV-parser (quotes, komma/puntkomma/tab). Eerste regel = kolomnamen. */
-export function parseCsv(text) {
+// ─── CSV / PLAKKEN ───────────────────────────────────────────────────────────
+/** CSV/TSV → array van rijen (arrays). Quotes, komma/puntkomma/tab. */
+export function parseTable(text) {
   const src = String(text || "").replace(/^\uFEFF/, "");
   const firstLine = src.split(/\r?\n/)[0] || "";
   const delim = firstLine.includes("\t") ? "\t" : (firstLine.match(/;/g) || []).length > (firstLine.match(/,/g) || []).length ? ";" : ",";
@@ -441,7 +521,7 @@ export function parseCsv(text) {
         i += 1;
       } else if (c === '"') inQuotes = false;
       else field += c;
-    } else if (c === '"') inQuotes = true;
+    } else if (c === '"' && field === "") inQuotes = true;
     else if (c === delim) {
       cur.push(field);
       field = "";
@@ -457,10 +537,59 @@ export function parseCsv(text) {
     cur.push(field);
     rows.push(cur);
   }
-  const nonEmpty = rows.filter((r) => r.some((x) => String(x).trim() !== ""));
-  if (!nonEmpty.length) return [];
-  const header = nonEmpty[0].map((h) => String(h).trim());
-  return nonEmpty.slice(1).map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] ?? ""])));
+  return rows.filter((r) => r.some((x) => String(x).trim() !== ""));
+}
+
+const keyOf = (v) => simplifyText(v).replace(/[\s_]/g, "");
+const KNOWN_KEYS = new Set([...SHEET_COLUMNS, ...LEGACY_SHEET_COLUMNS].map(keyOf));
+
+/** Is deze regel een kopregel (bevat hij minstens 3 bekende kolomnamen)? */
+export function isHeaderRow(cells) {
+  return (cells || []).filter((c) => KNOWN_KEYS.has(keyOf(c))).length >= 3;
+}
+
+const looksLikeEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s(v));
+
+/**
+ * Welke indeling heeft een rij zonder kopregel? Standaard de nieuwe;
+ * de oude alleen als het e-mailadres duidelijk op de oude plek staat.
+ */
+function layoutFor(cells) {
+  const iNew = SHEET_COLUMNS.indexOf("Email-adres");
+  const iOld = LEGACY_SHEET_COLUMNS.indexOf("email");
+  if (!looksLikeEmail(cells[iNew]) && looksLikeEmail(cells[iOld])) return LEGACY_SHEET_COLUMNS;
+  return SHEET_COLUMNS;
+}
+
+/**
+ * Geplakte tekst of CSV → rijen als objecten.
+ * - Met kopregel: kolommen op naam (oude én nieuwe namen werken).
+ * - Zonder kopregel: cellen op volgorde van SHEET_COLUMNS. Zo hoef je alleen
+ *   de rij van de lead te kopiëren.
+ */
+export function parseCsv(text) {
+  const table = parseTable(text);
+  if (!table.length) return [];
+  if (isHeaderRow(table[0])) {
+    const header = table[0].map((h) => String(h).trim());
+    return table.slice(1).map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] ?? ""])));
+  }
+  return table.map((r) => {
+    const cols = layoutFor(r);
+    return Object.fromEntries(cols.map((c, i) => [c, r[i] ?? ""]));
+  });
+}
+
+/** Ontbrekende kolommen (alleen relevant bij een kopregel). */
+export function missingColumns(rows) {
+  if (!rows.length) return { missing: [], critical: [] };
+  const keys = new Set(Object.keys(rows[0]).map(keyOf));
+  const has = (names) => names.some((n) => keys.has(keyOf(n)));
+  const aliasFor = (c) => Object.values(FIELD_COLUMNS).find((names) => names.includes(c)) || [c];
+  const legacy = !has(["lead_status", "Naam", "Email-adres", "Regio"]) && has(["name", "max_budget"]);
+  const missing = (legacy ? LEGACY_SHEET_COLUMNS : SHEET_COLUMNS).filter((c) => !has(aliasFor(c)));
+  const critical = REQUIRED_FIELDS.filter(([, names]) => !has(names)).map(([label]) => label);
+  return { missing, critical };
 }
 
 /**
