@@ -274,6 +274,50 @@ export function followUpStats(cohortLeads, allLeads, now = new Date()) {
   };
 }
 
+/**
+ * Houden we alles in beweging? (vervangt de reactietijd-KPI)
+ * - Tijd tot doorsturen: mediaan van binnenkomst → eerste keer doorgestuurd (cohort).
+ * - Bij de makelaar: open leads in fase Doorgestuurd, en hoeveel daarvan al
+ *   langer dan 14 dagen geen contact met ons hadden.
+ * - Zonder volgende actie / achterstallig: werkvoorraad nu (alle open leads).
+ */
+export function momentumStats(cohortLeads, allLeads, now = new Date()) {
+  const days = (ms) => ms / (24 * 3600 * 1000);
+  const durations = cohortLeads
+    .map((l) => {
+      const a = leadArrivedAt(l);
+      const f = reachedAt(l, "forwarded");
+      return a && f && f >= a ? f - a : null;
+    })
+    .filter((v) => v !== null)
+    .sort((x, y) => x - y);
+  const open = allLeads.filter((l) => !l.archived && !l.deletedAt && !isClosedStage(l.pipelineStage));
+  const atRealtor = open.filter((l) => l.pipelineStage === "partner_connected");
+  const quiet = atRealtor.filter((l) => {
+    const last = toDate(l.lastContactAt) || toDate(l.firstForwardedAt) || leadArrivedAt(l);
+    return !last || days(now - last) > 14;
+  });
+  const forwarded = cohortLeads.filter((l) => reached(l, "forwarded")).length;
+  return {
+    medianToForwardMs: durations.length ? durations[Math.floor(durations.length / 2)] : null,
+    toForwardSample: durations.length,
+    forwarded: ratio(forwarded, cohortLeads.length),
+    atRealtor: atRealtor.length,
+    atRealtorQuiet: quiet.length,
+    withoutNextAction: open.filter((l) => STAGES_REQUIRING_NEXT_ACTION.includes(l.pipelineStage) && !hasNextAction(l)).length,
+    overdue: open.filter((l) => hasNextAction(l) && ["overdue", "nodate"].includes(getNextActionInfo(l, now).state)).length,
+  };
+}
+
+/** "3 dagen" / "1 dag" / "5 uur" */
+export function formatDays(ms) {
+  if (ms === null || ms === undefined) return "–";
+  const h = ms / 3600000;
+  if (h < 24) return `${Math.max(1, Math.round(h))} uur`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "1 dag" : `${d} dagen`;
+}
+
 /** "1u 18m" / "2d 4u" / "35m" */
 export function formatDuration(ms) {
   if (ms === null || ms === undefined) return "–";
@@ -491,9 +535,19 @@ export function dataQuality(cohortLeads) {
 // ─── ADVERTENTIEKOSTEN (Meta Ads) ────────────────────────────────────────────
 /** Leads die via betaalde advertenties binnenkwamen. */
 export const PAID_SOURCES = ["meta_ads"];
+// Bronnen die zeker niet uit de Meta-advertenties komen, ook als er een campagnenaam bij staat.
+const OTHER_CHANNELS = ["google_ads", "google_organic", "tiktok"];
 
+const campaignOf = (lead) => String(lead?.utmCampaign || "").trim();
+
+/**
+ * Lead uit de advertenties? Bron Meta Ads, of een campagnenaam (utm_campaign).
+ * Zo telt een advertentielead ook mee als de bron bij import anders is
+ * uitgekomen (bijv. lege utm_source) — net als het campagnefilter in Leads.
+ */
 export function isPaidLead(lead) {
-  return PAID_SOURCES.includes(lead.leadSource);
+  if (PAID_SOURCES.includes(lead.leadSource)) return true;
+  return Boolean(campaignOf(lead)) && !OTHER_CHANNELS.includes(lead.leadSource);
 }
 
 /** Totaal van een maand: ingevuld totaal, anders de som van de campagnes. */
@@ -515,33 +569,77 @@ function monthShare(monthKey, period) {
   return (to - from) / (end - start);
 }
 
+function monthKeyOf(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Kosten van één campagne in een maand.
+ * - Per campagne ingevuld → dat bedrag.
+ * - Alleen een maandtotaal → wat overblijft na de ingevulde campagnes wordt
+ *   verdeeld over de campagnes zonder bedrag die die maand leads hadden,
+ *   naar rato van het aantal leads (één campagne = het hele restbedrag).
+ */
+function campaignSpendInMonth(key, entry, campaign, leadsByMonth) {
+  const explicit = entry?.campaigns || {};
+  const hasOwn = explicit[campaign] !== undefined && explicit[campaign] !== "" && explicit[campaign] !== null;
+  if (hasOwn) return Number(explicit[campaign]) || 0;
+  const filled = Object.values(explicit).reduce((s, v) => s + (Number(v) || 0), 0);
+  const rest = monthTotal(entry) - filled;
+  if (rest <= 0) return 0;
+  const counts = leadsByMonth[key] || {};
+  const open = Object.keys(counts).filter((c) => {
+    const v = explicit[c];
+    return v === undefined || v === "" || v === null;
+  });
+  const total = open.reduce((n, c) => n + counts[c], 0);
+  if (!total || !counts[campaign]) return 0;
+  return (rest * counts[campaign]) / total;
+}
+
+/** Aantal advertentieleads per maand per campagne: { "2026-11": { "Campagne": 3 } }. */
+export function paidLeadsByMonth(leads) {
+  const map = {};
+  (leads || []).filter(isPaidLead).forEach((l) => {
+    const d = leadArrivedAt(l);
+    const c = campaignOf(l);
+    if (!d || !c) return;
+    const k = monthKeyOf(d);
+    map[k] = map[k] || {};
+    map[k][c] = (map[k][c] || 0) + 1;
+  });
+  return map;
+}
+
 /** Uitgaven in een periode (maanden naar rato als de periode een deel van de maand is). */
-export function adSpendInPeriod(months, period, campaign = null) {
+export function adSpendInPeriod(months, period, campaign = null, leadsByMonth = {}) {
   return Object.entries(months || {}).reduce((sum, [key, entry]) => {
     const share = monthShare(key, period);
     if (!share) return sum;
-    const amount = campaign ? Number(entry?.campaigns?.[campaign]) || 0 : monthTotal(entry);
+    const amount = campaign ? campaignSpendInMonth(key, entry, campaign, leadsByMonth) : monthTotal(entry);
     return sum + amount * share;
   }, 0);
 }
 
 /**
  * Kosten per lead en per doorgestuurde lead voor een cohort.
- * Alleen leads met bron Meta Ads tellen mee (de kosten horen daarbij).
+ * Alleen advertentieleads tellen mee (zie isPaidLead).
+ * allLeads (optioneel): alle leads, om een maandbudget eerlijk over campagnes te verdelen.
  */
-export function adPerformance(cohortLeads, months, period) {
+export function adPerformance(cohortLeads, months, period, allLeads = cohortLeads) {
   const paid = cohortLeads.filter(isPaidLead);
+  const byMonth = paidLeadsByMonth(allLeads);
   const spend = adSpendInPeriod(months, period);
   const forwarded = paid.filter((l) => reached(l, "forwarded")).length;
   const purchased = paid.filter((l) => reached(l, "purchased")).length;
   const per = (n) => (n > 0 && spend > 0 ? spend / n : null);
-  // Per campagne (alleen campagnes met leads of met ingevulde kosten)
-  const names = new Set(paid.map((l) => String(l.utmCampaign || "").trim()).filter(Boolean));
+  // Per campagne (alleen campagnes met leads of met kosten)
+  const names = new Set(paid.map(campaignOf).filter(Boolean));
   Object.values(months || {}).forEach((e) => Object.keys(e?.campaigns || {}).forEach((k) => names.add(k)));
   const campaigns = Array.from(names)
     .map((name) => {
-      const list = paid.filter((l) => String(l.utmCampaign || "").trim() === name);
-      const s = adSpendInPeriod(months, period, name);
+      const list = paid.filter((l) => campaignOf(l) === name);
+      const s = adSpendInPeriod(months, period, name, byMonth);
       const f = list.filter((l) => reached(l, "forwarded")).length;
       return { name, spend: s, leads: list.length, forwarded: f, perLead: list.length && s ? s / list.length : null, perForwarded: f && s ? s / f : null };
     })

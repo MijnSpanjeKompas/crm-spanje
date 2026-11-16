@@ -112,7 +112,7 @@ function MonthRow({ month, entry, campaigns, user }) {
 
 export function AdSpendSection({ coh, leads, months, period, isAll, user, onShowLeads, Section }) {
   const [editing, setEditing] = useState(false);
-  const perf = useMemo(() => adPerformance(coh, months, period), [coh, months, period]);
+  const perf = useMemo(() => adPerformance(coh, months, period, leads), [coh, months, period, leads]);
 
   // Maanden om in te vullen: vanaf de eerste Meta-lead (max. 12 maanden terug) t/m deze maand.
   const monthList = useMemo(() => {
@@ -142,8 +142,8 @@ export function AdSpendSection({ coh, leads, months, period, isAll, user, onShow
   return (
     <Section
       title="Wat kost een lead?"
-      subtitle={hasSpend ? `${isAll ? "Alle leads" : "Leads uit deze periode"} via Meta Ads, afgezet tegen het advertentiebudget.` : "Vul het advertentiebudget per maand in om de kosten per lead te zien."}
-      info="Alleen leads met bron 'Meta Ads' tellen mee. Is de periode een deel van een maand, dan telt het budget naar rato van het aantal dagen."
+      subtitle={hasSpend ? `${isAll ? "Alle leads" : "Leads uit deze periode"} uit de advertenties, afgezet tegen het advertentiebudget.` : "Vul het advertentiebudget per maand in om de kosten per lead te zien."}
+      info="Telt leads met bron Meta Ads of met een campagnenaam. Vul je alleen een maandbedrag in, dan gaat dat naar de campagne(s) van die maand (bij meerdere naar rato van het aantal leads). Is de periode een deel van een maand, dan telt het budget naar rato van het aantal dagen."
       right={
         <button type="button" onClick={() => setEditing((v) => !v)} style={btnStyle(editing ? "primary" : "gold", editing)}>
           <Icon name={editing ? "check" : "euro"} size={14} /> {editing ? "Klaar" : "Budget invullen"}
@@ -165,7 +165,7 @@ export function AdSpendSection({ coh, leads, months, period, isAll, user, onShow
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
             <Tile label="Uitgegeven" value={euro(perf.spend)} sub={isAll ? "totaal" : "in deze periode"} />
-            <Tile label="Leads via Meta" value={perf.leads} sub={perf.forwarded ? `${perf.forwarded} doorgestuurd` : "nog geen doorgestuurd"} />
+            <Tile label="Leads via advertenties" value={perf.leads} sub={perf.forwarded ? `${perf.forwarded} doorgestuurd` : "nog geen doorgestuurd"} />
             <Tile label="Kosten per lead" value={euro(perf.perLead)} />
             <Tile label="Kosten per doorgestuurde lead" value={euro(perf.perForwarded)} strong info="Het belangrijkste cijfer: wat kost het om een lead te krijgen die echt naar een makelaar gaat?" />
             <Tile label="Kosten per aankoop" value={euro(perf.perPurchase)} sub={perf.purchased ? `${perf.purchased} aankopen` : "nog geen aankopen"} />
@@ -197,7 +197,7 @@ export function AdSpendSection({ coh, leads, months, period, isAll, user, onShow
             </div>
           )}
           {perf.campaigns.some((c) => c.leads && !c.spend) && hasSpend && (
-            <div style={{ fontSize: 12, color: C.textSubtle, marginTop: 8 }}>Campagnes zonder bedrag: vul onder "Budget invullen" per campagne in wat ze kostten om ook daar de kosten per lead te zien.</div>
+            <div style={{ fontSize: 12, color: C.textSubtle, marginTop: 8 }}>Campagnes zonder bedrag: vul onder "Budget invullen" het maandbedrag of het bedrag per campagne in.</div>
           )}
         </>
       )}

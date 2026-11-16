@@ -318,6 +318,39 @@ describe("advertentiekosten", () => {
   });
 });
 
+describe("advertentiekosten: maandbedrag en campagnes", () => {
+  const mk = (id, extra) => normalizeLead({ id, schemaVersion: 2, name: id, leadSource: "meta_ads", sourceSubmittedAt: new Date(2026, 10, 5), pipelineStage: "new_lead", ...extra });
+  const all = { all: true };
+
+  test("alleen maandtotaal ingevuld → gaat naar de enige campagne van die maand", () => {
+    const months = { "2026-11": { total: 400 }, "2026-10": { campaigns: { okt: 500 } } };
+    const leads = [
+      mk("a", { utmCampaign: "nov" }),
+      mk("b", { utmCampaign: "nov", pipelineStage: "partner_connected" }),
+      mk("c", { utmCampaign: "nov", pipelineStage: "partner_connected" }),
+      mk("d", { utmCampaign: "okt", sourceSubmittedAt: new Date(2026, 9, 5) }),
+    ];
+    const perf = adPerformance(leads, months, all, leads);
+    expect(perf.spend).toBe(900);
+    expect(perf.campaigns.find((c) => c.name === "nov")).toMatchObject({ spend: 400, leads: 3, forwarded: 2, perForwarded: 200 });
+    expect(perf.campaigns.find((c) => c.name === "okt")).toMatchObject({ spend: 500, leads: 1 });
+  });
+
+  test("maandtotaal met twee campagnes zonder bedrag → naar rato van leads", () => {
+    const months = { "2026-11": { total: 300 } };
+    const leads = [mk("a", { utmCampaign: "x" }), mk("b", { utmCampaign: "x" }), mk("c", { utmCampaign: "y" })];
+    const perf = adPerformance(leads, months, all, leads);
+    expect(perf.campaigns.find((c) => c.name === "x").spend).toBe(200);
+    expect(perf.campaigns.find((c) => c.name === "y").spend).toBe(100);
+  });
+
+  test("lead met campagnenaam maar andere bron telt wel mee; Google Ads niet", () => {
+    const leads = [mk("a", { utmCampaign: "nov" }), mk("b", { utmCampaign: "nov", leadSource: "website_questionnaire" }), mk("g", { utmCampaign: "nov", leadSource: "google_ads" })];
+    const perf = adPerformance(leads, { "2026-11": { total: 100 } }, all, leads);
+    expect(perf.leads).toBe(2);
+  });
+});
+
 describe("dagelijks overzicht", () => {
   test("bevat vandaag, te laat en nieuw binnen; slaat prullenbak over", () => {
     const now = new Date();
@@ -335,5 +368,25 @@ describe("dagelijks overzicht", () => {
     expect(mail.text).toMatch(/Bram – Contact met makelaar checken · Luke \(jij\)/);
     expect(mail.html).toContain("https://crm.example.nl");
     expect(mail.text).not.toMatch(/Weg/);
+  });
+});
+
+describe("KPI: blijft alles in beweging", () => {
+  const { momentumStats, formatDays } = require("../crm/analytics");
+  const now = new Date(2026, 10, 16, 15);
+  const mk = (id, extra) => normalizeLead({ id, schemaVersion: 2, name: id, leadSource: "meta_ads", sourceSubmittedAt: new Date(2026, 10, 1), pipelineStage: "new_lead", nextActionType: "first_contact", nextActionDate: "2026-11-20", ...extra });
+
+  test("tijd tot doorsturen, bij de makelaar en stil gevallen", () => {
+    const leads = [
+      mk("a", { pipelineStage: "partner_connected", firstForwardedAt: new Date(2026, 10, 3), lastContactAt: new Date(2026, 10, 14), nextActionType: "check_realtor" }),
+      mk("b", { pipelineStage: "partner_connected", firstForwardedAt: new Date(2026, 10, 2), lastContactAt: new Date(2026, 10, 1), nextActionType: "check_realtor" }),
+      mk("c"),
+      mk("d", { nextActionType: "", nextActionDate: "", pipelineStage: "contacted" }),
+    ];
+    const m = momentumStats(leads, leads, now);
+    expect(formatDays(m.medianToForwardMs)).toBe("2 dagen");
+    expect(m.forwarded).toMatchObject({ count: 2, total: 4 });
+    expect(m.atRealtor).toBe(2);
+    expect(m.atRealtorQuiet).toBe(1);
   });
 });

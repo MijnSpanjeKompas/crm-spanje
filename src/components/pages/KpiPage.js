@@ -10,8 +10,8 @@ import {
   cohortFunnel,
   kpiSummary,
   trend,
-  followUpStats,
-  formatDuration,
+  momentumStats,
+  formatDays,
   groupStats,
   distribution,
   partnerStats,
@@ -212,7 +212,7 @@ export function KpiPage({ leads, links, partners, now, navigate, onOpenPartner, 
   const prevFunnel = useMemo(() => (prevCoh ? cohortFunnel(prevCoh) : null), [prevCoh]);
   const kpi = useMemo(() => kpiSummary(coh), [coh]);
   const tr = useMemo(() => trend(leads, period, prev), [leads, period, prev]);
-  const follow = useMemo(() => followUpStats(coh, leads, now), [coh, leads, now]);
+  const move = useMemo(() => momentumStats(coh, leads, now), [coh, leads, now]);
   const groups = useMemo(() => groupStats(coh, dim), [coh, dim]);
   const regionLeads = useMemo(() => (regionScope === "all" ? coh : coh.filter((l) => reached(l, regionScope))), [coh, regionScope]);
   const partnerRows = useMemo(() => partnerStats(partners, links, leads, now).filter((r) => r.forwarded > 0).sort((a, b) => b.forwarded - a.forwarded), [partners, links, leads, now]);
@@ -318,27 +318,28 @@ export function KpiPage({ leads, links, partners, now, navigate, onOpenPartner, 
         </Section>
 
         <Section
-          title="Hoe snel reageren we?"
-          subtitle="Opgepakt = eerste contactmoment, afgevinkte contactactie of eerste handeling in het CRM (fase, actie, gesprek)."
-          info="Gemeten van binnenkomst van de lead tot het eerste moment dat Luke of Indy hem oppakte. Voor oudere leads haalt het CRM dat moment automatisch uit de tijdlijn. Het plannen van 'Eerste contact opnemen' telt niet als oppakken."
+          title="Blijft alles in beweging?"
+          subtitle="Hoe snel gaan leads naar een makelaar, en blijft er niets liggen?"
+          info="Tijd tot doorsturen geldt voor de leads uit de gekozen periode. De andere drie tegels laten de stand van nu zien (alle open leads)."
         >
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
             <Tile
-              label="Reactietijd"
-              value={formatDuration(follow.medianFirstAttemptMs)}
-              sub={follow.sample ? `Typische tijd tot we een nieuwe lead oppakken (${follow.sample} leads)` : "Nog niets vastgelegd"}
-              info="De mediaan: de helft van de leads benaderen we sneller dan dit, de andere helft langzamer. Minder gevoelig voor één uitschieter dan een gemiddelde."
+              label="Tijd tot doorsturen"
+              value={formatDays(move.medianToForwardMs)}
+              sub={move.toForwardSample ? `Van binnenkomst tot makelaar · ${move.forwarded.count} van ${move.forwarded.total} leads doorgestuurd` : "Nog geen doorgestuurde leads in deze periode"}
+              info="De mediaan: de helft van de doorgestuurde leads ging sneller naar een makelaar, de andere helft langzamer. Gemeten vanaf het formulier tot de lead op Doorgestuurd kwam."
             />
             <Tile
-              label="Binnen 24 uur opgepakt"
-              value={pct(follow.within24h.pct)}
-              sub={follow.within24h.total ? `${follow.within24h.count} van ${follow.within24h.total} leads` : "–"}
-              tone={follow.within24h.pct !== null && follow.within24h.pct < 0.8 ? "warn" : undefined}
+              label="Bij de makelaar"
+              value={move.atRealtor}
+              tone={move.atRealtorQuiet ? "warn" : undefined}
+              sub={move.atRealtorQuiet ? `${move.atRealtorQuiet} al ruim 2 weken niets van gehoord` : "Open leads in Doorgestuurd · alles recent bijgewerkt"}
+              info="Leads in fase Doorgestuurd. 'Niets van gehoord' = langer dan 14 dagen geen contactmoment sinds het doorsturen. Even checken bij de makelaar of de klant."
             />
-            <Tile label="Nog niet opgepakt" value={follow.noAttempt} tone={follow.noAttempt ? "danger" : undefined} sub="Langer dan 24 uur binnen, nog niets mee gedaan in het CRM" />
-            <Tile label="Achterstallige acties" value={follow.overdue} tone={follow.overdue ? "danger" : undefined} sub="Open leads waarvan de geplande actie over datum is" />
+            <Tile label="Zonder volgende actie" value={move.withoutNextAction} tone={move.withoutNextAction ? "danger" : undefined} sub="Open leads waar niets voor gepland staat; die vallen tussen wal en schip" />
+            <Tile label="Achterstallige acties" value={move.overdue} tone={move.overdue ? "danger" : undefined} sub="Open leads waarvan de geplande actie over datum is" />
           </div>
-          {follow.overdue > 0 && (
+          {move.overdue > 0 && (
             <button type="button" onClick={() => navigate("agenda", "today")} className="msk-link" style={{ border: "none", background: "none", color: C.goldText, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 10, padding: 0, display: "flex", gap: 4, alignItems: "center" }}>
               Bekijk in Agenda <Icon name="arrowRight" size={13} />
             </button>
